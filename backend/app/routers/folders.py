@@ -10,15 +10,26 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user, require_admin
-from ..models import FolderAccess, MediaItem, Role, UploadFolder, User
+from ..models import (
+    CloudProvider,
+    FolderAccess,
+    FolderProviderLink,
+    MediaItem,
+    Role,
+    UploadFolder,
+    User,
+)
 from ..schemas import (
     FolderAccessUpdate,
     FolderCreate,
     FolderOut,
+    FolderProviderLinkCreate,
+    FolderProviderLinkOut,
     FolderUpdate,
     MediaItemOut,
 )
 from ..storage import folder_dir, user_can_access_folder
+from ..transfers import enqueue_for_link
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -132,6 +143,97 @@ def set_access(
     db.commit()
     db.refresh(folder)
     return _to_out(db, folder)
+
+
+@router.get("/{folder_id}/providers", response_model=list[FolderProviderLinkOut])
+def list_links(
+    folder_id: int,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[FolderProviderLinkOut]:
+    _get_folder(db, folder_id)
+    links = db.scalars(
+        select(FolderProviderLink).where(FolderProviderLink.folder_id == folder_id)
+    ).all()
+    names = dict(db.execute(select(CloudProvider.id, CloudProvider.name)).all())
+    return [
+        FolderProviderLinkOut(
+            id=link.id,
+            folder_id=link.folder_id,
+            provider_id=link.provider_id,
+            provider_name=names.get(link.provider_id, ""),
+            dest_path=link.dest_path,
+            enabled=link.enabled,
+        )
+        for link in links
+    ]
+
+
+@router.post(
+    "/{folder_id}/providers",
+    response_model=FolderProviderLinkOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_link(
+    folder_id: int,
+    payload: FolderProviderLinkCreate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> FolderProviderLinkOut:
+    _get_folder(db, folder_id)
+    provider = db.get(CloudProvider, payload.provider_id)
+    if provider is None:
+        raise HTTPException(status_code=400, detail="Provider not found")
+    existing = db.scalar(
+        select(FolderProviderLink).where(
+            FolderProviderLink.folder_id == folder_id,
+            FolderProviderLink.provider_id == payload.provider_id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Provider bereits verknüpft")
+
+    link = FolderProviderLink(
+        folder_id=folder_id, provider_id=payload.provider_id, dest_path=payload.dest_path
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    # Backfill transfer jobs for media already in the folder.
+    enqueue_for_link(db, link)
+    db.commit()
+    return FolderProviderLinkOut(
+        id=link.id,
+        folder_id=link.folder_id,
+        provider_id=link.provider_id,
+        provider_name=provider.name,
+        dest_path=link.dest_path,
+        enabled=link.enabled,
+    )
+
+
+@router.delete(
+    "/{folder_id}/providers/{provider_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def remove_link(
+    folder_id: int,
+    provider_id: int,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    link = db.scalar(
+        select(FolderProviderLink).where(
+            FolderProviderLink.folder_id == folder_id,
+            FolderProviderLink.provider_id == provider_id,
+        )
+    )
+    if link is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+    db.delete(link)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{folder_id}/media", response_model=list[MediaItemOut])

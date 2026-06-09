@@ -7,6 +7,7 @@ runtime (key for the 1 GB Raspberry Pi target).
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,7 +20,8 @@ from .bootstrap import ensure_initial_admin
 from .config import get_settings
 from .db import init_db
 from .rclone import check_rclone
-from .routers import auth, folders, providers, uploads, users
+from .routers import auth, folders, providers, transfers, uploads, users
+from .transfers import worker_loop
 
 settings = get_settings()
 
@@ -29,7 +31,17 @@ async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     init_db()
     ensure_initial_admin()
-    yield
+
+    stop = asyncio.Event()
+    task: asyncio.Task | None = None
+    if settings.worker_enabled:
+        task = asyncio.create_task(worker_loop(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        if task is not None:
+            await task
 
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
@@ -39,6 +51,7 @@ app.include_router(users.router)
 app.include_router(folders.router)
 app.include_router(uploads.router)
 app.include_router(providers.router)
+app.include_router(transfers.router)
 
 
 @app.get("/api/health")

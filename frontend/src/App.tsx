@@ -6,6 +6,7 @@ import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
 import Login from "./pages/Login";
 import Providers from "./pages/Providers";
+import Transfers from "./pages/Transfers";
 import Users from "./pages/Users";
 
 export default function App() {
@@ -43,6 +44,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Providers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/transfers"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Transfers />
               </ProtectedRoute>
             }
           />

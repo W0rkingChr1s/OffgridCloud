@@ -54,15 +54,16 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Admin-UI: Provider hinzufügen (Typ → dynamische Felder → **Verbindungstest**)
 - ☑ Sichere Credential-Speicherung + Maskierung im UI
 
-## Phase 4 — Ordner ↔ Provider & Transfer-Engine
+## Phase 4 — Ordner ↔ Provider & Transfer-Engine ✅
 *Ergebnis: Dateien wandern automatisch in die Cloud.*
+*→ Meilenstein **M2 (Cloud-Upload)** erreicht.*
 
-- ☐ Datenmodell `FolderProviderLink` (m:n, Ziel-Pfad/Bucket je Provider), `TransferJob`
-- ☐ Admin-UI: Ordner einem/mehreren Providern zuordnen
-- ☐ Transfer-Worker: rclone-Aufruf je `TransferJob`, Fortschritt parsen
-- ☐ Status-Lebenszyklus `received → queued → uploading → verified → done`
-- ☐ Retry mit Backoff, Resume nach Abbruch, Fehler-Logging
-- ☐ Integritäts-Check (Hash/Size) nach Upload
+- ☑ Datenmodell `FolderProviderLink` (m:n, Ziel-Pfad/Bucket je Provider), `TransferJob`
+- ☑ Admin-UI: Ordner einem/mehreren Providern zuordnen + Transfers-Übersicht
+- ☑ Transfer-Worker (Hintergrund-Loop): rclone `copyto` je `TransferJob`, JSON-Stats geparst
+- ☑ Status-Lebenszyklus `received → queued → uploading → done` (aggregiert je Medium)
+- ☑ Retry mit exponentiellem Backoff, Resume-Recovery (running→queued beim Start), Fehler-Logging
+- ☑ Integritäts-Check: rclone verifiziert Größe/Hash nach Transfer (Exit 0 = geprüft)
 
 ## Phase 5 — Bandbreiten-Steuerung
 *Ergebnis: Upload passt sich der Leitung an — Kern des Produkts.*

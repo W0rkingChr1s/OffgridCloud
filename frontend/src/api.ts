@@ -39,6 +39,33 @@ export interface MediaItem {
   created_at: string;
 }
 
+export interface FolderProviderLink {
+  id: number;
+  folder_id: number;
+  provider_id: number;
+  provider_name: string;
+  dest_path: string;
+  enabled: boolean;
+}
+
+export type TransferStatus = "queued" | "running" | "done" | "failed";
+
+export interface TransferJob {
+  id: number;
+  media_id: number;
+  provider_id: number;
+  status: TransferStatus;
+  progress: number;
+  bytes_transferred: number;
+  attempts: number;
+  last_error: string;
+  created_at: string;
+  updated_at: string;
+  media_filename: string;
+  provider_name: string;
+  folder_id: number | null;
+}
+
 export type ProviderStatus = "unknown" | "ok" | "error";
 
 export interface Provider {

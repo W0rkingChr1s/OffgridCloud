@@ -9,6 +9,8 @@ os.environ.setdefault("OGC_BUFFER_DIR", os.path.join(_tmp, "buffer"))
 os.environ.setdefault("OGC_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("OGC_INITIAL_ADMIN_EMAIL", "admin@test.local")
 os.environ.setdefault("OGC_INITIAL_ADMIN_PASSWORD", "adminpass123")
+# Drive transfer-job state deterministically in tests; no background worker.
+os.environ.setdefault("OGC_WORKER_ENABLED", "false")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

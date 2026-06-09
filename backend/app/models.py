@@ -36,6 +36,13 @@ class ProviderStatus(str, enum.Enum):
     ERROR = "error"
 
 
+class TransferStatus(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
 class MediaStatus(str, enum.Enum):
     RECEIVED = "received"
     QUEUED = "queued"
@@ -121,6 +128,45 @@ class CloudProvider(Base):
     last_error: Mapped[str] = mapped_column(Text, default="")
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class FolderProviderLink(Base):
+    """Maps a folder to a target provider (+ destination path/bucket prefix)."""
+
+    __tablename__ = "folder_provider_links"
+    __table_args__ = (UniqueConstraint("folder_id", "provider_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"))
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("cloud_providers.id", ondelete="CASCADE")
+    )
+    dest_path: Mapped[str] = mapped_column(String(500), default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class TransferJob(Base):
+    """One upload of a media item to one provider."""
+
+    __tablename__ = "transfer_jobs"
+    __table_args__ = (UniqueConstraint("media_id", "provider_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_id: Mapped[int] = mapped_column(ForeignKey("media_items.id", ondelete="CASCADE"))
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("cloud_providers.id", ondelete="CASCADE")
+    )
+    status: Mapped[TransferStatus] = mapped_column(
+        Enum(TransferStatus), default=TransferStatus.QUEUED, index=True
+    )
+    progress: Mapped[float] = mapped_column(default=0.0)
+    bytes_transferred: Mapped[int] = mapped_column(BigInteger, default=0)
+    attempts: Mapped[int] = mapped_column(default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class UploadSession(Base):

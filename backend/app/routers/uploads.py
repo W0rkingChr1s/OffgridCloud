@@ -153,6 +153,13 @@ def complete_upload(
     db.delete(session)
     db.commit()
     db.refresh(media)
+
+    # Queue transfers to every provider linked to this folder.
+    from ..transfers import enqueue_for_media
+
+    enqueue_for_media(db, media)
+    db.commit()
+    db.refresh(media)
     return media
 
 

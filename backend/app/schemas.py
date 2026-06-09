@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import MediaStatus, ProviderStatus, Role
+from .models import MediaStatus, ProviderStatus, Role, TransferStatus
 
 
 def _normalise_email(value: str) -> str:
@@ -157,3 +157,41 @@ class ProviderOut(BaseModel):
     last_tested_at: datetime | None
     created_at: datetime
     config: dict[str, str]  # secrets masked
+
+
+# --- Folder <-> Provider links & transfers --------------------------------
+
+
+class FolderProviderLinkCreate(BaseModel):
+    provider_id: int
+    dest_path: str = ""
+
+
+class FolderProviderLinkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    folder_id: int
+    provider_id: int
+    provider_name: str = ""
+    dest_path: str
+    enabled: bool
+
+
+class TransferJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    media_id: int
+    provider_id: int
+    status: TransferStatus
+    progress: float
+    bytes_transferred: int
+    attempts: int
+    last_error: str
+    created_at: datetime
+    updated_at: datetime
+    # Enriched for the admin view:
+    media_filename: str = ""
+    provider_name: str = ""
+    folder_id: int | None = None

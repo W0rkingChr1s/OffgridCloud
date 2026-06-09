@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
 
+    # Background upload worker. Disabled in tests so job state can be driven
+    # deterministically.
+    worker_enabled: bool = True
+    worker_poll_interval: float = 3.0  # seconds between idle polls
+    worker_max_attempts: int = 5
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{(self.data_dir / 'offgridcloud.db').resolve()}"

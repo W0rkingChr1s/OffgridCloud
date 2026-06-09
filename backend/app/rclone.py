@@ -10,9 +10,11 @@ orchestration arrives in Phase 4.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .config import get_settings
@@ -95,3 +97,69 @@ def test_remote(options: dict[str, str], subpath: str = "") -> TestResult:
     # Surface a concise error (last non-empty stderr line).
     err_lines = [ln for ln in (result.stderr or "").splitlines() if ln.strip()]
     return TestResult(False, err_lines[-1] if err_lines else "Verbindung fehlgeschlagen")
+
+
+@dataclass
+class UploadResult:
+    ok: bool
+    bytes_transferred: int = 0
+    message: str = ""
+
+
+def run_upload(
+    local_path: str,
+    options: dict[str, str],
+    dest: str,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> UploadResult:
+    """Upload a single local file to ``remote:dest`` via ``rclone copyto``.
+
+    rclone verifies size/hash after transfer for backends that support it, so a
+    zero exit code implies an integrity-checked upload. Progress is parsed from
+    rclone's JSON log on stderr.
+    """
+    binary = get_settings().rclone_binary
+    if shutil.which(binary) is None:
+        return UploadResult(False, 0, f"rclone ('{binary}') ist nicht installiert")
+
+    cmd = [
+        binary, "copyto", local_path, f"{_REMOTE}:{dest}",
+        "--use-json-log", "--stats", "1s", "--stats-log-level", "NOTICE",
+        "--transfers", "1", "--low-level-retries", "3", "--retries", "1",
+    ]
+    last_bytes = 0
+    err_tail = ""
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=_remote_env(options),
+        )
+    except OSError as exc:  # pragma: no cover
+        return UploadResult(False, 0, str(exc))
+
+    assert proc.stderr is not None
+    for line in proc.stderr:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            err_tail = line
+            continue
+        stats = obj.get("stats")
+        if isinstance(stats, dict):
+            last_bytes = int(stats.get("bytes", last_bytes) or last_bytes)
+            total = int(stats.get("totalBytes", 0) or 0)
+            if on_progress:
+                on_progress(last_bytes, total)
+        elif obj.get("level") == "error" and obj.get("msg"):
+            err_tail = obj["msg"]
+
+    proc.wait()
+    if proc.returncode == 0:
+        return UploadResult(True, last_bytes, "")
+    return UploadResult(False, last_bytes, err_tail or "Upload fehlgeschlagen")
