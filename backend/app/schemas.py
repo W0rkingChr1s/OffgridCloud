@@ -165,6 +165,7 @@ class ProviderOut(BaseModel):
 class FolderProviderLinkCreate(BaseModel):
     provider_id: int
     dest_path: str = ""
+    priority: int = 0
 
 
 class FolderProviderLinkOut(BaseModel):
@@ -175,7 +176,39 @@ class FolderProviderLinkOut(BaseModel):
     provider_id: int
     provider_name: str = ""
     dest_path: str
+    priority: int = 0
     enabled: bool
+
+
+class FolderProviderLinkUpdate(BaseModel):
+    dest_path: str | None = None
+    priority: int | None = None
+    enabled: bool | None = None
+
+
+class BandwidthWindow(BaseModel):
+    start: str  # "HH:MM"
+    end: str  # "HH:MM"
+    kbps: int = 0  # KiB/s, 0 = unlimited in this window
+
+
+class BandwidthPolicyUpdate(BaseModel):
+    enabled: bool | None = None
+    min_bandwidth_kbps: int | None = Field(default=None, ge=0)
+    bwlimit_kbps: int | None = Field(default=None, ge=0)
+    schedule: list[BandwidthWindow] | None = None
+
+
+class BandwidthStatusOut(BaseModel):
+    enabled: bool
+    min_bandwidth_kbps: int
+    bwlimit_kbps: int
+    schedule: list[BandwidthWindow]
+    last_kbps: float
+    last_measured_at: datetime | None
+    effective_bwlimit_kbps: int  # what applies right now
+    gated: bool  # uploads currently paused by the min-bandwidth gate
+    gate_reason: str
 
 
 class TransferJobOut(BaseModel):

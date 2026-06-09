@@ -65,15 +65,15 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Retry mit exponentiellem Backoff, Resume-Recovery (running→queued beim Start), Fehler-Logging
 - ☑ Integritäts-Check: rclone verifiziert Größe/Hash nach Transfer (Exit 0 = geprüft)
 
-## Phase 5 — Bandbreiten-Steuerung
+## Phase 5 — Bandbreiten-Steuerung ✅
 *Ergebnis: Upload passt sich der Leitung an — Kern des Produkts.*
 
-- ☐ Periodische Bandbreiten-/Latenz-Messung zum Ziel
-- ☐ Mindest-Bandbreite-Schwelle → Start/Stop des Schedulers
-- ☐ Dynamisches `--bwlimit` + Zeitpläne (z. B. nachts volle Last)
-- ☐ Pause/Resume bei Bandbreiten-Einbruch (kein Abbruch)
-- ☐ Prioritäten je Ordner/Provider (Eilmaterial zuerst)
-- ☐ Admin-UI für Regeln & Zeitfenster
+- ☑ Durchsatz-Messung aus realen Transfers (rclone-Speed); aktive Probe später
+- ☑ Mindest-Bandbreite-Schwelle → Gate startet/pausiert den Worker (mit Mess-Cooldown)
+- ☑ Dynamisches `--bwlimit` + Zeitfenster (z. B. nachts volle Last, über Mitternacht)
+- ☑ Pause/Resume bei Bandbreiten-Einbruch (zwischen Jobs, kein Abbruch laufender)
+- ☑ Prioritäten je Ordner↔Provider-Link (Eilmaterial zuerst)
+- ☑ Admin-UI für Regeln & Zeitfenster
 
 ## Phase 6 — Dashboard & Realtime
 *Ergebnis: modernes Kachel-Dashboard mit Live-Status.*

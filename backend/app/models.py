@@ -142,6 +142,7 @@ class FolderProviderLink(Base):
         ForeignKey("cloud_providers.id", ondelete="CASCADE")
     )
     dest_path: Mapped[str] = mapped_column(String(500), default="")
+    priority: Mapped[int] = mapped_column(default=0)  # higher = uploaded sooner
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -160,6 +161,7 @@ class TransferJob(Base):
     status: Mapped[TransferStatus] = mapped_column(
         Enum(TransferStatus), default=TransferStatus.QUEUED, index=True
     )
+    priority: Mapped[int] = mapped_column(default=0, index=True)
     progress: Mapped[float] = mapped_column(default=0.0)
     bytes_transferred: Mapped[int] = mapped_column(BigInteger, default=0)
     attempts: Mapped[int] = mapped_column(default=0)
@@ -167,6 +169,27 @@ class TransferJob(Base):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class BandwidthPolicy(Base):
+    """Singleton (id=1) controlling bandwidth-aware scheduling.
+
+    Throughput values are in KiB/s (matching rclone's --bwlimit units).
+    """
+
+    __tablename__ = "bandwidth_policy"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Minimum measured throughput required to start uploads (0 = no gate).
+    min_bandwidth_kbps: Mapped[int] = mapped_column(default=0)
+    # Base throttle passed to rclone --bwlimit (0 = unlimited).
+    bwlimit_kbps: Mapped[int] = mapped_column(default=0)
+    # JSON list of windows: [{"start":"HH:MM","end":"HH:MM","kbps":int}].
+    schedule_json: Mapped[str] = mapped_column(Text, default="[]")
+    # Last observed throughput (from real transfers) for the min-bandwidth gate.
+    last_kbps: Mapped[float] = mapped_column(default=0.0)
+    last_measured_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class UploadSession(Base):

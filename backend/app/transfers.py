@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from . import bandwidth
 from .config import get_settings
 from .crypto import decrypt
 from .db import SessionLocal
@@ -33,12 +34,16 @@ from .rclone import UploadResult, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
 
-# Signature: (local_path, rclone_options, dest) -> UploadResult
-UploadFn = Callable[[str, dict, str], UploadResult]
+# Signature: (local_path, rclone_options, dest, bwlimit_kbps) -> UploadResult
+UploadFn = Callable[[str, dict, str, int], UploadResult]
 
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.utcnow()
 
 
 # --- Enqueue --------------------------------------------------------------
@@ -61,7 +66,13 @@ def enqueue_for_media(db: Session, media: MediaItem) -> int:
             )
         )
         if exists is None:
-            db.add(TransferJob(media_id=media.id, provider_id=link.provider_id))
+            db.add(
+                TransferJob(
+                    media_id=media.id,
+                    provider_id=link.provider_id,
+                    priority=link.priority,
+                )
+            )
             created += 1
     db.flush()
     recompute_media_status(db, media.id)
@@ -82,7 +93,13 @@ def enqueue_for_link(db: Session, link: FolderProviderLink) -> int:
             )
         )
         if exists is None:
-            db.add(TransferJob(media_id=media.id, provider_id=link.provider_id))
+            db.add(
+                TransferJob(
+                    media_id=media.id,
+                    provider_id=link.provider_id,
+                    priority=link.priority,
+                )
+            )
             created += 1
         recompute_media_status(db, media.id)
     db.flush()
@@ -118,12 +135,15 @@ def _build_dest(dest_path: str, filename: str) -> str:
     return posixpath.join(dest_path.strip("/"), filename) if dest_path.strip("/") else filename
 
 
-def _rclone_upload_fn(local_path: str, options: dict, dest: str) -> UploadResult:
-    return run_upload(local_path, options, dest)
+def _rclone_upload_fn(local_path: str, options: dict, dest: str, bwlimit_kbps: int) -> UploadResult:
+    return run_upload(local_path, options, dest, bwlimit_kbps)
 
 
 def process_job(
-    db: Session, job: TransferJob, upload_fn: UploadFn = _rclone_upload_fn
+    db: Session,
+    job: TransferJob,
+    upload_fn: UploadFn = _rclone_upload_fn,
+    bwlimit_kbps: int = 0,
 ) -> TransferJob:
     """Run one transfer job through its state machine. Commits its own changes."""
     media = db.get(MediaItem, job.media_id)
@@ -162,7 +182,11 @@ def process_job(
     options = pt.to_rclone_options(config)
     dest = _build_dest(dest_path, media.filename)
 
-    result = upload_fn(media.stored_path, options, dest)
+    result = upload_fn(media.stored_path, options, dest, bwlimit_kbps)
+
+    # Feed observed throughput back into the bandwidth gate.
+    if result.kbps > 0:
+        bandwidth.record_measurement(db, result.kbps)
 
     settings = get_settings()
     if result.ok:
@@ -196,7 +220,7 @@ def _pick_eligible(db: Session) -> TransferJob | None:
             TransferJob.status == TransferStatus.QUEUED,
             or_(TransferJob.next_attempt_at.is_(None), TransferJob.next_attempt_at <= _now()),
         )
-        .order_by(TransferJob.created_at)
+        .order_by(TransferJob.priority.desc(), TransferJob.created_at)
         .limit(1)
     )
 
@@ -216,12 +240,33 @@ def recover_running_jobs() -> None:
 
 
 def process_one() -> bool:
-    """Process a single eligible job. Returns True if one was handled."""
+    """Process a single eligible job, respecting the bandwidth policy.
+
+    Returns True if a job was handled (so the loop can immediately try the next).
+    """
     with SessionLocal() as db:
+        policy = bandwidth.get_policy(db)
+        ok, reason = bandwidth.should_start(
+            policy.enabled,
+            policy.min_bandwidth_kbps,
+            policy.last_kbps,
+            policy.last_measured_at,
+            _utcnow_naive(),
+        )
+        if not ok:
+            logger.debug("Upload gated: %s", reason)
+            return False
+
         job = _pick_eligible(db)
         if job is None:
             return False
-        process_job(db, job)
+
+        bwlimit = bandwidth.effective_bwlimit(
+            bandwidth.parse_schedule(policy.schedule_json),
+            policy.bwlimit_kbps,
+            datetime.now(),
+        )
+        process_job(db, job, bwlimit_kbps=bwlimit)
         return True
 
 

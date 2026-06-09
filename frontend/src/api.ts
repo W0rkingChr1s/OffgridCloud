@@ -45,7 +45,26 @@ export interface FolderProviderLink {
   provider_id: number;
   provider_name: string;
   dest_path: string;
+  priority: number;
   enabled: boolean;
+}
+
+export interface BandwidthWindow {
+  start: string;
+  end: string;
+  kbps: number;
+}
+
+export interface BandwidthStatus {
+  enabled: boolean;
+  min_bandwidth_kbps: number;
+  bwlimit_kbps: number;
+  schedule: BandwidthWindow[];
+  last_kbps: number;
+  last_measured_at: string | null;
+  effective_bwlimit_kbps: number;
+  gated: boolean;
+  gate_reason: string;
 }
 
 export type TransferStatus = "queued" | "running" | "done" | "failed";

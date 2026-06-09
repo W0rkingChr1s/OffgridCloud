@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -104,19 +105,22 @@ class UploadResult:
     ok: bool
     bytes_transferred: int = 0
     message: str = ""
+    kbps: float = 0.0  # observed throughput in KiB/s
 
 
 def run_upload(
     local_path: str,
     options: dict[str, str],
     dest: str,
+    bwlimit_kbps: int = 0,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> UploadResult:
     """Upload a single local file to ``remote:dest`` via ``rclone copyto``.
 
     rclone verifies size/hash after transfer for backends that support it, so a
     zero exit code implies an integrity-checked upload. Progress is parsed from
-    rclone's JSON log on stderr.
+    rclone's JSON log on stderr. ``bwlimit_kbps`` (KiB/s, 0 = unlimited) throttles
+    the transfer; observed throughput is returned in ``kbps``.
     """
     binary = get_settings().rclone_binary
     if shutil.which(binary) is None:
@@ -127,8 +131,12 @@ def run_upload(
         "--use-json-log", "--stats", "1s", "--stats-log-level", "NOTICE",
         "--transfers", "1", "--low-level-retries", "3", "--retries", "1",
     ]
+    if bwlimit_kbps and bwlimit_kbps > 0:
+        cmd += ["--bwlimit", f"{bwlimit_kbps}k"]
     last_bytes = 0
+    last_speed = 0.0
     err_tail = ""
+    started = time.monotonic()
     try:
         proc = subprocess.Popen(
             cmd,
@@ -154,12 +162,16 @@ def run_upload(
         if isinstance(stats, dict):
             last_bytes = int(stats.get("bytes", last_bytes) or last_bytes)
             total = int(stats.get("totalBytes", 0) or 0)
+            last_speed = float(stats.get("speed", last_speed) or last_speed)
             if on_progress:
                 on_progress(last_bytes, total)
         elif obj.get("level") == "error" and obj.get("msg"):
             err_tail = obj["msg"]
 
     proc.wait()
+    elapsed = max(time.monotonic() - started, 0.001)
+    # Prefer rclone's reported speed (bytes/s); fall back to bytes/elapsed.
+    kbps = (last_speed / 1024.0) if last_speed > 0 else (last_bytes / 1024.0 / elapsed)
     if proc.returncode == 0:
-        return UploadResult(True, last_bytes, "")
-    return UploadResult(False, last_bytes, err_tail or "Upload fehlgeschlagen")
+        return UploadResult(True, last_bytes, "", kbps)
+    return UploadResult(False, last_bytes, err_tail or "Upload fehlgeschlagen", kbps)

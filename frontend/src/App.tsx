@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Bandwidth from "./pages/Bandwidth";
 import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
@@ -52,6 +53,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Transfers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/bandwidth"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Bandwidth />
               </ProtectedRoute>
             }
           />

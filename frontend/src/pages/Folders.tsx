@@ -75,11 +75,11 @@ export default function Folders() {
     }
   }
 
-  async function addLink(folderId: number, providerId: number, destPath: string) {
+  async function addLink(folderId: number, providerId: number, destPath: string, priority: number) {
     try {
       await api(`/api/folders/${folderId}/providers`, {
         method: "POST",
-        body: JSON.stringify({ provider_id: providerId, dest_path: destPath }),
+        body: JSON.stringify({ provider_id: providerId, dest_path: destPath, priority }),
       });
       load();
     } catch (e) {
@@ -181,13 +181,14 @@ function ProviderLinks({
   folderId: number;
   links: FolderProviderLink[];
   providers: Provider[];
-  onAdd: (folderId: number, providerId: number, destPath: string) => void;
+  onAdd: (folderId: number, providerId: number, destPath: string, priority: number) => void;
   onRemove: (folderId: number, providerId: number) => void;
 }) {
   const linkedIds = new Set(links.map((l) => l.provider_id));
   const available = providers.filter((p) => !linkedIds.has(p.id));
   const [providerId, setProviderId] = useState<number | "">("");
   const [destPath, setDestPath] = useState("");
+  const [priority, setPriority] = useState(0);
 
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-sm outline-none focus:border-ogc-teal";
 
@@ -201,6 +202,7 @@ function ProviderLinks({
             <span className="text-slate-200">
               {l.provider_name}
               {l.dest_path && <span className="text-slate-500"> → {l.dest_path}</span>}
+              {l.priority !== 0 && <span className="ml-1 text-xs text-ogc-teal">P{l.priority}</span>}
             </span>
             <button onClick={() => onRemove(folderId, l.provider_id)} className="text-xs text-red-300 hover:underline">
               entfernen
@@ -220,13 +222,15 @@ function ProviderLinks({
             ))}
           </select>
           <input className={`${field} flex-1`} placeholder="Ziel-Pfad / Bucket (optional)" value={destPath} onChange={(e) => setDestPath(e.target.value)} />
+          <input className={`${field} w-20`} type="number" title="Priorität (höher = zuerst)" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
           <button
             disabled={!providerId}
             onClick={() => {
               if (providerId) {
-                onAdd(folderId, providerId, destPath);
+                onAdd(folderId, providerId, destPath, priority);
                 setProviderId("");
                 setDestPath("");
+                setPriority(0);
               }
             }}
             className="rounded-lg bg-ogc-blue/80 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"

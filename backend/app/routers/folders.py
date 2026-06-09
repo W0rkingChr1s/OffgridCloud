@@ -16,6 +16,8 @@ from ..models import (
     FolderProviderLink,
     MediaItem,
     Role,
+    TransferJob,
+    TransferStatus,
     UploadFolder,
     User,
 )
@@ -25,6 +27,7 @@ from ..schemas import (
     FolderOut,
     FolderProviderLinkCreate,
     FolderProviderLinkOut,
+    FolderProviderLinkUpdate,
     FolderUpdate,
     MediaItemOut,
 )
@@ -163,6 +166,7 @@ def list_links(
             provider_id=link.provider_id,
             provider_name=names.get(link.provider_id, ""),
             dest_path=link.dest_path,
+            priority=link.priority,
             enabled=link.enabled,
         )
         for link in links
@@ -194,7 +198,10 @@ def add_link(
         raise HTTPException(status_code=409, detail="Provider bereits verknüpft")
 
     link = FolderProviderLink(
-        folder_id=folder_id, provider_id=payload.provider_id, dest_path=payload.dest_path
+        folder_id=folder_id,
+        provider_id=payload.provider_id,
+        dest_path=payload.dest_path,
+        priority=payload.priority,
     )
     db.add(link)
     db.commit()
@@ -208,6 +215,52 @@ def add_link(
         provider_id=link.provider_id,
         provider_name=provider.name,
         dest_path=link.dest_path,
+        priority=link.priority,
+        enabled=link.enabled,
+    )
+
+
+@router.patch(
+    "/{folder_id}/providers/{provider_id}", response_model=FolderProviderLinkOut
+)
+def update_link(
+    folder_id: int,
+    provider_id: int,
+    payload: FolderProviderLinkUpdate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> FolderProviderLinkOut:
+    link = db.scalar(
+        select(FolderProviderLink).where(
+            FolderProviderLink.folder_id == folder_id,
+            FolderProviderLink.provider_id == provider_id,
+        )
+    )
+    if link is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+    if payload.dest_path is not None:
+        link.dest_path = payload.dest_path
+    if payload.enabled is not None:
+        link.enabled = payload.enabled
+    if payload.priority is not None:
+        link.priority = payload.priority
+        # Propagate to still-queued jobs so re-prioritisation takes effect.
+        media_ids = select(MediaItem.id).where(MediaItem.folder_id == folder_id)
+        db.query(TransferJob).filter(
+            TransferJob.provider_id == provider_id,
+            TransferJob.media_id.in_(media_ids),
+            TransferJob.status == TransferStatus.QUEUED,
+        ).update({TransferJob.priority: payload.priority}, synchronize_session=False)
+    db.commit()
+    db.refresh(link)
+    provider = db.get(CloudProvider, provider_id)
+    return FolderProviderLinkOut(
+        id=link.id,
+        folder_id=link.folder_id,
+        provider_id=link.provider_id,
+        provider_name=provider.name if provider else "",
+        dest_path=link.dest_path,
+        priority=link.priority,
         enabled=link.enabled,
     )
 

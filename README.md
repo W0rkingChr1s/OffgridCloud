@@ -85,11 +85,12 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 - **Phase 2** — Ordner & lokale Datei-Annahme: Admin legt Ordner an und gibt sie Benutzern frei; Benutzer laden per **chunked/resumable Upload** (Drag & Drop, Fortschritt) große Videos hoch — chunk-weise auf Platte gestreamt (Pi-3-schonend), SHA-256 beim Abschluss.
 - **Phase 3** — Cloud-Provider-Anbindung: Admin verknüpft Ziel-Speicher (11 Typen: S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP/SCP, FTP/FTPS, Hetzner Storage Box, SMB/NAS) über **rclone**, mit dynamischem Formular, **Verbindungstest** und verschlüsselter Credential-Ablage (Secrets im UI maskiert).
 - **Phase 4** — Ordner ↔ Provider & Transfer-Engine: Admin verknüpft Ordner mit einem/mehreren Cloud-Zielen; ein **Hintergrund-Worker** lädt Medien per rclone automatisch hoch — mit Status-Lebenszyklus (queued → uploading → done), **Retry mit Backoff**, Resume-Recovery und Transfers-Übersicht mit manuellem Retry. **Damit ist die Upload-Blockade aufgelöst.**
+- **Phase 5** — Bandbreiten-Steuerung: **Drosselung (`--bwlimit`) mit Zeitfenstern** (z. B. nachts volle Last), **Mindest-Bandbreite-Gate** (pausiert Uploads bei schwacher Leitung, Messung aus realem Durchsatz) und **Prioritäten** je Ordner↔Provider (Eilmaterial zuerst) — alles über eine Admin-Oberfläche.
 
 > Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
 > angelegt — **Passwort nach dem ersten Login ändern.**
 
-Als Nächstes: **Phase 5** (Bandbreiten-Steuerung — Upload passt sich der Leitung an). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Als Nächstes: **Phase 6** (Dashboard & Realtime — Live-Fortschritt per WebSocket/SSE) → erreicht **Meilenstein M3**. Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 

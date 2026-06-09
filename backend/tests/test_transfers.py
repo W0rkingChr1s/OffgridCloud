@@ -36,11 +36,11 @@ def _upload(client, auth, folder_id, filename, data: bytes):
     return client.post(f"/api/uploads/{sess['id']}/complete", headers=auth).json()
 
 
-def ok_fn(local, options, dest):
-    return UploadResult(True, 999, "")
+def ok_fn(local, options, dest, bwlimit=0):
+    return UploadResult(True, 999, "", 500.0)
 
 
-def fail_fn(local, options, dest):
+def fail_fn(local, options, dest, bwlimit=0):
     return UploadResult(False, 0, "boom")
 
 
@@ -154,6 +154,30 @@ def test_retry_endpoint_requeues_failed_job(client, admin_auth):
     assert resp.status_code == 200
     assert resp.json()["status"] == "queued"
     assert resp.json()["attempts"] == 0
+
+
+def test_priority_job_is_picked_first(client, admin_auth):
+    from app.transfers import _pick_eligible
+
+    p_low = _provider(client, admin_auth, "Low")
+    p_high = _provider(client, admin_auth, "High")
+    folder = _folder(client, admin_auth)
+    client.post(
+        f"/api/folders/{folder['id']}/providers",
+        headers=admin_auth,
+        json={"provider_id": p_low["id"], "priority": 0},
+    )
+    client.post(
+        f"/api/folders/{folder['id']}/providers",
+        headers=admin_auth,
+        json={"provider_id": p_high["id"], "priority": 10},
+    )
+    _upload(client, admin_auth, folder["id"], "x.mp4", b"data")
+
+    with SessionLocal() as db:
+        job = _pick_eligible(db)
+        assert job is not None
+        assert job.provider_id == p_high["id"]  # higher priority wins
 
 
 def test_two_providers_media_done_only_when_all_done(client, admin_auth):
