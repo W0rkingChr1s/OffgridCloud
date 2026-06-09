@@ -28,7 +28,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-lg font-bold">OffgridCloud</span>
           </Link>
           <nav className="flex items-center gap-1">
-            <NavLink to="/" label="Dashboard" />
+            <NavLink to="/" label="Ordner" />
+            {user?.role === "admin" && <NavLink to="/admin/folders" label="Verwalten" />}
             {user?.role === "admin" && <NavLink to="/users" label="Benutzer" />}
           </nav>
           <div className="ml-auto flex items-center gap-3">

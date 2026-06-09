@@ -79,14 +79,15 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 
 ## Status
 
-🚧 **Phasen 0 & 1 erledigt:**
+🚧 **Phasen 0–2 erledigt** (Meilenstein **M1 – Walking Skeleton** komplett):
 - **Phase 0** — Grundgerüst (FastAPI + statisches React-Kachel-UI + rclone-Wrapper + systemd/Docker + CI)
-- **Phase 1** — Auth & User-Management (JWT-Login, bcrypt, Rollen Admin/Benutzer, Initial-Admin beim ersten Start, Admin-UI zum Verwalten von Konten, geschützte Routen)
+- **Phase 1** — Auth & User-Management (JWT-Login, bcrypt, Rollen Admin/Benutzer, Initial-Admin, Admin-UI, geschützte Routen)
+- **Phase 2** — Ordner & lokale Datei-Annahme: Admin legt Ordner an und gibt sie Benutzern frei; Benutzer laden per **chunked/resumable Upload** (Drag & Drop, Fortschritt) große Videos hoch — chunk-weise auf Platte gestreamt (Pi-3-schonend), SHA-256 beim Abschluss.
 
 > Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
 > angelegt — **Passwort nach dem ersten Login ändern.**
 
-Als Nächstes: **Phase 2** (Ordner & lokale Datei-Annahme). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Als Nächstes: **Phase 3** (Cloud-Provider-Anbindung). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 

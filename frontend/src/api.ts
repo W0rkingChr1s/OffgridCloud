@@ -11,6 +11,34 @@ export interface User {
   created_at: string;
 }
 
+export interface Folder {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  user_ids: number[];
+  media_count: number;
+}
+
+export type MediaStatus =
+  | "received"
+  | "queued"
+  | "uploading"
+  | "verified"
+  | "done"
+  | "failed";
+
+export interface MediaItem {
+  id: number;
+  folder_id: number;
+  filename: string;
+  size: number;
+  sha256: string;
+  status: MediaStatus;
+  uploaded_by: number | null;
+  created_at: string;
+}
+
 export interface Health {
   status: string;
   app: string;

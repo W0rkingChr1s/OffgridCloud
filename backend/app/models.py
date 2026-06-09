@@ -1,8 +1,8 @@
 """ORM models.
 
-Phase 0 ships only the ``User`` model so the database layer is real and
-testable. Folders, providers, media items and transfer jobs follow in later
-phases (see docs/ENTWICKLUNGSPLAN.md).
+Phase 0: User. Phase 1: roles/auth. Phase 2: folders, per-user access, media
+items and resumable upload sessions. Providers and transfer jobs follow later
+(see docs/ENTWICKLUNGSPLAN.md).
 """
 
 from __future__ import annotations
@@ -10,8 +10,17 @@ from __future__ import annotations
 import enum
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
@@ -19,6 +28,15 @@ from .db import Base
 class Role(str, enum.Enum):
     ADMIN = "admin"
     USER = "user"
+
+
+class MediaStatus(str, enum.Enum):
+    RECEIVED = "received"
+    QUEUED = "queued"
+    UPLOADING = "uploading"
+    VERIFIED = "verified"
+    DONE = "done"
+    FAILED = "failed"
 
 
 def _utcnow() -> datetime:
@@ -34,4 +52,64 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role), default=Role.USER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class UploadFolder(Base):
+    __tablename__ = "folders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    access: Mapped[list[FolderAccess]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
+    media: Mapped[list[MediaItem]] = relationship(
+        back_populates="folder", cascade="all, delete-orphan"
+    )
+
+
+class FolderAccess(Base):
+    """Which user may upload into which folder (m:n)."""
+
+    __tablename__ = "folder_access"
+    __table_args__ = (UniqueConstraint("folder_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+
+    folder: Mapped[UploadFolder] = relationship(back_populates="access")
+
+
+class MediaItem(Base):
+    __tablename__ = "media_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"))
+    filename: Mapped[str] = mapped_column(String(500))
+    stored_path: Mapped[str] = mapped_column(Text)
+    size: Mapped[int] = mapped_column(BigInteger, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[MediaStatus] = mapped_column(Enum(MediaStatus), default=MediaStatus.RECEIVED)
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    folder: Mapped[UploadFolder] = relationship(back_populates="media")
+
+
+class UploadSession(Base):
+    """A resumable upload in progress. Persisted so it survives restarts."""
+
+    __tablename__ = "upload_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)  # uuid4
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"))
+    filename: Mapped[str] = mapped_column(String(500))
+    temp_path: Mapped[str] = mapped_column(Text)
+    size: Mapped[int] = mapped_column(BigInteger, default=0)  # expected total, 0 = unknown
+    received: Mapped[int] = mapped_column(BigInteger, default=0)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

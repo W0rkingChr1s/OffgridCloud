@@ -33,14 +33,15 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Admin-UI: Benutzer anlegen/sperren/Rolle ändern/Passwort-Reset/löschen
 - ☑ Geschützte Routen im Frontend (Rollen-Guards, geschützte API-Aufrufe)
 
-## Phase 2 — Ordner & lokale Datei-Annahme
+## Phase 2 — Ordner & lokale Datei-Annahme ✅
 *Ergebnis: Benutzer lädt Dateien lokal in freigegebene Ordner — schnell & stabil.*
+*→ Meilenstein **M1 (Walking Skeleton)** komplett.*
 
-- ☐ Datenmodell `UploadFolder`, `FolderUserAccess`, `MediaItem`
-- ☐ Admin-UI: Ordner anlegen/bearbeiten, Benutzern freigeben
-- ☐ Chunked / resumable Upload-Endpunkt (große Videos!) + Hash beim Empfang
-- ☐ Benutzer-UI: Drag & Drop, Fortschritt, nur freigegebene Ordner sichtbar
-- ☐ Dateiablage auf lokalem Storage, `MediaItem`-Status `received`
+- ☑ Datenmodell `UploadFolder`, `FolderAccess`, `MediaItem`, `UploadSession`
+- ☑ Admin-UI: Ordner anlegen/bearbeiten/löschen, Benutzern freigeben
+- ☑ Chunked / resumable Upload-Endpunkt (große Videos!) + SHA-256 beim Abschluss
+- ☑ Benutzer-UI: Drag & Drop, Fortschritt, nur freigegebene Ordner sichtbar
+- ☑ Dateiablage auf lokalem Storage, `MediaItem`-Status `received`
 
 ## Phase 3 — Cloud-Provider-Anbindung
 *Ergebnis: Admin verknüpft Provider; Verbindungstest grün.*

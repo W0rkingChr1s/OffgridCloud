@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import Role
+from .models import MediaStatus, Role
 
 
 def _normalise_email(value: str) -> str:
@@ -58,3 +58,64 @@ class UserUpdate(BaseModel):
     role: Role | None = None
     active: bool | None = None
     password: str | None = Field(default=None, min_length=8)
+
+
+# --- Folders --------------------------------------------------------------
+
+
+class FolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+
+
+class FolderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+
+
+class FolderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str
+    created_at: datetime
+    user_ids: list[int] = []
+    media_count: int = 0
+
+
+class FolderAccessUpdate(BaseModel):
+    """Replace the full set of users with upload access to a folder."""
+
+    user_ids: list[int]
+
+
+# --- Media & uploads ------------------------------------------------------
+
+
+class MediaItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    folder_id: int
+    filename: str
+    size: int
+    sha256: str
+    status: MediaStatus
+    uploaded_by: int | None
+    created_at: datetime
+
+
+class UploadCreate(BaseModel):
+    filename: str = Field(min_length=1, max_length=500)
+    size: int = Field(default=0, ge=0)
+
+
+class UploadSessionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    folder_id: int
+    filename: str
+    size: int
+    received: int
