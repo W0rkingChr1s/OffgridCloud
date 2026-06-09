@@ -35,6 +35,7 @@ export interface MediaItem {
   size: number;
   sha256: string;
   status: MediaStatus;
+  local_deleted: boolean;
   uploaded_by: number | null;
   created_at: string;
 }

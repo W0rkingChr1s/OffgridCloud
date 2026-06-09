@@ -1,8 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError, type Folder, type MediaItem } from "../api";
+import { api, ApiError, type Folder, getToken, type MediaItem } from "../api";
 import Layout from "../components/Layout";
 import { formatBytes, uploadFile } from "../upload";
+
+function Thumb({ id }: { id: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex h-10 w-14 items-center justify-center rounded bg-slate-700/60 text-slate-400">
+        ▦
+      </div>
+    );
+  }
+  return (
+    <img
+      src={`/api/media/${id}/thumbnail?token=${encodeURIComponent(getToken() ?? "")}`}
+      alt=""
+      loading="lazy"
+      className="h-10 w-14 rounded object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 interface UploadRow {
   name: string;
@@ -132,6 +152,7 @@ export default function FolderDetail() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
+                <th className="px-4 py-3">Vorschau</th>
                 <th className="px-4 py-3">Datei</th>
                 <th className="px-4 py-3">Größe</th>
                 <th className="px-4 py-3">Status</th>
@@ -141,6 +162,7 @@ export default function FolderDetail() {
             <tbody>
               {media.map((m) => (
                 <tr key={m.id} className="border-t border-white/5 bg-slate-900/40">
+                  <td className="px-4 py-3">{m.local_deleted ? <span className="text-xs text-slate-500">gelöscht</span> : <Thumb id={m.id} />}</td>
                   <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
                   <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
                   <td className="px-4 py-3">
