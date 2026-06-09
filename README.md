@@ -2,8 +2,6 @@
   <img src="assets/logo/offgridcloud-logo.svg" alt="OffgridCloud" width="520">
 </p>
 
-<p align="center"><strong>Upload when the signal is right.</strong></p>
-
 # OffgridCloud
 
 Ein selbst-gehosteter Mini-Server, der Medien-Uploads aus dem Feld von instabilen
