@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { RetroEasterEgg } from "./retro";
 import Bandwidth from "./pages/Bandwidth";
 import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
@@ -15,6 +16,7 @@ import Users from "./pages/Users";
 export default function App() {
   return (
     <BrowserRouter>
+      <RetroEasterEgg />
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />

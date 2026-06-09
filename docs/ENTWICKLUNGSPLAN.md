@@ -95,13 +95,14 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Monitoring/Health, Disk-Auslastung + Speicher-Warnung (System-Seite)
 - ☑ Dokumentation: Installations- & Betriebshandbuch (`docs/BETRIEB.md`)
 
-## Phase 8 — Erweiterungen (Backlog)
-*Nach MVP, nach Bedarf.*
+## Phase 8 — Erweiterungen
 
-- ☐ Teams/Gruppen statt nur Admin/User
-- ☐ Thumbnails/Vorschau für Bilder & Videos
-- ☐ Mobile-optimierter Upload / PWA für das Feld-Team
-- ☐ Webhook/Benachrichtigung ans Social-Media-Team bei „fertig"
+- ☑ Teams/Gruppen statt nur Admin/User (Gruppen + Mitgliedschaft + Ordner-Freigabe an Teams)
+- ☑ Thumbnails/Vorschau für Bilder (Pillow) & Videos (ffmpeg, falls installiert)
+- ☑ PWA für das Feld-Team (installierbar, Offline-App-Shell, mobil-optimiert)
+- ☑ Webhook/Benachrichtigung ans Social-Media-Team bei „fertig"
+- ☑ Aktive Bandbreiten-Probe (nachgezogen aus Phase 5)
+- ☑ 🥚 Easter Egg: 80er-Terminal-/CRT-Design (Konami-Code)
 - ☐ Multi-Server / mehrere Mini-Server poolen
 - ☐ Metadaten/Tagging, Such-/Filterfunktionen
 

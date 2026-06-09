@@ -94,7 +94,11 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 
 **Meilensteine M3 (Kernversprechen) & M4 (feldtauglich) erreicht** — das Produkt ist einsatzbereit.
 
-Optional/Backlog: **Phase 8** (Teams/Gruppen, Thumbnails, PWA fürs Feld, Benachrichtigungen). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+- **Phase 8** — Erweiterungen: **Teams/Gruppen** (Ordner an ganze Teams freigeben), **Thumbnails** (Bilder via Pillow, Videos via ffmpeg), **PWA** (installierbar, Offline-App-Shell fürs Feld), **Webhook** bei „fertig", **aktive Bandbreiten-Probe**.
+
+> 🥚 **Easter Egg:** Konami-Code (↑ ↑ ↓ ↓ ← → ← → B A) schaltet ein 80er-Terminal-/CRT-Design frei.
+
+Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche. Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 
