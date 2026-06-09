@@ -39,6 +39,37 @@ export interface MediaItem {
   created_at: string;
 }
 
+export type ProviderStatus = "unknown" | "ok" | "error";
+
+export interface Provider {
+  id: number;
+  name: string;
+  type: string;
+  status: ProviderStatus;
+  last_error: string;
+  last_tested_at: string | null;
+  created_at: string;
+  config: Record<string, string>;
+}
+
+export interface ProviderField {
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  secret: boolean;
+  help: string;
+  default: string;
+  options: string[];
+}
+
+export interface ProviderTypeDef {
+  key: string;
+  label: string;
+  help: string;
+  fields: ProviderField[];
+}
+
 export interface Health {
   status: string;
   app: string;

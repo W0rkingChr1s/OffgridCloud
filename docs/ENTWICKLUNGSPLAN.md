@@ -43,15 +43,16 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Benutzer-UI: Drag & Drop, Fortschritt, nur freigegebene Ordner sichtbar
 - ☑ Dateiablage auf lokalem Storage, `MediaItem`-Status `received`
 
-## Phase 3 — Cloud-Provider-Anbindung
+## Phase 3 — Cloud-Provider-Anbindung ✅
 *Ergebnis: Admin verknüpft Provider; Verbindungstest grün.*
 
-- ☐ Datenmodell `CloudProvider` (Config verschlüsselt at rest)
-- ☐ Provider-Typen + Feld-Schemata (S3, Azure, OneDrive/SharePoint, WebDAV/Nextcloud/
-      ownCloud, SFTP, SCP/SSH, FTP/FTPS, NAS, Hetzner Storage Box, MinIO)
-- ☐ Mapping `CloudProvider` → rclone-Remote (Konfig-Generator)
-- ☐ Admin-UI: Provider hinzufügen (Typ → Felder → **Verbindungstest**)
-- ☐ Sichere Credential-Speicherung + Maskierung im UI
+- ☑ Datenmodell `CloudProvider` (Config verschlüsselt at rest via Fernet)
+- ☑ Provider-Typen + Feld-Schemata (11 Typen: S3, MinIO, Azure Blob, OneDrive/
+      SharePoint, Nextcloud, ownCloud, WebDAV, SFTP/SCP, FTP/FTPS, Hetzner
+      Storage Box, SMB/NAS)
+- ☑ Mapping `CloudProvider` → rclone-Remote (Env-basiert, Secrets nicht auf Platte)
+- ☑ Admin-UI: Provider hinzufügen (Typ → dynamische Felder → **Verbindungstest**)
+- ☑ Sichere Credential-Speicherung + Maskierung im UI
 
 ## Phase 4 — Ordner ↔ Provider & Transfer-Engine
 *Ergebnis: Dateien wandern automatisch in die Cloud.*

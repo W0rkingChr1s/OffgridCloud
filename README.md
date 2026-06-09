@@ -79,15 +79,16 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 
 ## Status
 
-🚧 **Phasen 0–2 erledigt** (Meilenstein **M1 – Walking Skeleton** komplett):
+🚧 **Phasen 0–3 erledigt** (Meilenstein **M1 – Walking Skeleton** komplett):
 - **Phase 0** — Grundgerüst (FastAPI + statisches React-Kachel-UI + rclone-Wrapper + systemd/Docker + CI)
 - **Phase 1** — Auth & User-Management (JWT-Login, bcrypt, Rollen Admin/Benutzer, Initial-Admin, Admin-UI, geschützte Routen)
 - **Phase 2** — Ordner & lokale Datei-Annahme: Admin legt Ordner an und gibt sie Benutzern frei; Benutzer laden per **chunked/resumable Upload** (Drag & Drop, Fortschritt) große Videos hoch — chunk-weise auf Platte gestreamt (Pi-3-schonend), SHA-256 beim Abschluss.
+- **Phase 3** — Cloud-Provider-Anbindung: Admin verknüpft Ziel-Speicher (11 Typen: S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP/SCP, FTP/FTPS, Hetzner Storage Box, SMB/NAS) über **rclone**, mit dynamischem Formular, **Verbindungstest** und verschlüsselter Credential-Ablage (Secrets im UI maskiert).
 
 > Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
 > angelegt — **Passwort nach dem ersten Login ändern.**
 
-Als Nächstes: **Phase 3** (Cloud-Provider-Anbindung). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Als Nächstes: **Phase 4** (Ordner ↔ Provider verknüpfen & Dateien automatisch in die Cloud übertragen). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 

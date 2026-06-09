@@ -10,6 +10,7 @@ orchestration arrives in Phase 4.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -42,3 +43,55 @@ def check_rclone() -> RcloneStatus:
 
     first_line = result.stdout.splitlines()[0] if result.stdout else ""
     return RcloneStatus(available=True, version=first_line.strip() or None)
+
+
+@dataclass(frozen=True)
+class TestResult:
+    ok: bool
+    message: str
+
+
+_REMOTE = "ogctest"
+
+
+def _remote_env(options: dict[str, str]) -> dict[str, str]:
+    """Build RCLONE_CONFIG_* env vars so secrets never touch disk."""
+    env = dict(os.environ)
+    for key, value in options.items():
+        env[f"RCLONE_CONFIG_{_REMOTE.upper()}_{key.upper()}"] = str(value)
+    return env
+
+
+def test_remote(options: dict[str, str], subpath: str = "") -> TestResult:
+    """Try to list the remote's root (or subpath) with a short timeout."""
+    binary = get_settings().rclone_binary
+    if shutil.which(binary) is None:
+        return TestResult(False, f"rclone ('{binary}') ist nicht installiert")
+
+    target = f"{_REMOTE}:{subpath}"
+    cmd = [
+        binary, "lsd", target,
+        "--max-depth", "1",
+        "--low-level-retries", "1",
+        "--retries", "1",
+        "--contimeout", "10s",
+        "--timeout", "15s",
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=_remote_env(options),
+        )
+    except subprocess.TimeoutExpired:
+        return TestResult(False, "Zeitüberschreitung beim Verbindungstest")
+    except OSError as exc:  # pragma: no cover
+        return TestResult(False, str(exc))
+
+    if result.returncode == 0:
+        return TestResult(True, "Verbindung erfolgreich")
+    # Surface a concise error (last non-empty stderr line).
+    err_lines = [ln for ln in (result.stderr or "").splitlines() if ln.strip()]
+    return TestResult(False, err_lines[-1] if err_lines else "Verbindung fehlgeschlagen")

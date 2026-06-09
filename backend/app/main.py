@@ -19,7 +19,7 @@ from .bootstrap import ensure_initial_admin
 from .config import get_settings
 from .db import init_db
 from .rclone import check_rclone
-from .routers import auth, folders, uploads, users
+from .routers import auth, folders, providers, uploads, users
 
 settings = get_settings()
 
@@ -38,6 +38,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(folders.router)
 app.include_router(uploads.router)
+app.include_router(providers.router)
 
 
 @app.get("/api/health")

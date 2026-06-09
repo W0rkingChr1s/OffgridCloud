@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
 import Login from "./pages/Login";
+import Providers from "./pages/Providers";
 import Users from "./pages/Users";
 
 export default function App() {
@@ -34,6 +35,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Folders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/providers"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Providers />
               </ProtectedRoute>
             }
           />

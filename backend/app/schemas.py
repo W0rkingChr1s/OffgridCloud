@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import MediaStatus, Role
+from .models import MediaStatus, ProviderStatus, Role
 
 
 def _normalise_email(value: str) -> str:
@@ -119,3 +119,41 @@ class UploadSessionOut(BaseModel):
     filename: str
     size: int
     received: int
+
+
+# --- Cloud providers ------------------------------------------------------
+
+
+class ProviderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    type: str
+    config: dict[str, str] = {}
+
+
+class ProviderUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    config: dict[str, str] | None = None
+
+
+class ProviderTestRequest(BaseModel):
+    """Test an unsaved draft, or a saved provider with config overrides."""
+
+    type: str
+    config: dict[str, str] = {}
+    subpath: str = ""
+
+
+class ProviderTestResult(BaseModel):
+    ok: bool
+    message: str
+
+
+class ProviderOut(BaseModel):
+    id: int
+    name: str
+    type: str
+    status: ProviderStatus
+    last_error: str
+    last_tested_at: datetime | None
+    created_at: datetime
+    config: dict[str, str]  # secrets masked

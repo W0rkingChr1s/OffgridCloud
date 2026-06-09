@@ -30,6 +30,12 @@ class Role(str, enum.Enum):
     USER = "user"
 
 
+class ProviderStatus(str, enum.Enum):
+    UNKNOWN = "unknown"
+    OK = "ok"
+    ERROR = "error"
+
+
 class MediaStatus(str, enum.Enum):
     RECEIVED = "received"
     QUEUED = "queued"
@@ -98,6 +104,23 @@ class MediaItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     folder: Mapped[UploadFolder] = relationship(back_populates="media")
+
+
+class CloudProvider(Base):
+    """A configured upload target. Credentials are stored encrypted as JSON."""
+
+    __tablename__ = "cloud_providers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    type: Mapped[str] = mapped_column(String(50))  # registry key, e.g. "s3"
+    config_encrypted: Mapped[str] = mapped_column(Text)  # encrypted JSON blob
+    status: Mapped[ProviderStatus] = mapped_column(
+        Enum(ProviderStatus), default=ProviderStatus.UNKNOWN
+    )
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class UploadSession(Base):
