@@ -1,0 +1,133 @@
+/* 80s terminal / green-phosphor CRT easter egg.
+   Activated via the Konami code. Scoped under html.retro and overrides the
+   Tailwind look with broad attribute selectors so the whole UI turns retro. */
+
+@import url("https://fonts.googleapis.com/css2?family=VT323&display=swap");
+
+html.retro,
+html.retro body {
+  background: #050805 !important;
+}
+
+html.retro,
+html.retro * {
+  font-family: "VT323", "Courier New", monospace !important;
+  color: #33ff66 !important;
+  border-radius: 0 !important;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.6);
+}
+
+/* Flatten every panel/background to terminal black. */
+html.retro [class*="bg-slate-"],
+html.retro [class*="bg-ogc-"],
+html.retro [class*="bg-white"],
+html.retro [class*="bg-emerald-"],
+html.retro [class*="bg-red-"],
+html.retro [class*="bg-orange-"] {
+  background: #0a0f0a !important;
+}
+
+html.retro [class*="bg-gradient"] {
+  background: #0a1f0a !important;
+}
+
+/* Borders, rings and dividers become phosphor green; kill soft shadows. */
+html.retro [class*="ring-"],
+html.retro [class*="border"] {
+  border-color: #1f9f3f !important;
+  --tw-ring-color: #1f9f3f !important;
+  box-shadow: none !important;
+}
+
+html.retro [class*="shadow"] {
+  box-shadow: 0 0 8px rgba(51, 255, 102, 0.15) !important;
+}
+
+/* Bright green for emphasis; dim green for muted text. */
+html.retro [class*="text-white"],
+html.retro h1,
+html.retro h2,
+html.retro h3 {
+  color: #aaffaa !important;
+}
+html.retro [class*="text-slate-5"],
+html.retro [class*="text-slate-4"] {
+  color: #2aa84a !important;
+}
+
+/* Inputs/selects as terminal fields. */
+html.retro input,
+html.retro select,
+html.retro textarea,
+html.retro button {
+  background: #0a0f0a !important;
+  border: 1px solid #1f9f3f !important;
+}
+
+/* Tint images/thumbnails to monochrome green. */
+html.retro img {
+  filter: grayscale(1) sepia(1) hue-rotate(60deg) saturate(4) brightness(0.85) !important;
+}
+
+/* CRT scanlines + vignette overlay. */
+html.retro body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.28) 3px,
+      rgba(0, 0, 0, 0.28) 3px
+    ),
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.55) 100%);
+  animation: ogc-flicker 6s infinite;
+}
+
+@keyframes ogc-flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.82; }
+  98% { opacity: 0.92; }
+}
+
+/* Retro badge shown while the mode is active. */
+.retro-badge {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 9999;
+  font-family: "VT323", monospace;
+  color: #33ff66;
+  background: #0a0f0a;
+  border: 1px solid #1f9f3f;
+  padding: 4px 10px;
+  cursor: pointer;
+  text-shadow: 0 0 4px rgba(51, 255, 102, 0.7);
+}
+.retro-badge::before {
+  content: "▮ ";
+  animation: ogc-cursor 1s steps(1) infinite;
+}
+@keyframes ogc-cursor {
+  50% { opacity: 0; }
+}
+
+/* Brief activation toast. */
+.retro-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  font-family: "VT323", monospace;
+  color: #aaffaa;
+  background: #0a0f0a;
+  border: 1px solid #33ff66;
+  padding: 8px 16px;
+  text-shadow: 0 0 6px rgba(51, 255, 102, 0.8);
+}

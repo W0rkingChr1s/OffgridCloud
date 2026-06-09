@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+
+# Built UI copied into the backend at build time
+backend/app/static/
+
+# Runtime data & secrets
+data/
+.env
+
+# OS / editor
+.DS_Store
+*.swp
+
+# TS build info
+*.tsbuildinfo
