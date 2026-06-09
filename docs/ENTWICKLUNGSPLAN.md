@@ -9,14 +9,17 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 ---
 
 ## Phase 0 — Fundament & Setup
-*Ergebnis: lauffähiges Projektgerüst, das jeder starten kann.*
+*Ergebnis: lauffähiges Projektgerüst, das jeder starten kann — Pi-3-tauglich.*
 
 - ☐ Repo-Struktur (`backend/`, `frontend/`, `docs/`, `assets/`, `deploy/`)
-- ☐ `docker-compose.yml` (Backend, Frontend, optional Redis) + `.env.example`
 - ☐ Backend-Grundgerüst FastAPI: Healthcheck, Config-Loader, SQLite-Anbindung
+- ☐ Frontend zu **statischen Dateien** bauen, vom FastAPI ausliefern (kein Node zur Laufzeit)
 - ☐ Frontend-Grundgerüst React + Vite + TypeScript + Tailwind, Logo eingebunden
-- ☐ rclone im Backend-Container verfügbar + Versions-Check
-- ☐ CI: Lint + Tests + Build (GitHub Actions)
+- ☐ rclone-Binary einbinden + Versions-Check (Subprozess-Wrapper)
+- ☐ **Deployment-Variante A:** nativer **systemd-Service** + Install-Skript (empfohlen für RPi 3)
+- ☐ **Deployment-Variante B:** ein einziges **Docker-Image** (multi-arch arm64), in CI gebaut — *kein* compose-Stack
+- ☐ `.env.example` (Initial-Admin, Secret-Key, Puffer-Pfad auf USB-SSD)
+- ☐ CI: Lint + Tests + Frontend-Build + Image-Build (GitHub Actions)
 - ☐ `CONTRIBUTING.md`, Code-Style, `.editorconfig`
 
 ## Phase 1 — Auth & User-Management

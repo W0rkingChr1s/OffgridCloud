@@ -41,7 +41,9 @@ den Status für alle transparent.
 ## Architektur in einem Satz
 
 FastAPI-Backend + **rclone** als universelle Transfer-Engine (deckt alle Provider ab)
-+ bandbreiten-gesteuerter Worker + React/Vite-Kachel-UI, deploybar per Docker.
++ bandbreiten-gesteuerter In-Process-Worker + React/Vite-Kachel-UI (als statische Dateien
+ausgeliefert). Läuft als **ein Prozess** — sparsam genug für einen **Raspberry Pi 3**
+(nativer systemd-Service oder ein einziges Docker-Image, ~150–250 MB RAM).
 Details und Begründung im [Konzept](docs/KONZEPT.md).
 
 ## Status

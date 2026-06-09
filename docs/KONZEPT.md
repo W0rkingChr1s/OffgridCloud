@@ -145,16 +145,48 @@ Design-Sprache: Kacheln mit Status-Farbcodierung, Logo-Palette
 |----------------|------|------------|
 | **Backend**    | Python + **FastAPI** | Async, schnelle API, gute rclone-/Subprozess-Anbindung, einfache Wartung. |
 | **Transfer**   | **rclone** | Deckt alle Provider ab (s. o.). |
-| **Queue/Worker** | FastAPI Background-Tasks → später **Redis + Worker** | MVP simpel, skaliert bei Bedarf. |
+| **Queue/Worker** | **SQLite-Queue + In-Process-Worker** (MVP) → Redis nur bei echtem Bedarf | Spart einen Dienst → wichtig auf 1 GB RAM. |
 | **DB**         | **SQLite** (MVP) → optional PostgreSQL | Appliance-tauglich, keine Extra-Dienste. |
 | **Auth**       | JWT + bcrypt, Rollen-Middleware | Schlankes Rollenmodell. |
-| **Frontend**   | **React + Vite + TypeScript**, Tailwind CSS | Schnelles, modernes Kachel-UI; großes Ökosystem. |
+| **Frontend**   | **React + Vite + TypeScript**, Tailwind CSS | Modernes Kachel-UI; wird zu **statischen Dateien** gebaut und vom Backend ausgeliefert → **kein Node zur Laufzeit**. |
 | **Realtime**   | WebSocket / SSE | Live-Fortschritt im Dashboard. |
-| **Deployment** | **Docker / docker-compose** | Ein-Befehl-Setup auf dem Mini-Server. |
+| **Deployment** | **Nativer systemd-Service** (empfohlen für RPi 3) **oder ein einziges Docker-Image** (multi-arch arm64) | Ein Prozess statt compose-Stack — s. Abschnitt 11. |
 | **Secrets**    | Verschlüsselung der Provider-Credentials at rest | Sicherheit der Cloud-Zugänge. |
 
 > Stack ist eine **begründete Empfehlung**, kein Dogma. Falls das Team Node/Go
 > bevorzugt, ist die Architektur (rclone-Engine + REST + Kachel-UI) übertragbar.
+
+## 8a. Betrieb auf dem Raspberry Pi 3 (Ressourcen-Budget)
+
+Zielplattform ist u. a. ein **Raspberry Pi 3** — sparsam und lautlos, aber mit
+harten Grenzen. Die Architektur ist explizit darauf ausgelegt.
+
+**Die Grenzen:**
+- **1 GB RAM** (LPDDR2) — der bestimmende Faktor.
+- **microSD** als Systemmedium — langsam und verschleißanfällig bei vielen Schreibvorgängen.
+- CPU (Quad-Core A53) reicht problemlos, da **rclone** die Transferarbeit übernimmt.
+
+**Konsequenzen für das Design (statt 3-Container-compose):**
+
+1. **Ein Prozess** — FastAPI liefert API **und** das statische React-UI aus und ruft
+   `rclone` als Subprozess. Kein separater Frontend-Dienst, kein Node zur Laufzeit.
+2. **Keine zusätzlichen Dienste** — SQLite statt PostgreSQL, In-Process-Worker statt Redis.
+3. **Realistisches RAM-Budget:** ~150–250 MB im Betrieb (FastAPI + rclone-Subprozess),
+   passt mit Puffer in 1 GB.
+
+**Deployment-Optionen (beide unterstützt):**
+
+| Variante | Für wen | Hinweise |
+|----------|---------|----------|
+| **Nativer systemd-Service** *(empfohlen für RPi 3)* | Maximale Sparsamkeit | Python-venv + rclone-Binary + `.service`-Unit. Kein Docker-Overhead. |
+| **Ein einziges Docker-Image** (multi-arch arm64) | Reproduzierbarkeit, einfache Updates | **Ein** Container, kein compose-Stack. ~50–80 MB extra für den Daemon. |
+
+**Pi-spezifische Pflicht-Regeln:**
+- **Medien-Puffer auf externe USB-SSD** legen, nicht auf die SD-Karte (Verschleiß + Platz).
+- **Chunked Uploads streamen direkt auf Platte** — niemals ganze Videos im RAM puffern (OOM-Schutz).
+- **rclone gedrosselt:** `--transfers 1–2`, moderates `--buffer-size`, `--bwlimit`.
+- **64-bit Raspberry Pi OS** empfohlen (arm64-Wheels, bessere Performance).
+- **Builds nicht auf dem Pi** — Docker-Image und Frontend in CI bauen, nur fertige Artefakte ausliefern.
 
 ## 9. Sicherheit
 
