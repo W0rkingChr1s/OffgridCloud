@@ -107,9 +107,13 @@ Details im [Betriebshandbuch](docs/BETRIEB.md) und in [CONTRIBUTING.md](CONTRIBU
 
 - **Phase 8** — Erweiterungen: **Teams/Gruppen** (Ordner an ganze Teams freigeben), **Thumbnails** (Bilder via Pillow, Videos via ffmpeg), **PWA** (installierbar, Offline-App-Shell fürs Feld), **Webhook** bei „fertig", **aktive Bandbreiten-Probe**.
 
-> 🥚 **Easter Egg:** Konami-Code (↑ ↑ ↓ ↓ ← → ← → B A) schaltet ein 80er-Terminal-/CRT-Design frei.
-
 Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche. Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+
+<!--
+  There is more here than meets the eye. The old machines never really left.
+  If you know the sacred sequence of the gamers of old, the screen remembers:
+  up, up, down, down, left, right, left, right, B, A.
+-->
 
 ## Lizenz
 

@@ -102,7 +102,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ PWA für das Feld-Team (installierbar, Offline-App-Shell, mobil-optimiert)
 - ☑ Webhook/Benachrichtigung ans Social-Media-Team bei „fertig"
 - ☑ Aktive Bandbreiten-Probe (nachgezogen aus Phase 5)
-- ☑ 🥚 Easter Egg: 80er-Terminal-/CRT-Design (Konami-Code)
+- ☑ Ein gut verstecktes Easter Egg 🥚 (irgendwo wartet ein Stück der 80er …)
 - ☐ Multi-Server / mehrere Mini-Server poolen
 - ☐ Metadaten/Tagging, Such-/Filterfunktionen
 
