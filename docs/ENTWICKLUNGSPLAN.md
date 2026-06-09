@@ -22,15 +22,16 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ CI: Lint + Tests + Frontend-Build + Image-Build (GitHub Actions)
 - ☑ `CONTRIBUTING.md`, Code-Style, `.editorconfig`
 
-## Phase 1 — Auth & User-Management
+## Phase 1 — Auth & User-Management ✅
 *Ergebnis: Login, Rollen, Admin kann Benutzer verwalten.*
 
-- ☐ Datenmodell `User`, Migrationen
-- ☐ Registrierung deaktiviert/Initial-Admin via Env beim ersten Start
-- ☐ Login (JWT), Passwort-Hashing (bcrypt), Logout/Refresh
-- ☐ Rollen-Middleware (`admin` / `user`)
-- ☐ Admin-UI: Benutzer anlegen/sperren/Rolle ändern/Passwort-Reset
-- ☐ Geschützte Routen im Frontend (Rollen-Guards)
+- ☑ Datenmodell `User` (Migrationen via `create_all`; Alembic bei wachsendem Schema)
+- ☑ Registrierung deaktiviert/Initial-Admin via Env beim ersten Start
+- ☑ Login (JWT) + Passwort-Hashing (bcrypt); Logout client-seitig (Token verwerfen).
+      *Refresh-Token später, falls nötig.*
+- ☑ Rollen-Dependencies (`admin` / `user`): `get_current_user`, `require_admin`
+- ☑ Admin-UI: Benutzer anlegen/sperren/Rolle ändern/Passwort-Reset/löschen
+- ☑ Geschützte Routen im Frontend (Rollen-Guards, geschützte API-Aufrufe)
 
 ## Phase 2 — Ordner & lokale Datei-Annahme
 *Ergebnis: Benutzer lädt Dateien lokal in freigegebene Ordner — schnell & stabil.*

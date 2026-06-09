@@ -79,9 +79,14 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 
 ## Status
 
-🚧 **Phase 0 erledigt** — lauffähiges Grundgerüst (FastAPI + statisches React-Kachel-UI
-+ rclone-Wrapper + systemd/Docker-Deployment + CI). Als Nächstes: Phase 1 (Auth &
-User-Management). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+🚧 **Phasen 0 & 1 erledigt:**
+- **Phase 0** — Grundgerüst (FastAPI + statisches React-Kachel-UI + rclone-Wrapper + systemd/Docker + CI)
+- **Phase 1** — Auth & User-Management (JWT-Login, bcrypt, Rollen Admin/Benutzer, Initial-Admin beim ersten Start, Admin-UI zum Verwalten von Konten, geschützte Routen)
+
+> Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
+> angelegt — **Passwort nach dem ersten Login ändern.**
+
+Als Nächstes: **Phase 2** (Ordner & lokale Datei-Annahme). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 

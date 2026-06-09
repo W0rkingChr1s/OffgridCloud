@@ -15,9 +15,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .bootstrap import ensure_initial_admin
 from .config import get_settings
 from .db import init_db
 from .rclone import check_rclone
+from .routers import auth, users
 
 settings = get_settings()
 
@@ -26,10 +28,14 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     init_db()
+    ensure_initial_admin()
     yield
 
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
+
+app.include_router(auth.router)
+app.include_router(users.router)
 
 
 @app.get("/api/health")
