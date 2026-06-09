@@ -1,0 +1,46 @@
+<svg width="960" height="240" viewBox="0 0 960 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OffgridCloud">
+  <defs>
+    <linearGradient id="lkBg" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5A4"/>
+      <stop offset="0.55" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="lkArrow" x1="100" y1="60" x2="100" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C7F9F7"/>
+    </linearGradient>
+    <linearGradient id="lkWord" x1="280" y1="80" x2="280" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0EA5A4"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon (scaled down) -->
+  <g transform="translate(20,20) scale(0.39)">
+    <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#lkBg)"/>
+    <g stroke="#A5F3F0" stroke-opacity="0.45" stroke-width="6" stroke-linecap="round">
+      <line x1="96" y1="120" x2="170" y2="190"/>
+      <line x1="416" y1="120" x2="342" y2="190"/>
+      <line x1="96" y1="392" x2="170" y2="322"/>
+      <line x1="416" y1="392" x2="342" y2="322"/>
+    </g>
+    <g fill="#A5F3F0" fill-opacity="0.85">
+      <circle cx="96" cy="120" r="13"/>
+      <circle cx="416" cy="120" r="13"/>
+      <circle cx="96" cy="392" r="13"/>
+      <circle cx="416" cy="392" r="13"/>
+    </g>
+    <path d="M168 336 a64 64 0 0 1 6 -127 a86 86 0 0 1 164 -12 a58 58 0 0 1 10 139 Z" fill="#FFFFFF"/>
+    <rect x="238" y="250" width="36" height="84" rx="18" fill="url(#lkArrow)"/>
+    <path d="M256 196 L312 262 H200 Z" fill="url(#lkArrow)"/>
+    <g fill="#0EA5A4">
+      <rect x="300" y="300" width="12" height="14" rx="3"/>
+      <rect x="318" y="292" width="12" height="22" rx="3"/>
+      <rect x="336" y="282" width="12" height="32" rx="3"/>
+    </g>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="232" y="132" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="68" font-weight="700" fill="url(#lkWord)">Offgrid<tspan fill="#312E81">Cloud</tspan></text>
+  <text x="234" y="176" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="23" font-weight="500" letter-spacing="2" fill="#64748B">UPLOAD WHEN THE SIGNAL IS RIGHT</text>
+</svg>
