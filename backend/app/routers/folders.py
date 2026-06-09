@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..admin_ops import audit
 from ..db import get_db
 from ..deps import get_current_user, require_admin
 from ..models import (
@@ -74,7 +75,7 @@ def list_folders(
 @router.post("", response_model=FolderOut, status_code=status.HTTP_201_CREATED)
 def create_folder(
     payload: FolderCreate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> FolderOut:
     folder = UploadFolder(name=payload.name, description=payload.description)
@@ -82,6 +83,7 @@ def create_folder(
     db.commit()
     db.refresh(folder)
     folder_dir(folder.id)  # create on disk
+    audit(db, admin, "folder.create", folder.name)
     return _to_out(db, folder)
 
 
@@ -112,13 +114,15 @@ def update_folder(
 @router.delete("/{folder_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_folder(
     folder_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> Response:
     folder = _get_folder(db, folder_id)
+    name = folder.name
     db.delete(folder)  # cascades access + media rows
     db.commit()
     shutil.rmtree(folder_dir(folder_id), ignore_errors=True)
+    audit(db, admin, "folder.delete", name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -181,7 +185,7 @@ def list_links(
 def add_link(
     folder_id: int,
     payload: FolderProviderLinkCreate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> FolderProviderLinkOut:
     _get_folder(db, folder_id)
@@ -209,6 +213,7 @@ def add_link(
     # Backfill transfer jobs for media already in the folder.
     enqueue_for_link(db, link)
     db.commit()
+    audit(db, admin, "folder.link_add", f"folder={folder_id} provider={provider.name}")
     return FolderProviderLinkOut(
         id=link.id,
         folder_id=link.folder_id,
@@ -273,7 +278,7 @@ def update_link(
 def remove_link(
     folder_id: int,
     provider_id: int,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> Response:
     link = db.scalar(
@@ -286,6 +291,7 @@ def remove_link(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
     db.delete(link)
     db.commit()
+    audit(db, admin, "folder.link_remove", f"folder={folder_id} provider={provider_id}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

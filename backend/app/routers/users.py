@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..admin_ops import audit
 from ..db import get_db
 from ..deps import require_admin
 from ..models import User
@@ -21,7 +22,11 @@ def list_users(db: Session = Depends(get_db)) -> list[User]:
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> User:
+def create_user(
+    payload: UserCreate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> User:
     if db.scalar(select(User).where(User.email == payload.email)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
     user = User(
@@ -33,6 +38,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
+    audit(db, admin, "user.create", f"{user.email} ({user.role.value})")
     return user
 
 
@@ -79,6 +85,8 @@ def delete_user(
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    email = user.email
     db.delete(user)
     db.commit()
+    audit(db, admin, "user.delete", email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

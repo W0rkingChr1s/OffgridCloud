@@ -9,10 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..admin_ops import audit
 from ..crypto import decrypt, encrypt
 from ..db import get_db
 from ..deps import require_admin
-from ..models import CloudProvider, ProviderStatus
+from ..models import CloudProvider, ProviderStatus, User
 from ..providers_registry import get_type, registry_json, validate_config
 from ..rclone import test_remote
 from ..schemas import (
@@ -100,7 +101,11 @@ def list_providers(db: Session = Depends(get_db)) -> list[ProviderOut]:
 
 
 @router.post("", response_model=ProviderOut, status_code=status.HTTP_201_CREATED)
-def create_provider(payload: ProviderCreate, db: Session = Depends(get_db)) -> ProviderOut:
+def create_provider(
+    payload: ProviderCreate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ProviderOut:
     pt = get_type(payload.type)
     if pt is None:
         raise HTTPException(status_code=400, detail=f"Unknown provider type '{payload.type}'")
@@ -117,6 +122,7 @@ def create_provider(payload: ProviderCreate, db: Session = Depends(get_db)) -> P
     db.add(provider)
     db.commit()
     db.refresh(provider)
+    audit(db, admin, "provider.create", f"{provider.name} ({provider.type})")
     return _to_out(provider)
 
 
@@ -144,10 +150,16 @@ def update_provider(
 
 
 @router.delete("/{provider_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def delete_provider(provider_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_provider(
+    provider_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
     provider = _get(db, provider_id)
+    name = provider.name
     db.delete(provider)
     db.commit()
+    audit(db, admin, "provider.delete", name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -116,6 +116,28 @@ export interface ProviderTypeDef {
   fields: ProviderField[];
 }
 
+export interface DiskUsage {
+  total: number;
+  used: number;
+  free: number;
+  percent_used: number;
+  low_space: boolean;
+}
+
+export interface SystemStatus {
+  delete_local_after_upload: boolean;
+  disk: DiskUsage;
+  rclone_available: boolean;
+}
+
+export interface AuditEvent {
+  id: number;
+  created_at: string;
+  user_email: string;
+  action: string;
+  detail: string;
+}
+
 export interface Health {
   status: string;
   app: string;

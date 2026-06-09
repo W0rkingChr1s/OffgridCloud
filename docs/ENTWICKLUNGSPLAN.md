@@ -84,15 +84,16 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Transfer-Ansicht: laufend (Live-Byte-Fortschritt) / wartend / fertig, manueller Retry
 - ☑ Status-Farbcodierung, Dark-Mode, responsives Layout
 
-## Phase 7 — Härtung, Sicherheit & Betrieb
+## Phase 7 — Härtung, Sicherheit & Betrieb ✅
 *Ergebnis: feldtauglich und sicher.*
+*→ Meilenstein **M4 (feldtauglich)** erreicht.*
 
-- ☐ HTTPS / Reverse-Proxy-Setup, optional self-signed im Feld
-- ☐ Audit-Log (Admin-Aktionen, Transfers)
-- ☐ Speicher-Management: optionales Löschen lokaler Kopien nach verifiziertem Upload
-- ☐ Backup/Restore der Konfig & DB
-- ☐ Monitoring/Health, Disk-Voll-Warnungen
-- ☐ Dokumentation: Installations- & Betriebshandbuch
+- ☑ HTTPS / Reverse-Proxy-Setup (Caddyfile + nginx-Beispiel, self-signed fürs Feld)
+- ☑ Audit-Log (Admin-Aktionen: Benutzer/Provider/Ordner/Links/Bandbreite/System)
+- ☑ Speicher-Management: optionales Löschen lokaler Kopien nach verifiziertem Upload
+- ☑ Backup/Restore der Konfig & DB (`deploy/backup.sh` + Anleitung)
+- ☑ Monitoring/Health, Disk-Auslastung + Speicher-Warnung (System-Seite)
+- ☑ Dokumentation: Installations- & Betriebshandbuch (`docs/BETRIEB.md`)
 
 ## Phase 8 — Erweiterungen (Backlog)
 *Nach MVP, nach Bedarf.*

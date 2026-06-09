@@ -56,13 +56,13 @@ def test_upload_after_link_enqueues_job(client, admin_auth):
     )
     media = _upload(client, admin_auth, folder["id"], "a.mp4", b"hello")
 
-    # Media should be queued, with one transfer job.
+    # Media should be queued, with exactly one transfer job for THIS media.
     assert media["status"] == "queued"
     transfers = client.get("/api/transfers", headers=admin_auth).json()
-    assert len(transfers) == 1
-    assert transfers[0]["media_id"] == media["id"]
-    assert transfers[0]["status"] == "queued"
-    assert transfers[0]["media_filename"] == "a.mp4"
+    mine = [t for t in transfers if t["media_id"] == media["id"]]
+    assert len(mine) == 1
+    assert mine[0]["status"] == "queued"
+    assert mine[0]["media_filename"] == "a.mp4"
 
 
 def test_successful_job_marks_media_done(client, admin_auth):

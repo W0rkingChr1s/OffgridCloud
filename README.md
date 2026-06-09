@@ -87,13 +87,14 @@ Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md)
 - **Phase 4** — Ordner ↔ Provider & Transfer-Engine: Admin verknüpft Ordner mit einem/mehreren Cloud-Zielen; ein **Hintergrund-Worker** lädt Medien per rclone automatisch hoch — mit Status-Lebenszyklus (queued → uploading → done), **Retry mit Backoff**, Resume-Recovery und Transfers-Übersicht mit manuellem Retry. **Damit ist die Upload-Blockade aufgelöst.**
 - **Phase 5** — Bandbreiten-Steuerung: **Drosselung (`--bwlimit`) mit Zeitfenstern** (z. B. nachts volle Last), **Mindest-Bandbreite-Gate** (pausiert Uploads bei schwacher Leitung, Messung aus realem Durchsatz) und **Prioritäten** je Ordner↔Provider (Eilmaterial zuerst) — alles über eine Admin-Oberfläche.
 - **Phase 6** — Dashboard & Realtime: **Live-Updates per SSE** (`/api/events`) ohne Client-Polling — Ordner-Kacheln mit Upload-% und Status-Zählern, Bandbreiten-Leiste, Transfers-Ansicht mit Live-Byte-Fortschritt der laufenden Übertragung.
+- **Phase 7** — Härtung, Sicherheit & Betrieb: **Audit-Log** der Admin-Aktionen, **Speicher-Management** (lokale Kopie nach verifiziertem Upload löschen), **Disk-Monitoring** mit Warnung, **Backup-Skript**, **Reverse-Proxy-Configs** (Caddy/nginx, self-signed fürs Feld) und ein **Betriebshandbuch** ([docs/BETRIEB.md](docs/BETRIEB.md)).
 
 > Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
 > angelegt — **Passwort nach dem ersten Login ändern.**
 
-**Meilenstein M3 (Kernversprechen) erreicht:** bandbreiten-gesteuerter, resilienter Upload mit Live-Dashboard.
+**Meilensteine M3 (Kernversprechen) & M4 (feldtauglich) erreicht** — das Produkt ist einsatzbereit.
 
-Als Nächstes: **Phase 7** (Härtung, Sicherheit & Betrieb — HTTPS, Audit-Log, Speicher-Management). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Optional/Backlog: **Phase 8** (Teams/Gruppen, Thumbnails, PWA fürs Feld, Benachrichtigungen). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 

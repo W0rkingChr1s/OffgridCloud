@@ -102,6 +102,7 @@ class MediaItemOut(BaseModel):
     size: int
     sha256: str
     status: MediaStatus
+    local_deleted: bool = False
     uploaded_by: int | None
     created_at: datetime
 
@@ -209,6 +210,34 @@ class BandwidthStatusOut(BaseModel):
     effective_bwlimit_kbps: int  # what applies right now
     gated: bool  # uploads currently paused by the min-bandwidth gate
     gate_reason: str
+
+
+class DiskUsageOut(BaseModel):
+    total: int
+    used: int
+    free: int
+    percent_used: float
+    low_space: bool
+
+
+class SystemStatusOut(BaseModel):
+    delete_local_after_upload: bool
+    disk: DiskUsageOut
+    rclone_available: bool
+
+
+class SystemSettingsUpdate(BaseModel):
+    delete_local_after_upload: bool | None = None
+
+
+class AuditEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    user_email: str
+    action: str
+    detail: str
 
 
 class TransferJobOut(BaseModel):

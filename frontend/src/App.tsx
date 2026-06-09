@@ -7,6 +7,7 @@ import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
 import Login from "./pages/Login";
 import Providers from "./pages/Providers";
+import System from "./pages/System";
 import Transfers from "./pages/Transfers";
 import Users from "./pages/Users";
 
@@ -61,6 +62,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Bandwidth />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/system"
+            element={
+              <ProtectedRoute requireAdmin>
+                <System />
               </ProtectedRoute>
             }
           />

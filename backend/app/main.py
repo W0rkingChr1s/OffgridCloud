@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .admin_ops import ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import ensure_initial_admin
 from .config import get_settings
@@ -27,6 +28,7 @@ from .routers import (
     events,
     folders,
     providers,
+    system,
     transfers,
     uploads,
     users,
@@ -42,6 +44,7 @@ async def lifespan(app: FastAPI):
     init_db()
     ensure_initial_admin()
     ensure_policy()
+    ensure_system_settings()
 
     stop = asyncio.Event()
     task: asyncio.Task | None = None
@@ -65,6 +68,7 @@ app.include_router(providers.router)
 app.include_router(transfers.router)
 app.include_router(bandwidth.router)
 app.include_router(events.router)
+app.include_router(system.router)
 
 
 @app.get("/api/health")

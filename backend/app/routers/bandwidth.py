@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..admin_ops import audit
 from ..bandwidth import effective_bwlimit, get_policy, parse_schedule, should_start
 from ..db import get_db
 from ..deps import require_admin
@@ -53,7 +54,7 @@ def get_bandwidth(
 @router.put("", response_model=BandwidthStatusOut)
 def update_bandwidth(
     payload: BandwidthPolicyUpdate,
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> BandwidthStatusOut:
     policy = get_policy(db)
@@ -67,4 +68,10 @@ def update_bandwidth(
         policy.schedule_json = json.dumps([w.model_dump() for w in payload.schedule])
     db.commit()
     db.refresh(policy)
+    audit(
+        db,
+        admin,
+        "bandwidth.update",
+        f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}",
+    )
     return _status(policy)

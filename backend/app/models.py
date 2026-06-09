@@ -107,6 +107,7 @@ class MediaItem(Base):
     size: Mapped[int] = mapped_column(BigInteger, default=0)
     sha256: Mapped[str] = mapped_column(String(64), default="")
     status: Mapped[MediaStatus] = mapped_column(Enum(MediaStatus), default=MediaStatus.RECEIVED)
+    local_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -190,6 +191,29 @@ class BandwidthPolicy(Base):
     # Last observed throughput (from real transfers) for the min-bandwidth gate.
     last_kbps: Mapped[float] = mapped_column(default=0.0)
     last_measured_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SystemSettings(Base):
+    """Singleton (id=1) for operational toggles."""
+
+    __tablename__ = "system_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Delete the local buffer copy once all transfers for a media item succeed.
+    delete_local_after_upload: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AuditEvent(Base):
+    """Append-only record of notable admin actions."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    user_email: Mapped[str] = mapped_column(String(255), default="")
+    action: Mapped[str] = mapped_column(String(100))
+    detail: Mapped[str] = mapped_column(Text, default="")
 
 
 class UploadSession(Base):

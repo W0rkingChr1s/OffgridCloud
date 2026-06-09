@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import posixpath
 import threading
 from collections.abc import Callable
@@ -246,7 +247,29 @@ def process_job(
     db.commit()
     recompute_media_status(db, media.id)
     db.commit()
+    maybe_delete_local(db, media.id)
     return job
+
+
+def maybe_delete_local(db: Session, media_id: int) -> None:
+    """If enabled, delete the local buffer copy once a media item is fully done."""
+    from .admin_ops import get_system_settings
+
+    if not get_system_settings(db).delete_local_after_upload:
+        return
+    media = db.get(MediaItem, media_id)
+    if media is None or media.status != MediaStatus.DONE or media.local_deleted:
+        return
+    try:
+        os.unlink(media.stored_path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:  # pragma: no cover
+        logger.warning("Could not delete local copy %s: %s", media.stored_path, exc)
+        return
+    media.local_deleted = True
+    db.commit()
+    logger.info("Deleted local copy of media %d after verified upload", media_id)
 
 
 # --- Worker loop ----------------------------------------------------------
