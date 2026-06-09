@@ -75,13 +75,14 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Prioritäten je Ordner↔Provider-Link (Eilmaterial zuerst)
 - ☑ Admin-UI für Regeln & Zeitfenster
 
-## Phase 6 — Dashboard & Realtime
+## Phase 6 — Dashboard & Realtime ✅
 *Ergebnis: modernes Kachel-Dashboard mit Live-Status.*
+*→ Meilenstein **M3 (Kernversprechen)** erreicht.*
 
-- ☐ WebSocket/SSE für Live-Fortschritt
-- ☐ Kachel-Dashboard: Ordner-Kacheln (% hochgeladen, aktive Transfers, Bandbreite)
-- ☐ Transfer-Ansicht: laufend/wartend/fertig, Pause/Retry-Aktionen
-- ☐ Status-Farbcodierung, Dark-Mode, responsive
+- ☑ **SSE** (`/api/events`) für Live-Fortschritt (Snapshots, rollenskaliert; Token via Query)
+- ☑ Kachel-Dashboard: Ordner-Kacheln mit % hochgeladen + Status-Zählern, Bandbreiten-Leiste
+- ☑ Transfer-Ansicht: laufend (Live-Byte-Fortschritt) / wartend / fertig, manueller Retry
+- ☑ Status-Farbcodierung, Dark-Mode, responsives Layout
 
 ## Phase 7 — Härtung, Sicherheit & Betrieb
 *Ergebnis: feldtauglich und sicher.*

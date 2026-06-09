@@ -113,7 +113,7 @@ def run_upload(
     options: dict[str, str],
     dest: str,
     bwlimit_kbps: int = 0,
-    on_progress: Callable[[int, int], None] | None = None,
+    on_progress: Callable[[int, int, float], None] | None = None,
 ) -> UploadResult:
     """Upload a single local file to ``remote:dest`` via ``rclone copyto``.
 
@@ -164,7 +164,7 @@ def run_upload(
             total = int(stats.get("totalBytes", 0) or 0)
             last_speed = float(stats.get("speed", last_speed) or last_speed)
             if on_progress:
-                on_progress(last_bytes, total)
+                on_progress(last_bytes, total, last_speed / 1024.0)
         elif obj.get("level") == "error" and obj.get("msg"):
             err_tail = obj["msg"]
 

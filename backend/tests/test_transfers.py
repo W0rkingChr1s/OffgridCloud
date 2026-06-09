@@ -36,11 +36,13 @@ def _upload(client, auth, folder_id, filename, data: bytes):
     return client.post(f"/api/uploads/{sess['id']}/complete", headers=auth).json()
 
 
-def ok_fn(local, options, dest, bwlimit=0):
+def ok_fn(local, options, dest, bwlimit=0, on_progress=None):
+    if on_progress:
+        on_progress(999, 999, 500.0)
     return UploadResult(True, 999, "", 500.0)
 
 
-def fail_fn(local, options, dest, bwlimit=0):
+def fail_fn(local, options, dest, bwlimit=0, on_progress=None):
     return UploadResult(False, 0, "boom")
 
 

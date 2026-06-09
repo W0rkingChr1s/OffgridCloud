@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type TransferJob } from "../api";
 import Layout from "../components/Layout";
+import { useEvents } from "../events";
 import { formatBytes } from "../upload";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -11,6 +12,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 export default function Transfers() {
+  const snapshot = useEvents();
   const [jobs, setJobs] = useState<TransferJob[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,9 +23,13 @@ export default function Transfers() {
   }
   useEffect(() => {
     load();
-    const t = setInterval(load, 4000); // light polling until realtime (Phase 6)
-    return () => clearInterval(t);
   }, []);
+
+  // Re-fetch the list whenever the live status counts change.
+  const countsKey = JSON.stringify(snapshot?.transfers?.counts ?? {});
+  useEffect(() => {
+    load();
+  }, [countsKey]);
 
   async function retry(id: number) {
     try {
@@ -34,10 +40,12 @@ export default function Transfers() {
     }
   }
 
-  const counts = jobs.reduce<Record<string, number>>((acc, j) => {
-    acc[j.status] = (acc[j.status] ?? 0) + 1;
-    return acc;
-  }, {});
+  const active = Object.fromEntries((snapshot?.transfers?.active ?? []).map((a) => [a.id, a]));
+  const counts = snapshot?.transfers?.counts ??
+    jobs.reduce<Record<string, number>>((acc, j) => {
+      acc[j.status] = (acc[j.status] ?? 0) + 1;
+      return acc;
+    }, {});
 
   return (
     <Layout>
@@ -80,6 +88,20 @@ export default function Transfers() {
                       <span className={`rounded px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                       {j.status === "done" && j.bytes_transferred > 0 && (
                         <span className="ml-2 text-xs text-slate-500">{formatBytes(j.bytes_transferred)}</span>
+                      )}
+                      {j.status === "running" && active[j.id] && (
+                        <div className="mt-1.5 w-48">
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue transition-all"
+                              style={{ width: `${Math.round((active[j.id].progress || 0) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            {active[j.id].total > 0 && `${formatBytes(active[j.id].bytes)} / ${formatBytes(active[j.id].total)}`}
+                            {active[j.id].kbps > 0 && ` · ${active[j.id].kbps.toFixed(0)} KB/s`}
+                          </div>
+                        </div>
                       )}
                       {j.status === "failed" && j.last_error && (
                         <div className="mt-1 text-xs text-red-300">{j.last_error}</div>

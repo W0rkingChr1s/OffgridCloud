@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import posixpath
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -34,8 +35,32 @@ from .rclone import UploadResult, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
 
-# Signature: (local_path, rclone_options, dest, bwlimit_kbps) -> UploadResult
-UploadFn = Callable[[str, dict, str, int], UploadResult]
+# Progress callback: (bytes_done, total_bytes, kbps) -> None
+ProgressCb = Callable[[int, int, float], None]
+# Signature: (local_path, rclone_options, dest, bwlimit_kbps, on_progress) -> UploadResult
+UploadFn = Callable[[str, dict, str, int, ProgressCb | None], UploadResult]
+
+
+# --- Live progress registry (in-memory, thread-safe) ----------------------
+# Lets the SSE stream report byte-level progress of the running job without
+# hammering the database.
+_live_lock = threading.Lock()
+_live: dict[int, dict] = {}
+
+
+def set_live(job_id: int, bytes_done: int, total: int, kbps: float) -> None:
+    with _live_lock:
+        _live[job_id] = {"bytes": bytes_done, "total": total, "kbps": kbps}
+
+
+def clear_live(job_id: int) -> None:
+    with _live_lock:
+        _live.pop(job_id, None)
+
+
+def get_live() -> dict[int, dict]:
+    with _live_lock:
+        return {k: dict(v) for k, v in _live.items()}
 
 
 def _now() -> datetime:
@@ -135,8 +160,14 @@ def _build_dest(dest_path: str, filename: str) -> str:
     return posixpath.join(dest_path.strip("/"), filename) if dest_path.strip("/") else filename
 
 
-def _rclone_upload_fn(local_path: str, options: dict, dest: str, bwlimit_kbps: int) -> UploadResult:
-    return run_upload(local_path, options, dest, bwlimit_kbps)
+def _rclone_upload_fn(
+    local_path: str,
+    options: dict,
+    dest: str,
+    bwlimit_kbps: int,
+    on_progress: ProgressCb | None = None,
+) -> UploadResult:
+    return run_upload(local_path, options, dest, bwlimit_kbps, on_progress)
 
 
 def process_job(
@@ -182,7 +213,15 @@ def process_job(
     options = pt.to_rclone_options(config)
     dest = _build_dest(dest_path, media.filename)
 
-    result = upload_fn(media.stored_path, options, dest, bwlimit_kbps)
+    job_id = job.id
+
+    def _on_progress(bytes_done: int, total: int, kbps: float) -> None:
+        set_live(job_id, bytes_done, total, kbps)
+
+    try:
+        result = upload_fn(media.stored_path, options, dest, bwlimit_kbps, _on_progress)
+    finally:
+        clear_live(job_id)
 
     # Feed observed throughput back into the bandwidth gate.
     if result.kbps > 0:
