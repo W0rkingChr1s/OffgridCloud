@@ -1,0 +1,23 @@
+# systemd unit for the native (no-Docker) install — recommended for Raspberry Pi 3.
+# Install with deploy/install.sh, then: sudo systemctl enable --now offgridcloud
+[Unit]
+Description=OffgridCloud - bandwidth-aware media uploader
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=offgrid
+Group=offgrid
+WorkingDirectory=/opt/offgridcloud/backend
+EnvironmentFile=/opt/offgridcloud/.env
+ExecStart=/opt/offgridcloud/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+# Keep the footprint modest on a 1 GB Pi.
+MemoryMax=400M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

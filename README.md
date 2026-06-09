@@ -46,9 +46,42 @@ ausgeliefert). Läuft als **ein Prozess** — sparsam genug für einen **Raspber
 (nativer systemd-Service oder ein einziges Docker-Image, ~150–250 MB RAM).
 Details und Begründung im [Konzept](docs/KONZEPT.md).
 
+## Schnellstart (Entwicklung)
+
+```bash
+# Backend (Terminal 1)
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload          # http://localhost:8000
+
+# Frontend (Terminal 2)
+cd frontend
+npm install
+npm run dev                            # http://localhost:5173
+```
+
+## Deployment auf dem Raspberry Pi 3
+
+**Variante A — nativer Service (empfohlen):**
+```bash
+sudo ./deploy/install.sh
+sudo systemctl enable --now offgridcloud   # http://<pi-ip>:8000
+```
+
+**Variante B — ein einziges Docker-Image:**
+```bash
+docker build -f deploy/Dockerfile -t offgridcloud .
+docker run -d -p 8000:8000 -v /mnt/ssd/offgrid:/data --env-file .env offgridcloud
+```
+
+Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md).
+
 ## Status
 
-🚧 Frühe Planungsphase — siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+🚧 **Phase 0 erledigt** — lauffähiges Grundgerüst (FastAPI + statisches React-Kachel-UI
++ rclone-Wrapper + systemd/Docker-Deployment + CI). Als Nächstes: Phase 1 (Auth &
+User-Management). Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
 ## Lizenz
 
