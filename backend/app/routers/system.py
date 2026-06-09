@@ -25,6 +25,8 @@ def _status(db: Session) -> SystemStatusOut:
     settings_row = get_system_settings(db)
     return SystemStatusOut(
         delete_local_after_upload=settings_row.delete_local_after_upload,
+        probe_url=settings_row.probe_url,
+        webhook_url=settings_row.webhook_url,
         disk=DiskUsageOut(**disk_usage()),
         rclone_available=check_rclone().available,
     )
@@ -42,15 +44,19 @@ def update_settings(
     db: Session = Depends(get_db),
 ) -> SystemStatusOut:
     row = get_system_settings(db)
+    changed = []
     if payload.delete_local_after_upload is not None:
         row.delete_local_after_upload = payload.delete_local_after_upload
+        changed.append(f"delete_local={payload.delete_local_after_upload}")
+    if payload.probe_url is not None:
+        row.probe_url = payload.probe_url.strip()
+        changed.append("probe_url")
+    if payload.webhook_url is not None:
+        row.webhook_url = payload.webhook_url.strip()
+        changed.append("webhook_url")
+    if changed:
         db.commit()
-        audit(
-            db,
-            admin,
-            "system.update",
-            f"delete_local_after_upload={payload.delete_local_after_upload}",
-        )
+        audit(db, admin, "system.update", ", ".join(changed))
     return _status(db)
 
 

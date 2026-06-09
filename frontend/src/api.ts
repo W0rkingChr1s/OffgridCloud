@@ -126,6 +126,8 @@ export interface DiskUsage {
 
 export interface SystemStatus {
   delete_local_after_upload: boolean;
+  probe_url: string;
+  webhook_url: string;
   disk: DiskUsage;
   rclone_available: boolean;
 }

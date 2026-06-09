@@ -222,12 +222,16 @@ class DiskUsageOut(BaseModel):
 
 class SystemStatusOut(BaseModel):
     delete_local_after_upload: bool
+    probe_url: str
+    webhook_url: str
     disk: DiskUsageOut
     rclone_available: bool
 
 
 class SystemSettingsUpdate(BaseModel):
     delete_local_after_upload: bool | None = None
+    probe_url: str | None = None
+    webhook_url: str | None = None
 
 
 class AuditEventOut(BaseModel):

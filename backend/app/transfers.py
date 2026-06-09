@@ -247,8 +247,50 @@ def process_job(
     db.commit()
     recompute_media_status(db, media.id)
     db.commit()
+    maybe_notify(db, media.id)
     maybe_delete_local(db, media.id)
     return job
+
+
+def _http_post_json(url: str, payload: dict) -> None:
+    import urllib.request
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    urllib.request.urlopen(req, timeout=10).close()  # noqa: S310 (admin-set URL)
+
+
+def maybe_notify(
+    db: Session,
+    media_id: int,
+    send_fn: Callable[[str, dict], None] = _http_post_json,
+) -> None:
+    """If a webhook is configured, notify once when a media item is fully uploaded."""
+    from .admin_ops import get_system_settings
+
+    url = get_system_settings(db).webhook_url
+    if not url:
+        return
+    media = db.get(MediaItem, media_id)
+    if media is None or media.status != MediaStatus.DONE or media.notified:
+        return
+    payload = {
+        "event": "media.done",
+        "media_id": media.id,
+        "folder_id": media.folder_id,
+        "filename": media.filename,
+        "size": media.size,
+        "sha256": media.sha256,
+    }
+    try:
+        send_fn(url, payload)
+    except Exception as exc:  # noqa: BLE001 - webhook failures must not break uploads
+        logger.warning("Webhook notify failed for media %d: %s", media_id, exc)
+        return
+    media.notified = True
+    db.commit()
 
 
 def maybe_delete_local(db: Session, media_id: int) -> None:
@@ -273,6 +315,12 @@ def maybe_delete_local(db: Session, media_id: int) -> None:
 
 
 # --- Worker loop ----------------------------------------------------------
+
+
+def _has_queued(db: Session) -> bool:
+    return db.scalar(
+        select(TransferJob.id).where(TransferJob.status == TransferStatus.QUEUED).limit(1)
+    ) is not None
 
 
 def _pick_eligible(db: Session) -> TransferJob | None:
@@ -316,8 +364,26 @@ def process_one() -> bool:
             _utcnow_naive(),
         )
         if not ok:
-            logger.debug("Upload gated: %s", reason)
-            return False
+            # Try to self-heal: actively re-measure the link if a probe URL is
+            # configured, then re-evaluate the gate.
+            from .admin_ops import get_system_settings
+
+            probe_url = get_system_settings(db).probe_url
+            if probe_url and _has_queued(db):
+                kbps = bandwidth.active_probe(probe_url)
+                if kbps > 0:
+                    bandwidth.record_measurement(db, kbps)
+                    policy = bandwidth.get_policy(db)
+                    ok, reason = bandwidth.should_start(
+                        policy.enabled,
+                        policy.min_bandwidth_kbps,
+                        policy.last_kbps,
+                        policy.last_measured_at,
+                        _utcnow_naive(),
+                    )
+            if not ok:
+                logger.debug("Upload gated: %s", reason)
+                return False
 
         job = _pick_eligible(db)
         if job is None:

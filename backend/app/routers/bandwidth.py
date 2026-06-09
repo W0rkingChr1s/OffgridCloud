@@ -5,11 +5,18 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..admin_ops import audit
-from ..bandwidth import effective_bwlimit, get_policy, parse_schedule, should_start
+from ..admin_ops import audit, get_system_settings
+from ..bandwidth import (
+    active_probe,
+    effective_bwlimit,
+    get_policy,
+    parse_schedule,
+    record_measurement,
+    should_start,
+)
 from ..db import get_db
 from ..deps import require_admin
 from ..models import BandwidthPolicy, User
@@ -75,3 +82,20 @@ def update_bandwidth(
         f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}",
     )
     return _status(policy)
+
+
+@router.post("/probe", response_model=BandwidthStatusOut)
+def run_probe(
+    _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> BandwidthStatusOut:
+    """Actively measure bandwidth by downloading the configured probe URL."""
+    url = get_system_settings(db).probe_url
+    if not url:
+        raise HTTPException(status_code=400, detail="Keine Probe-URL konfiguriert (System).")
+    kbps = active_probe(url)
+    if kbps <= 0:
+        raise HTTPException(
+            status_code=502, detail="Messung fehlgeschlagen (URL nicht erreichbar?)"
+        )
+    record_measurement(db, kbps)
+    return _status(get_policy(db))

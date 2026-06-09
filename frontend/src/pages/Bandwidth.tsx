@@ -26,6 +26,15 @@ export default function Bandwidth() {
   }
   useEffect(load, []);
 
+  async function probe() {
+    setError(null);
+    try {
+      apply(await api<BandwidthStatus>("/api/bandwidth/probe", { method: "POST" }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Messung fehlgeschlagen");
+    }
+  }
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -71,11 +80,23 @@ export default function Bandwidth() {
       {status && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Tile title="Aktuelles Limit" value={status.effective_bwlimit_kbps === 0 ? "unbegrenzt" : `${status.effective_bwlimit_kbps} KB/s`} />
-          <Tile
-            title="Zuletzt gemessen"
-            value={status.last_kbps > 0 ? `${status.last_kbps.toFixed(0)} KB/s` : "—"}
-            hint={status.last_measured_at ? new Date(status.last_measured_at + "Z").toLocaleString() : "noch keine Messung"}
-          />
+          <div className="rounded-2xl bg-slate-800/60 p-5 shadow-lg ring-1 ring-white/5">
+            <div className="mb-3 h-1.5 w-12 rounded-full bg-gradient-to-r from-ogc-blue to-ogc-indigo" />
+            <div className="text-sm font-medium text-slate-400">Zuletzt gemessen</div>
+            <div className="mt-1 text-2xl font-bold text-white">
+              {status.last_kbps > 0 ? `${status.last_kbps.toFixed(0)} KB/s` : "—"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              {status.last_measured_at ? new Date(status.last_measured_at + "Z").toLocaleString() : "noch keine Messung"}
+            </div>
+            <button
+              type="button"
+              onClick={probe}
+              className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5"
+            >
+              Jetzt messen
+            </button>
+          </div>
           <Tile
             title="Upload-Status"
             value={status.gated ? "pausiert" : "bereit"}

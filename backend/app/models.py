@@ -108,6 +108,7 @@ class MediaItem(Base):
     sha256: Mapped[str] = mapped_column(String(64), default="")
     status: Mapped[MediaStatus] = mapped_column(Enum(MediaStatus), default=MediaStatus.RECEIVED)
     local_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    notified: Mapped[bool] = mapped_column(Boolean, default=False)
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -201,6 +202,10 @@ class SystemSettings(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Delete the local buffer copy once all transfers for a media item succeed.
     delete_local_after_upload: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Optional URL whose download is used to actively measure bandwidth.
+    probe_url: Mapped[str] = mapped_column(String(1000), default="")
+    # Optional webhook called when a media item finishes uploading everywhere.
+    webhook_url: Mapped[str] = mapped_column(String(1000), default="")
 
 
 class AuditEvent(Base):

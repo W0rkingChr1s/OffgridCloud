@@ -7,9 +7,17 @@ export default function System() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [probeUrl, setProbeUrl] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
 
   function load() {
-    api<SystemStatus>("/api/system").then(setStatus).catch(report);
+    api<SystemStatus>("/api/system")
+      .then((s) => {
+        setStatus(s);
+        setProbeUrl(s.probe_url);
+        setWebhookUrl(s.webhook_url);
+      })
+      .catch(report);
     api<AuditEvent[]>("/api/system/audit").then(setAudit).catch(report);
   }
   function report(e: unknown) {
@@ -17,11 +25,11 @@ export default function System() {
   }
   useEffect(load, []);
 
-  async function toggleDelete(value: boolean) {
+  async function save(patch: Record<string, unknown>) {
     try {
       const s = await api<SystemStatus>("/api/system", {
         method: "PUT",
-        body: JSON.stringify({ delete_local_after_upload: value }),
+        body: JSON.stringify(patch),
       });
       setStatus(s);
       load();
@@ -29,6 +37,7 @@ export default function System() {
       report(e);
     }
   }
+  const toggleDelete = (value: boolean) => save({ delete_local_after_upload: value });
 
   const disk = status?.disk;
   const pct = disk ? Math.round(disk.percent_used) : 0;
@@ -82,6 +91,34 @@ export default function System() {
                 Entfernt die Pufferdatei, sobald alle Zielprovider bestätigt sind.
               </span>
             </span>
+          </label>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+        <div className="mb-3 text-sm font-medium text-slate-400">Integrationen</div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm">
+            <span className="mb-1 block text-slate-400">Bandbreiten-Probe-URL</span>
+            <input
+              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+              placeholder="https://… (Datei für aktive Messung)"
+              value={probeUrl}
+              onChange={(e) => setProbeUrl(e.target.value)}
+              onBlur={() => probeUrl !== status?.probe_url && save({ probe_url: probeUrl })}
+            />
+            <span className="mt-1 block text-xs text-slate-500">Download misst den Durchsatz (Knopf „Jetzt messen“ unter Bandbreite).</span>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-slate-400">Webhook-URL (bei „fertig“)</span>
+            <input
+              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+              placeholder="https://… (POST bei fertigem Upload)"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              onBlur={() => webhookUrl !== status?.webhook_url && save({ webhook_url: webhookUrl })}
+            />
+            <span className="mt-1 block text-xs text-slate-500">Erhält ein JSON, sobald ein Medium überallhin hochgeladen wurde.</span>
           </label>
         </div>
       </div>

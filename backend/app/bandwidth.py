@@ -13,6 +13,9 @@ Pure helpers take plain values so they're easy to unit-test.
 from __future__ import annotations
 
 import json
+import time as _time
+import urllib.request
+from collections.abc import Callable
 from datetime import datetime, time, timedelta
 
 from sqlalchemy.orm import Session
@@ -118,3 +121,21 @@ def record_measurement(db: Session, kbps: float) -> None:
     policy.last_kbps = float(kbps)
     policy.last_measured_at = _utcnow_naive()
     db.commit()
+
+
+def _http_download_size(url: str, timeout: float = 20.0) -> int:
+    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (admin-set URL)
+        return len(resp.read())
+
+
+def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:
+    """Actively measure throughput by downloading ``url``. Returns KiB/s (0 on error)."""
+    if not url:
+        return 0.0
+    start = _time.monotonic()
+    try:
+        size = fetcher(url)
+    except Exception:  # noqa: BLE001 - any network error -> no measurement
+        return 0.0
+    elapsed = max(_time.monotonic() - start, 0.001)
+    return size / 1024.0 / elapsed
