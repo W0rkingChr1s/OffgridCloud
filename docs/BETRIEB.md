@@ -14,7 +14,26 @@ sudo nano /opt/offgridcloud/.env        # Secrets setzen (s. u.)
 sudo systemctl enable --now offgridcloud
 ```
 
-### Variante B — ein Docker-Image
+### Variante B — Windows (PowerShell)
+
+```powershell
+# Im Repo-Verzeichnis. Fehlende Tools (Python, Node, rclone) werden – sofern
+# winget vorhanden ist – automatisch installiert.
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1
+
+# Server starten:
+powershell -ExecutionPolicy Bypass -File deploy\run.ps1          # http://localhost:8000
+
+# Optional als Autostart-Dienst registrieren (Admin-PowerShell):
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -InstallService
+```
+
+Der Installer legt eine `.env` im Repo-Stamm an (mit zufälligem `OGC_SECRET_KEY`).
+`run.ps1` lädt diese `.env` und startet uvicorn aus der mitgelieferten venv.
+Den Dienst stoppen/starten: `Stop-ScheduledTask -TaskName OffgridCloud` /
+`Start-ScheduledTask -TaskName OffgridCloud`.
+
+### Variante C — ein Docker-Image (plattformübergreifend)
 
 ```bash
 docker build -f deploy/Dockerfile -t offgridcloud .

@@ -17,8 +17,16 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 echo ">> Installing system dependencies (python3-venv, rclone)..."
-apt-get update
-apt-get install -y --no-install-recommends python3-venv rclone
+if command -v apt-get >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y --no-install-recommends python3-venv rclone
+elif command -v dnf >/dev/null 2>&1; then
+  dnf install -y python3-virtualenv rclone || dnf install -y python3 rclone
+elif command -v pacman >/dev/null 2>&1; then
+  pacman -Sy --noconfirm python rclone
+else
+  echo "No supported package manager found. Ensure python3-venv and rclone are installed." >&2
+fi
 
 echo ">> Building frontend (requires Node.js)..."
 if ! command -v npm >/dev/null 2>&1; then
@@ -42,8 +50,17 @@ python3 -m venv "$PREFIX/backend/.venv"
 "$PREFIX/backend/.venv/bin/pip" install -r "$PREFIX/backend/requirements.txt"
 
 if [[ ! -f "$PREFIX/.env" ]]; then
-  echo ">> Creating $PREFIX/.env from example (EDIT THE SECRETS!)..."
-  cp "$REPO_ROOT/.env.example" "$PREFIX/.env"
+  echo ">> Creating $PREFIX/.env with a generated secret key..."
+  SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+  cat > "$PREFIX/.env" <<ENV
+OGC_SECRET_KEY=$SECRET
+OGC_INITIAL_ADMIN_EMAIL=admin@offgrid.local
+OGC_INITIAL_ADMIN_PASSWORD=changeme
+OGC_ENVIRONMENT=production
+OGC_DATA_DIR=$PREFIX/data
+OGC_BUFFER_DIR=$PREFIX/data/buffer
+OGC_RCLONE_BINARY=rclone
+ENV
 fi
 
 mkdir -p "$PREFIX/data/buffer"

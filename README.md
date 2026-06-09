@@ -61,21 +61,34 @@ npm install
 npm run dev                            # http://localhost:5173
 ```
 
-## Deployment auf dem Raspberry Pi 3
+## Installation (Linux & Windows)
 
-**Variante A — nativer Service (empfohlen):**
+Die Installer bauen das Frontend, richten die Python-Umgebung ein, stellen rclone
+bereit, erzeugen eine `.env` mit zufälligem Secret-Key und registrieren optional
+einen Autostart-Dienst.
+
+**Linux / Raspberry Pi (systemd):**
 ```bash
 sudo ./deploy/install.sh
-sudo systemctl enable --now offgridcloud   # http://<pi-ip>:8000
+sudo systemctl enable --now offgridcloud      # http://<host>:8000
 ```
 
-**Variante B — ein einziges Docker-Image:**
+**Windows (PowerShell):**
+```powershell
+# fehlende Tools (Python/Node/rclone) werden via winget nachgezogen
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Setup
+powershell -ExecutionPolicy Bypass -File deploy\run.ps1               # starten
+# optional als Autostart-Dienst (Adminrechte):
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -InstallService
+```
+
+**Docker (ein Image, plattformübergreifend):**
 ```bash
 docker build -f deploy/Dockerfile -t offgridcloud .
 docker run -d -p 8000:8000 -v /mnt/ssd/offgrid:/data --env-file .env offgridcloud
 ```
 
-Details in [CONTRIBUTING.md](CONTRIBUTING.md) und dem [Konzept](docs/KONZEPT.md).
+Details im [Betriebshandbuch](docs/BETRIEB.md) und in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status
 
