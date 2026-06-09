@@ -34,6 +34,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {user?.role === "admin" && <NavLink to="/admin/transfers" label="Transfers" />}
             {user?.role === "admin" && <NavLink to="/admin/bandwidth" label="Bandbreite" />}
             {user?.role === "admin" && <NavLink to="/users" label="Benutzer" />}
+            {user?.role === "admin" && <NavLink to="/admin/groups" label="Teams" />}
             {user?.role === "admin" && <NavLink to="/admin/system" label="System" />}
           </nav>
           <div className="ml-auto flex items-center gap-3">

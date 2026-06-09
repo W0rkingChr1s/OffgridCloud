@@ -20,7 +20,6 @@ from ..bandwidth import effective_bwlimit, get_policy, parse_schedule, should_st
 from ..db import SessionLocal
 from ..models import (
     CloudProvider,
-    FolderAccess,
     MediaItem,
     Role,
     TransferJob,
@@ -29,6 +28,7 @@ from ..models import (
     User,
 )
 from ..security import decode_access_token
+from ..storage import accessible_folder_ids
 from ..transfers import get_live
 
 router = APIRouter(tags=["events"])
@@ -49,12 +49,12 @@ def _user_from_token(token: str) -> int:
 def _accessible_folders(db: Session, user: User) -> list[UploadFolder]:
     if user.role == Role.ADMIN:
         return list(db.scalars(select(UploadFolder).order_by(UploadFolder.name)))
+    ids = accessible_folder_ids(db, user)
+    if not ids:
+        return []
     return list(
         db.scalars(
-            select(UploadFolder)
-            .join(FolderAccess, FolderAccess.folder_id == UploadFolder.id)
-            .where(FolderAccess.user_id == user.id)
-            .order_by(UploadFolder.name)
+            select(UploadFolder).where(UploadFolder.id.in_(ids)).order_by(UploadFolder.name)
         )
     )
 

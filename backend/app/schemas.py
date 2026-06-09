@@ -81,6 +81,7 @@ class FolderOut(BaseModel):
     description: str
     created_at: datetime
     user_ids: list[int] = []
+    group_ids: list[int] = []
     media_count: int = 0
 
 
@@ -88,6 +89,34 @@ class FolderAccessUpdate(BaseModel):
     """Replace the full set of users with upload access to a folder."""
 
     user_ids: list[int]
+
+
+class FolderGroupsUpdate(BaseModel):
+    """Replace the full set of groups with upload access to a folder."""
+
+    group_ids: list[int]
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = ""
+
+
+class GroupUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+
+
+class GroupMembersUpdate(BaseModel):
+    user_ids: list[int]
+
+
+class GroupOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    created_at: datetime
+    member_ids: list[int] = []
 
 
 # --- Media & uploads ------------------------------------------------------

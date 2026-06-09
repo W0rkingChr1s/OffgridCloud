@@ -17,7 +17,16 @@ export interface Folder {
   description: string;
   created_at: string;
   user_ids: number[];
+  group_ids: number[];
   media_count: number;
+}
+
+export interface Group {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  member_ids: number[];
 }
 
 export type MediaStatus =

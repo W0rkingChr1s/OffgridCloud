@@ -14,7 +14,9 @@ from ..deps import get_current_user, require_admin
 from ..models import (
     CloudProvider,
     FolderAccess,
+    FolderGroupAccess,
     FolderProviderLink,
+    Group,
     MediaItem,
     Role,
     TransferJob,
@@ -25,6 +27,7 @@ from ..models import (
 from ..schemas import (
     FolderAccessUpdate,
     FolderCreate,
+    FolderGroupsUpdate,
     FolderOut,
     FolderProviderLinkCreate,
     FolderProviderLinkOut,
@@ -32,7 +35,7 @@ from ..schemas import (
     FolderUpdate,
     MediaItemOut,
 )
-from ..storage import folder_dir, user_can_access_folder
+from ..storage import accessible_folder_ids, folder_dir, user_can_access_folder
 from ..transfers import enqueue_for_link
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
@@ -41,6 +44,11 @@ router = APIRouter(prefix="/api/folders", tags=["folders"])
 def _to_out(db: Session, folder: UploadFolder) -> FolderOut:
     user_ids = list(
         db.scalars(select(FolderAccess.user_id).where(FolderAccess.folder_id == folder.id))
+    )
+    group_ids = list(
+        db.scalars(
+            select(FolderGroupAccess.group_id).where(FolderGroupAccess.folder_id == folder.id)
+        )
     )
     count = db.scalar(
         select(func.count(MediaItem.id)).where(MediaItem.folder_id == folder.id)
@@ -51,6 +59,7 @@ def _to_out(db: Session, folder: UploadFolder) -> FolderOut:
         description=folder.description,
         created_at=folder.created_at,
         user_ids=user_ids,
+        group_ids=group_ids,
         media_count=count or 0,
     )
 
@@ -63,12 +72,16 @@ def list_folders(
     if user.role == Role.ADMIN:
         folders = db.scalars(select(UploadFolder).order_by(UploadFolder.name)).all()
     else:
-        folders = db.scalars(
-            select(UploadFolder)
-            .join(FolderAccess, FolderAccess.folder_id == UploadFolder.id)
-            .where(FolderAccess.user_id == user.id)
-            .order_by(UploadFolder.name)
-        ).all()
+        ids = accessible_folder_ids(db, user)
+        folders = (
+            db.scalars(
+                select(UploadFolder)
+                .where(UploadFolder.id.in_(ids))
+                .order_by(UploadFolder.name)
+            ).all()
+            if ids
+            else []
+        )
     return [_to_out(db, f) for f in folders]
 
 
@@ -147,6 +160,26 @@ def set_access(
     db.query(FolderAccess).filter(FolderAccess.folder_id == folder.id).delete()
     for uid in valid_ids:
         db.add(FolderAccess(folder_id=folder.id, user_id=uid))
+    db.commit()
+    db.refresh(folder)
+    return _to_out(db, folder)
+
+
+@router.put("/{folder_id}/groups", response_model=FolderOut)
+def set_group_access(
+    folder_id: int,
+    payload: FolderGroupsUpdate,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> FolderOut:
+    folder = _get_folder(db, folder_id)
+    valid_ids = set(db.scalars(select(Group.id).where(Group.id.in_(payload.group_ids))))
+    unknown = set(payload.group_ids) - valid_ids
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unbekannte Gruppen: {sorted(unknown)}")
+    db.query(FolderGroupAccess).filter(FolderGroupAccess.folder_id == folder.id).delete()
+    for gid in valid_ids:
+        db.add(FolderGroupAccess(folder_id=folder.id, group_id=gid))
     db.commit()
     db.refresh(folder)
     return _to_out(db, folder)

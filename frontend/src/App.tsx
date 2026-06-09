@@ -5,6 +5,7 @@ import Bandwidth from "./pages/Bandwidth";
 import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
+import Groups from "./pages/Groups";
 import Login from "./pages/Login";
 import Providers from "./pages/Providers";
 import System from "./pages/System";
@@ -70,6 +71,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <System />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/groups"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Groups />
               </ProtectedRoute>
             }
           />

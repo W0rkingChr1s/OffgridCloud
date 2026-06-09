@@ -4,6 +4,7 @@ import {
   ApiError,
   type Folder,
   type FolderProviderLink,
+  type Group,
   type Provider,
   type User,
 } from "../api";
@@ -12,6 +13,7 @@ import Layout from "../components/Layout";
 export default function Folders() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [links, setLinks] = useState<Record<number, FolderProviderLink[]>>({});
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export default function Folders() {
       const fs = await api<Folder[]>("/api/folders");
       setFolders(fs);
       api<User[]>("/api/users").then(setUsers).catch(report);
+      api<Group[]>("/api/groups").then(setGroups).catch(report);
       api<Provider[]>("/api/providers").then(setProviders).catch(report);
       const entries = await Promise.all(
         fs.map(async (f) => [f.id, await api<FolderProviderLink[]>(`/api/folders/${f.id}/providers`)] as const),
@@ -69,6 +72,18 @@ export default function Folders() {
     if (!confirm(`Ordner „${folder.name}“ samt Dateien löschen?`)) return;
     try {
       await api(`/api/folders/${folder.id}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      report(e);
+    }
+  }
+
+  async function toggleGroupAccess(folder: Folder, groupId: number) {
+    const next = folder.group_ids.includes(groupId)
+      ? folder.group_ids.filter((id) => id !== groupId)
+      : [...folder.group_ids, groupId];
+    try {
+      await api(`/api/folders/${folder.id}/groups`, { method: "PUT", body: JSON.stringify({ group_ids: next }) });
       load();
     } catch (e) {
       report(e);
@@ -131,8 +146,8 @@ export default function Folders() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Freigegeben für</div>
-                <div className="flex flex-wrap gap-2">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Freigegeben für (Benutzer)</div>
+                <div className="mb-3 flex flex-wrap gap-2">
                   {users.filter((u) => u.role !== "admin").length === 0 && (
                     <span className="text-sm text-slate-500">Keine Benutzer vorhanden.</span>
                   )}
@@ -153,6 +168,24 @@ export default function Folders() {
                         </button>
                       );
                     })}
+                </div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Teams</div>
+                <div className="flex flex-wrap gap-2">
+                  {groups.length === 0 && <span className="text-sm text-slate-500">Keine Teams angelegt.</span>}
+                  {groups.map((g) => {
+                    const on = f.group_ids.includes(g.id);
+                    return (
+                      <button
+                        key={g.id}
+                        onClick={() => toggleGroupAccess(f, g.id)}
+                        className={`rounded-full px-3 py-1 text-sm transition ${
+                          on ? "bg-ogc-blue/20 text-ogc-blue ring-1 ring-ogc-blue/40" : "bg-slate-700/50 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {on ? "✓ " : ""}⛂ {g.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

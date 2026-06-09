@@ -27,6 +27,7 @@ from .routers import (
     bandwidth,
     events,
     folders,
+    groups,
     media,
     providers,
     system,
@@ -64,6 +65,7 @@ app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(folders.router)
+app.include_router(groups.router)
 app.include_router(uploads.router)
 app.include_router(providers.router)
 app.include_router(transfers.router)

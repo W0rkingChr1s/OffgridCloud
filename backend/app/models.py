@@ -97,6 +97,37 @@ class FolderAccess(Base):
     folder: Mapped[UploadFolder] = relationship(back_populates="access")
 
 
+class Group(Base):
+    """A team. Users in a group inherit access to folders shared with it."""
+
+    __tablename__ = "groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class GroupMembership(Base):
+    __tablename__ = "group_memberships"
+    __table_args__ = (UniqueConstraint("group_id", "user_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+
+
+class FolderGroupAccess(Base):
+    """Grants a whole group upload access to a folder (m:n)."""
+
+    __tablename__ = "folder_group_access"
+    __table_args__ = (UniqueConstraint("folder_id", "group_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"))
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"))
+
+
 class MediaItem(Base):
     __tablename__ = "media_items"
 

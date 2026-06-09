@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import FolderAccess, Role, User
+from .models import FolderAccess, FolderGroupAccess, GroupMembership, Role, User
 
 
 def safe_filename(name: str) -> str:
@@ -36,7 +36,34 @@ def uploads_tmp_dir() -> Path:
 def user_can_access_folder(db: Session, user: User, folder_id: int) -> bool:
     if user.role == Role.ADMIN:
         return True
-    stmt = select(FolderAccess).where(
-        FolderAccess.folder_id == folder_id, FolderAccess.user_id == user.id
+    direct = db.scalar(
+        select(FolderAccess).where(
+            FolderAccess.folder_id == folder_id, FolderAccess.user_id == user.id
+        )
     )
-    return db.scalar(stmt) is not None
+    if direct is not None:
+        return True
+    via_group = db.scalar(
+        select(FolderGroupAccess)
+        .join(GroupMembership, GroupMembership.group_id == FolderGroupAccess.group_id)
+        .where(
+            FolderGroupAccess.folder_id == folder_id,
+            GroupMembership.user_id == user.id,
+        )
+    )
+    return via_group is not None
+
+
+def accessible_folder_ids(db: Session, user: User) -> set[int]:
+    """Folder ids a non-admin user can access (direct + via group membership)."""
+    direct = set(
+        db.scalars(select(FolderAccess.folder_id).where(FolderAccess.user_id == user.id))
+    )
+    via_group = set(
+        db.scalars(
+            select(FolderGroupAccess.folder_id)
+            .join(GroupMembership, GroupMembership.group_id == FolderGroupAccess.group_id)
+            .where(GroupMembership.user_id == user.id)
+        )
+    )
+    return direct | via_group
