@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type AuditEvent, type SystemStatus } from "../api";
+import { api, ApiError, type AuditEvent, type SystemStatus, type UpdateInfo } from "../api";
 import Layout from "../components/Layout";
 import { formatBytes } from "../upload";
 
@@ -48,6 +48,8 @@ export default function System() {
       <p className="mb-6 text-sm text-slate-400">Speicher, Einstellungen und Aktivitätsprotokoll.</p>
 
       {error && <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>}
+
+      <UpdateCard />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
@@ -99,15 +101,17 @@ export default function System() {
         <div className="mb-3 text-sm font-medium text-slate-400">Integrationen</div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block text-slate-400">Bandbreiten-Probe-URL</span>
+            <span className="mb-1 block text-slate-400">Bandbreiten-Probe-URL (optional)</span>
             <input
               className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
-              placeholder="https://… (Datei für aktive Messung)"
+              placeholder="Standard: öffentliche Test-Datei (Cloudflare)"
               value={probeUrl}
               onChange={(e) => setProbeUrl(e.target.value)}
               onBlur={() => probeUrl !== status?.probe_url && save({ probe_url: probeUrl })}
             />
-            <span className="mt-1 block text-xs text-slate-500">Download misst den Durchsatz (Knopf „Jetzt messen“ unter Bandbreite).</span>
+            <span className="mt-1 block text-xs text-slate-500">
+              Leer lassen — „Jetzt messen“ (unter Bandbreite) funktioniert ohne Eingabe. Nur setzen, um ein eigenes Testziel zu nutzen.
+            </span>
           </label>
           <label className="text-sm">
             <span className="mb-1 block text-slate-400">Webhook-URL (bei „fertig“)</span>
@@ -153,5 +157,104 @@ export default function System() {
         </div>
       )}
     </Layout>
+  );
+}
+
+function UpdateCard() {
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  function check(force = false) {
+    setBusy(true);
+    setMsg(null);
+    api<UpdateInfo>(`/api/updates${force ? "?force=true" : ""}`)
+      .then(setInfo)
+      .catch((e) => setMsg(e instanceof ApiError ? e.message : "Fehler"))
+      .finally(() => setBusy(false));
+  }
+  useEffect(() => check(), []);
+
+  async function apply() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{ started: boolean; message: string }>("/api/updates/apply", {
+        method: "POST",
+      });
+      setMsg(r.message);
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : "Update fehlgeschlagen");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const available = info?.update_available;
+  return (
+    <div
+      className={`mb-6 rounded-2xl p-5 ring-1 ${
+        available ? "bg-ogc-teal/10 ring-ogc-teal/30" : "bg-slate-800/60 ring-white/10"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-sm font-medium text-slate-400">Version</span>
+        <span className="text-lg font-bold text-white">{info?.current ?? "…"}</span>
+        {available && info?.latest && (
+          <span className="rounded-full bg-ogc-teal/20 px-2 py-0.5 text-xs font-semibold text-ogc-teal">
+            Update verfügbar: {info.latest}
+          </span>
+        )}
+        {info && !available && !info.error && (
+          <span className="text-xs text-emerald-300">aktuell</span>
+        )}
+        <button
+          type="button"
+          onClick={() => check(true)}
+          disabled={busy}
+          className="ml-auto rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-50"
+        >
+          {busy ? "…" : "Nach Updates suchen"}
+        </button>
+      </div>
+
+      {info?.error && <div className="mt-2 text-xs text-slate-500">{info.error}</div>}
+
+      {available && (
+        <div className="mt-3 space-y-3">
+          {info?.release_url && (
+            <a
+              href={info.release_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-ogc-teal hover:underline"
+            >
+              Release-Notes ansehen ↗
+            </a>
+          )}
+          {info?.self_update_enabled ? (
+            <div>
+              <button
+                type="button"
+                onClick={apply}
+                disabled={busy}
+                className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Jetzt aktualisieren
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+              Update auf dem Server ausführen:
+              <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">
+                sudo /opt/offgridcloud/src/deploy/update.sh
+              </code>
+            </div>
+          )}
+        </div>
+      )}
+
+      {msg && <div className="mt-3 text-sm text-slate-300">{msg}</div>}
+    </div>
   );
 }

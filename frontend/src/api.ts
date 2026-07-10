@@ -142,6 +142,18 @@ export interface SystemStatus {
   rclone_available: boolean;
 }
 
+export interface UpdateInfo {
+  current: string;
+  latest: string | null;
+  update_available: boolean;
+  release_url: string;
+  release_name: string;
+  published_at: string;
+  notes: string;
+  error: string;
+  self_update_enabled: boolean;
+}
+
 export interface AuditEvent {
   id: number;
   created_at: string;

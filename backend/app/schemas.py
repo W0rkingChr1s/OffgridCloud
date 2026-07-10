@@ -263,6 +263,24 @@ class SystemSettingsUpdate(BaseModel):
     webhook_url: str | None = None
 
 
+class UpdateInfoOut(BaseModel):
+    current: str
+    latest: str | None = None
+    update_available: bool = False
+    release_url: str = ""
+    release_name: str = ""
+    published_at: str = ""
+    notes: str = ""
+    error: str = ""
+    # Whether one-click apply is wired up on this instance.
+    self_update_enabled: bool = False
+
+
+class UpdateApplyResult(BaseModel):
+    started: bool
+    message: str
+
+
 class AuditEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

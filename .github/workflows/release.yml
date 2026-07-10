@@ -1,0 +1,59 @@
+name: Release
+
+# Cut a release by pushing a semver tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# This builds the frontend, bundles a Node-free install tarball, and publishes a
+# GitHub Release. Instances check this release (GET /api/updates) and update via
+# deploy/update.sh.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Assemble install tarball (prebuilt UI, no Node needed)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAGE="offgridcloud-${VERSION}"
+          mkdir -p "dist/$STAGE"
+          cp -r backend "dist/$STAGE/"
+          rm -rf "dist/$STAGE/backend/.venv" "dist/$STAGE/backend/tests" \
+                 "dist/$STAGE/backend/.pytest_cache"
+          find "dist/$STAGE/backend" -name '__pycache__' -type d -prune -exec rm -rf {} +
+          cp -r frontend/dist "dist/$STAGE/backend/app/static"
+          cp -r deploy docs "dist/$STAGE/"
+          cp README.md LICENSE .env.example "dist/$STAGE/"
+          echo "$VERSION" > "dist/$STAGE/VERSION"
+          tar -C dist -czf "dist/${STAGE}.tar.gz" "$STAGE"
+          ls -lh dist/*.tar.gz
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/offgridcloud-${VERSION}.tar.gz" \
+            --title "OffgridCloud $GITHUB_REF_NAME" \
+            --generate-notes

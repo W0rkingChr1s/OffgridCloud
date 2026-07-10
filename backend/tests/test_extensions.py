@@ -26,9 +26,16 @@ def test_active_probe_handles_errors():
     assert active_probe("http://x", fetcher=boom) == 0.0
 
 
-def test_probe_endpoint_requires_url(client, admin_auth):
+def test_probe_endpoint_works_without_configured_url(client, admin_auth, monkeypatch):
+    # Zero-config: with no probe URL set, the endpoint falls back to the
+    # built-in default target instead of erroring — users enter nothing.
+    import app.routers.bandwidth as bw
+
+    monkeypatch.setattr(bw, "active_probe", lambda url: 2048.0)
     client.put("/api/system", headers=admin_auth, json={"probe_url": ""})
-    assert client.post("/api/bandwidth/probe", headers=admin_auth).status_code == 400
+    resp = client.post("/api/bandwidth/probe", headers=admin_auth)
+    assert resp.status_code == 200
+    assert resp.json()["last_kbps"] == 2048.0
 
 
 # --- Webhook notification -------------------------------------------------

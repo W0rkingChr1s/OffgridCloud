@@ -124,6 +124,11 @@ Nach der Installation für den echten Einsatz:
 5. **Backups.** `deploy/backup.sh` sichert DB + `.env` (nicht den Medien-Puffer).
 6. **Monitoring.** `GET /api/health` (ohne Auth) für Uptime-Checks; Logs via
    `journalctl -u offgridcloud -f`.
+7. **Updates.** Instanzen zeigen unter **System** die aktuelle vs. neueste
+   Version (aus den GitHub-Releases). Aktualisieren mit einem Befehl:
+   `sudo /opt/offgridcloud/src/deploy/update.sh` — Daten, `.env` und Port bleiben
+   erhalten. Für einen **One-Click-Knopf im Web-UI** bei der Installation
+   `--self-update` mitgeben.
 
 Alles im Detail im **[Betriebshandbuch](docs/BETRIEB.md)** — Reverse-Proxy,
 Bandbreiten-Steuerung, Speicher-Management, Audit-Log, Backup/Restore,
