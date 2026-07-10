@@ -44,7 +44,19 @@ ausgeliefert). Läuft als **ein Prozess** — sparsam genug für einen **Raspber
 (nativer systemd-Service oder ein einziges Docker-Image, ~150–250 MB RAM).
 Details und Begründung im [Konzept](docs/KONZEPT.md).
 
-## Schnellstart (Entwicklung)
+## In 30 Sekunden ausprobieren
+
+Ein Befehl — baut das Frontend, richtet Python ein, erzeugt eine lokale `.env`
+(mit zufälligem Admin-Passwort) und startet den Server auf `http://localhost:8000`:
+
+```bash
+./quickstart.sh                       # Ctrl-C zum Beenden
+```
+
+Braucht nur `python3` und (fürs UI) `npm`. Nichts wird systemweit installiert.
+Das generierte Admin-Passwort wird beim ersten Lauf angezeigt und in `.env` abgelegt.
+
+## Schnellstart (Entwicklung mit Live-Reload)
 
 ```bash
 # Backend (Terminal 1)
@@ -62,14 +74,22 @@ npm run dev                            # http://localhost:5173
 ## Installation (Linux & Windows)
 
 Die Installer bauen das Frontend, richten die Python-Umgebung ein, stellen rclone
-bereit, erzeugen eine `.env` mit zufälligem Secret-Key und registrieren optional
+bereit (offizieller Installer, aktuelle Version), erzeugen eine `.env` mit
+zufälligem Secret-Key **und zufälligem Admin-Passwort** und registrieren optional
 einen Autostart-Dienst.
 
 **Linux / Raspberry Pi (systemd):**
 ```bash
+sudo ./deploy/install.sh --start              # installieren + starten + Health-Check
+# oder ohne Sofortstart:
 sudo ./deploy/install.sh
 sudo systemctl enable --now offgridcloud      # http://<host>:8000
 ```
+
+Nützliche Optionen: `--admin-email you@example.com`, `--port 8080`,
+`--with-ffmpeg` (Video-Thumbnails), `--no-service`. Das einmalig angezeigte
+Admin-Passwort notieren. Entfernen: `sudo ./deploy/uninstall.sh` (`--purge`
+löscht auch Daten).
 
 **Windows (PowerShell):**
 ```powershell

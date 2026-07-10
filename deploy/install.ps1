@@ -75,16 +75,20 @@ $py = Join-Path $venv "Scripts\python.exe"
 
 # --- .env (generate a secret on first install) ----------------------------
 $envFile = Join-Path $Root ".env"
+$generatedPassword = $null
 if (-not (Test-Path $envFile)) {
-    Write-Host ">> Writing .env with a generated secret key..."
+    Write-Host ">> Writing .env with a generated secret key + admin password..."
     $bytes = New-Object byte[] 48
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $secret = [Convert]::ToBase64String($bytes)
+    $pwBytes = New-Object byte[] 12
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($pwBytes)
+    $generatedPassword = [Convert]::ToBase64String($pwBytes) -replace '[+/=]', ''
     $buffer = (Join-Path $Root "data\buffer") -replace '\\', '/'
     @(
         "OGC_SECRET_KEY=$secret"
         "OGC_INITIAL_ADMIN_EMAIL=admin@offgrid.local"
-        "OGC_INITIAL_ADMIN_PASSWORD=changeme"
+        "OGC_INITIAL_ADMIN_PASSWORD=$generatedPassword"
         "OGC_ENVIRONMENT=production"
         "OGC_DATA_DIR=$(( (Join-Path $Root 'data') -replace '\\','/' ))"
         "OGC_BUFFER_DIR=$buffer"
@@ -117,4 +121,10 @@ Write-Host "  Edit secrets:   notepad `"$envFile`""
 Write-Host "  Start manually: powershell -ExecutionPolicy Bypass -File `"$Root\deploy\run.ps1`""
 Write-Host "  Then open:      http://localhost:$Port"
 Write-Host ""
-Write-Host "  Default login: admin@offgrid.local / changeme  (change it!)" -ForegroundColor Yellow
+if ($generatedPassword) {
+    Write-Host "  Admin login (shown only once — save it now):" -ForegroundColor Yellow
+    Write-Host "    admin@offgrid.local / $generatedPassword" -ForegroundColor Yellow
+    Write-Host "  Change the password after your first login."
+} else {
+    Write-Host "  Login uses the credentials already in $envFile"
+}

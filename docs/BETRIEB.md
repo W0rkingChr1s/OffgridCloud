@@ -5,14 +5,38 @@ Mini-Server (z. B. Raspberry Pi 3).
 
 ## 1. Installation
 
+### Variante 0 — lokal ausprobieren (ohne Installation)
+
+```bash
+git clone <repo> && cd OffgridCloud
+./quickstart.sh                         # http://localhost:8000, Ctrl-C beendet
+```
+
+Baut das Frontend, legt eine venv an, schreibt eine lokale `.env` (mit zufälligem
+Admin-Passwort, das einmalig angezeigt wird) und startet den Server im Vordergrund.
+Kein root, kein systemd. Für den echten Betrieb Variante A verwenden.
+
 ### Variante A — nativer Service (empfohlen für RPi 3)
 
 ```bash
 git clone <repo> && cd OffgridCloud
-sudo ./deploy/install.sh
-sudo nano /opt/offgridcloud/.env        # Secrets setzen (s. u.)
+sudo ./deploy/install.sh --start        # baut, installiert, startet, prüft Health
+```
+
+Der Installer erzeugt `/opt/offgridcloud/.env` mit zufälligem `OGC_SECRET_KEY`
+**und zufälligem Admin-Passwort** — das Passwort wird am Ende **einmalig**
+angezeigt, also notieren. rclone wird über den offiziellen Installer in aktueller
+Version bereitgestellt.
+
+Optionen: `--admin-email EMAIL`, `--port PORT`, `--prefix DIR`, `--with-ffmpeg`
+(Video-Thumbnails), `--no-service`, `--start`. Ohne `--start` danach:
+
+```bash
+sudo nano /opt/offgridcloud/.env        # z. B. OGC_BUFFER_DIR auf USB-SSD
 sudo systemctl enable --now offgridcloud
 ```
+
+Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht alles).
 
 ### Variante B — Windows (PowerShell)
 
