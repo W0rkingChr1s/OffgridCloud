@@ -2,6 +2,12 @@
   <img src="assets/logo/offgridcloud-logo.svg" alt="OffgridCloud" width="520">
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
+  <img src="https://img.shields.io/badge/status-production--ready-brightgreen.svg" alt="Status: production-ready">
+  <img src="https://img.shields.io/badge/Raspberry%20Pi%203-supported-c51a4a.svg" alt="Raspberry Pi 3 supported">
+</p>
+
 # OffgridCloud
 
 Ein selbst-gehosteter Mini-Server, der Medien-Uploads aus dem Feld von instabilen
@@ -31,10 +37,111 @@ den Status für alle transparent.
 - 🗂️ **Ordner ↔ Provider** — ein Ordner kann an mehrere Cloud-Ziele gespiegelt werden
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
-## Dokumentation
+---
 
-- 📘 [Konzept](docs/KONZEPT.md) — Vision, Architektur, Datenmodell, Provider-Strategie, Tech-Stack
-- 🗺️ [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) — Roadmap in Phasen & Meilensteinen
+## Installation
+
+### 🚀 One-Liner (empfohlen — Linux / Raspberry Pi OS)
+
+Auf einem frischen Raspberry Pi (oder Debian/Ubuntu/Fedora/Arch) reicht **ein
+Befehl**. Er installiert alle Abhängigkeiten (git, Node, Python, rclone), baut
+das Frontend, richtet einen systemd-Dienst ein, **startet ihn und prüft den
+Health-Endpoint**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
+```
+
+Optionen werden nach `--` durchgereicht — z. B. ffmpeg für Video-Thumbnails,
+eigener Port und Admin-Login:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
+  | sudo bash -s -- --with-ffmpeg --port 8080 --admin-email admin@example.com
+```
+
+Am Ende zeigt der Installer **einmalig** ein zufällig generiertes Admin-Passwort
+— unbedingt notieren. Danach:
+
+```
+http://<host-ip>:8000     →  Login mit admin@offgrid.local / <angezeigtes Passwort>
+```
+
+> Der Installer legt Repo + App unter `/opt/offgridcloud` ab. **Updates:** den
+> One-Liner erneut ausführen (Daten & `.env` bleiben erhalten).
+
+### 🧪 Lokal ausprobieren (ohne Installation)
+
+Repo klonen und in einem Befehl im Vordergrund starten — kein root, kein systemd:
+
+```bash
+git clone https://github.com/W0rkingChr1s/OffgridCloud.git && cd OffgridCloud
+./quickstart.sh                       # http://localhost:8000, Ctrl-C beendet
+```
+
+Braucht nur `python3` und (fürs UI) `npm`. Das generierte Admin-Passwort wird
+angezeigt und in `.env` abgelegt.
+
+### 🐳 Docker (ein Image, plattformübergreifend)
+
+```bash
+docker build -f deploy/Dockerfile -t offgridcloud .
+docker run -d --name offgridcloud -p 8000:8000 \
+  -v /mnt/ssd/offgrid:/data --env-file .env --restart unless-stopped offgridcloud
+```
+
+### 🪟 Windows (PowerShell)
+
+```powershell
+# fehlende Tools (Python/Node/rclone) werden via winget nachgezogen
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Setup (erzeugt Admin-Passwort)
+powershell -ExecutionPolicy Bypass -File deploy\run.ps1                # starten
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -InstallService   # optional Autostart (Admin)
+```
+
+### Manuell / Optionen / Deinstallieren
+
+```bash
+sudo ./deploy/install.sh --help       # alle Flags: --start --admin-email --port --with-ffmpeg --no-service ...
+sudo ./deploy/uninstall.sh            # entfernen (behält Daten; --purge löscht alles)
+```
+
+---
+
+## Produktiv betreiben — Checkliste
+
+Nach der Installation für den echten Einsatz:
+
+1. **TLS/HTTPS davor setzen.** OffgridCloud lauscht intern auf HTTP (Port 8000).
+   Einen Reverse-Proxy mit Zertifikat vorschalten — Vorlagen liegen bei:
+   `deploy/Caddyfile` (Auto-TLS, `tls internal` fürs Offline-Feld) oder
+   `deploy/nginx.conf.example` (inkl. SSE-tauglicher `/api/events`-Location).
+2. **Admin-Passwort ändern** nach dem ersten Login.
+3. **Puffer auf externe SSD.** `OGC_BUFFER_DIR` in `/opt/offgridcloud/.env` auf eine
+   USB-SSD legen — **nicht** auf die microSD-Karte (Schreibverschleiß, Kapazität).
+4. **`OGC_SECRET_KEY` sichern.** Er entschlüsselt die Provider-Credentials — geht
+   er verloren, müssen alle Provider neu eingerichtet werden. Getrennt aufbewahren.
+5. **Backups.** `deploy/backup.sh` sichert DB + `.env` (nicht den Medien-Puffer).
+6. **Monitoring.** `GET /api/health` (ohne Auth) für Uptime-Checks; Logs via
+   `journalctl -u offgridcloud -f`.
+
+Alles im Detail im **[Betriebshandbuch](docs/BETRIEB.md)** — Reverse-Proxy,
+Bandbreiten-Steuerung, Speicher-Management, Audit-Log, Backup/Restore,
+Updates, Troubleshooting.
+
+## Konfiguration (`.env`)
+
+Die Installer erzeugen `.env` mit zufälligem Key & Passwort. Wichtigste Variablen:
+
+| Variable | Bedeutung |
+|----------|-----------|
+| `OGC_SECRET_KEY` | **Kritisch.** Signiert JWTs & verschlüsselt Provider-Credentials. Sichern, nicht ändern. |
+| `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD` | Initial-Admin beim ersten Start. Passwort nach Login ändern. |
+| `OGC_DATA_DIR` | SQLite-DB & App-Status. |
+| `OGC_BUFFER_DIR` | Medien-Puffer — **auf externe USB-SSD** legen. |
+| `OGC_RCLONE_BINARY` | Pfad/Name des rclone-Binaries (Default `rclone`). |
+
+Vollständige Vorlage: [`.env.example`](.env.example).
 
 ## Architektur in einem Satz
 
@@ -42,92 +149,43 @@ FastAPI-Backend + **rclone** als universelle Transfer-Engine (deckt alle Provide
 + bandbreiten-gesteuerter In-Process-Worker + React/Vite-Kachel-UI (als statische Dateien
 ausgeliefert). Läuft als **ein Prozess** — sparsam genug für einen **Raspberry Pi 3**
 (nativer systemd-Service oder ein einziges Docker-Image, ~150–250 MB RAM).
-Details und Begründung im [Konzept](docs/KONZEPT.md).
+Details im [Konzept](docs/KONZEPT.md).
 
-## In 30 Sekunden ausprobieren
-
-Ein Befehl — baut das Frontend, richtet Python ein, erzeugt eine lokale `.env`
-(mit zufälligem Admin-Passwort) und startet den Server auf `http://localhost:8000`:
+## Entwicklung
 
 ```bash
-./quickstart.sh                       # Ctrl-C zum Beenden
-```
-
-Braucht nur `python3` und (fürs UI) `npm`. Nichts wird systemweit installiert.
-Das generierte Admin-Passwort wird beim ersten Lauf angezeigt und in `.env` abgelegt.
-
-## Schnellstart (Entwicklung mit Live-Reload)
-
-```bash
-# Backend (Terminal 1)
+# Backend (Terminal 1) — Live-Reload
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload          # http://localhost:8000
 
 # Frontend (Terminal 2)
-cd frontend
-npm install
-npm run dev                            # http://localhost:5173
+cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-## Installation (Linux & Windows)
-
-Die Installer bauen das Frontend, richten die Python-Umgebung ein, stellen rclone
-bereit (offizieller Installer, aktuelle Version), erzeugen eine `.env` mit
-zufälligem Secret-Key **und zufälligem Admin-Passwort** und registrieren optional
-einen Autostart-Dienst.
-
-**Linux / Raspberry Pi (systemd):**
-```bash
-sudo ./deploy/install.sh --start              # installieren + starten + Health-Check
-# oder ohne Sofortstart:
-sudo ./deploy/install.sh
-sudo systemctl enable --now offgridcloud      # http://<host>:8000
-```
-
-Nützliche Optionen: `--admin-email you@example.com`, `--port 8080`,
-`--with-ffmpeg` (Video-Thumbnails), `--no-service`. Das einmalig angezeigte
-Admin-Passwort notieren. Entfernen: `sudo ./deploy/uninstall.sh` (`--purge`
-löscht auch Daten).
-
-**Windows (PowerShell):**
-```powershell
-# fehlende Tools (Python/Node/rclone) werden via winget nachgezogen
-powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Setup
-powershell -ExecutionPolicy Bypass -File deploy\run.ps1               # starten
-# optional als Autostart-Dienst (Adminrechte):
-powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -InstallService
-```
-
-**Docker (ein Image, plattformübergreifend):**
-```bash
-docker build -f deploy/Dockerfile -t offgridcloud .
-docker run -d -p 8000:8000 -v /mnt/ssd/offgrid:/data --env-file .env offgridcloud
-```
-
-Details im [Betriebshandbuch](docs/BETRIEB.md) und in [CONTRIBUTING.md](CONTRIBUTING.md).
+Tests & Lint: `cd backend && pytest -q && ruff check .`. Beiträge:
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Status
 
-🚧 **Phasen 0–4 erledigt** (Meilensteine **M1 – Walking Skeleton** und **M2 – Cloud-Upload** erreicht):
-- **Phase 0** — Grundgerüst (FastAPI + statisches React-Kachel-UI + rclone-Wrapper + systemd/Docker + CI)
-- **Phase 1** — Auth & User-Management (JWT-Login, bcrypt, Rollen Admin/Benutzer, Initial-Admin, Admin-UI, geschützte Routen)
-- **Phase 2** — Ordner & lokale Datei-Annahme: Admin legt Ordner an und gibt sie Benutzern frei; Benutzer laden per **chunked/resumable Upload** (Drag & Drop, Fortschritt) große Videos hoch — chunk-weise auf Platte gestreamt (Pi-3-schonend), SHA-256 beim Abschluss.
-- **Phase 3** — Cloud-Provider-Anbindung: Admin verknüpft Ziel-Speicher (11 Typen: S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP/SCP, FTP/FTPS, Hetzner Storage Box, SMB/NAS) über **rclone**, mit dynamischem Formular, **Verbindungstest** und verschlüsselter Credential-Ablage (Secrets im UI maskiert).
-- **Phase 4** — Ordner ↔ Provider & Transfer-Engine: Admin verknüpft Ordner mit einem/mehreren Cloud-Zielen; ein **Hintergrund-Worker** lädt Medien per rclone automatisch hoch — mit Status-Lebenszyklus (queued → uploading → done), **Retry mit Backoff**, Resume-Recovery und Transfers-Übersicht mit manuellem Retry. **Damit ist die Upload-Blockade aufgelöst.**
-- **Phase 5** — Bandbreiten-Steuerung: **Drosselung (`--bwlimit`) mit Zeitfenstern** (z. B. nachts volle Last), **Mindest-Bandbreite-Gate** (pausiert Uploads bei schwacher Leitung, Messung aus realem Durchsatz) und **Prioritäten** je Ordner↔Provider (Eilmaterial zuerst) — alles über eine Admin-Oberfläche.
-- **Phase 6** — Dashboard & Realtime: **Live-Updates per SSE** (`/api/events`) ohne Client-Polling — Ordner-Kacheln mit Upload-% und Status-Zählern, Bandbreiten-Leiste, Transfers-Ansicht mit Live-Byte-Fortschritt der laufenden Übertragung.
-- **Phase 7** — Härtung, Sicherheit & Betrieb: **Audit-Log** der Admin-Aktionen, **Speicher-Management** (lokale Kopie nach verifiziertem Upload löschen), **Disk-Monitoring** mit Warnung, **Backup-Skript**, **Reverse-Proxy-Configs** (Caddy/nginx, self-signed fürs Feld) und ein **Betriebshandbuch** ([docs/BETRIEB.md](docs/BETRIEB.md)).
+✅ **Produktionsreif.** Die Phasen 0–8 sind umgesetzt; alle Meilensteine
+(**M1** Walking Skeleton → **M4** Feldtauglich) sind erreicht:
 
-> Beim ersten Start wird ein Admin aus `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD`
-> angelegt — **Passwort nach dem ersten Login ändern.**
+- **Phase 0–2** — Grundgerüst, Auth/User-Management, Ordner & **chunked/resumable** lokale Uploads.
+- **Phase 3–4** — Cloud-Provider (11 Typen via rclone, Verbindungstest, verschlüsselte Credentials) & automatische **Transfer-Engine** (Retry/Backoff, Resume, Integritäts-Check).
+- **Phase 5–6** — **Bandbreiten-Steuerung** (`--bwlimit`, Zeitfenster, Mindest-Bandbreite-Gate, Prioritäten) & **Live-Dashboard** per SSE.
+- **Phase 7** — Härtung: Audit-Log, Speicher-Management, Disk-Monitoring, Backup, Reverse-Proxy-Configs, [Betriebshandbuch](docs/BETRIEB.md).
+- **Phase 8** — Teams/Gruppen, Thumbnails (Pillow/ffmpeg), PWA fürs Feld, Fertig-Webhook, aktive Bandbreiten-Probe.
 
-**Meilensteine M3 (Kernversprechen) & M4 (feldtauglich) erreicht** — das Produkt ist einsatzbereit.
+Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche — siehe
+[Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 
-- **Phase 8** — Erweiterungen: **Teams/Gruppen** (Ordner an ganze Teams freigeben), **Thumbnails** (Bilder via Pillow, Videos via ffmpeg), **PWA** (installierbar, Offline-App-Shell fürs Feld), **Webhook** bei „fertig", **aktive Bandbreiten-Probe**.
+## Dokumentation
 
-Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche. Siehe [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+- 📗 [Betriebshandbuch](docs/BETRIEB.md) — Installation, Absicherung, Betrieb
+- 📘 [Konzept](docs/KONZEPT.md) — Vision, Architektur, Datenmodell, Tech-Stack
+- 🗺️ [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) — Roadmap in Phasen & Meilensteinen
 
 <!--
   There is more here than meets the eye. The old machines never really left.

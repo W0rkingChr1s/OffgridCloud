@@ -5,6 +5,23 @@ Mini-Server (z. B. Raspberry Pi 3).
 
 ## 1. Installation
 
+### Variante A′ — One-Liner (empfohlen, frischer Server)
+
+Ein Befehl auf einem frischen Debian/Raspberry Pi OS/Fedora/Arch installiert
+alle Abhängigkeiten (git, Node, Python, rclone), klont das Repo nach
+`/opt/offgridcloud/src`, baut, richtet den Dienst ein, startet ihn und prüft den
+Health-Endpoint:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
+# mit Optionen:
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
+  | sudo bash -s -- --with-ffmpeg --port 8080 --admin-email admin@example.com
+```
+
+Überschreibbar per Env: `OGC_REPO`, `OGC_BRANCH`, `OGC_SRC`. **Update:** den
+One-Liner erneut ausführen (Daten & `.env` bleiben erhalten).
+
 ### Variante 0 — lokal ausprobieren (ohne Installation)
 
 ```bash
