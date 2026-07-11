@@ -32,6 +32,7 @@ from .routers import (
     providers,
     system,
     transfers,
+    updates,
     uploads,
     users,
 )
@@ -73,6 +74,7 @@ app.include_router(bandwidth.router)
 app.include_router(events.router)
 app.include_router(system.router)
 app.include_router(media.router)
+app.include_router(updates.router)
 
 
 @app.get("/api/health")

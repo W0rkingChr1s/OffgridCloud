@@ -16,6 +16,7 @@
 #   --port PORT            Port to serve on (default: 8000).
 #   --prefix DIR           Install location (default: /opt/offgridcloud).
 #   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
+#   --self-update          Enable one-click updates from the web UI (sudoers).
 #   --no-service           Skip installing the systemd unit.
 #   -h, --help             Show this help and exit.
 set -euo pipefail
@@ -27,9 +28,10 @@ PORT="8000"
 DO_START=0
 INSTALL_SERVICE=1
 WITH_FFMPEG=0
+SELF_UPDATE=0
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-usage() { sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +40,7 @@ while [[ $# -gt 0 ]]; do
     --port) PORT="${2:?--port needs a value}"; shift 2 ;;
     --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
+    --self-update) SELF_UPDATE=1; shift ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -140,6 +143,30 @@ if [[ $INSTALL_SERVICE -eq 1 ]]; then
   sed "s/--port 8000/--port $PORT/" "$REPO_ROOT/deploy/offgridcloud.service" \
     > /etc/systemd/system/offgridcloud.service
   systemctl daemon-reload
+fi
+
+# --- Optional: one-click self-update (sudoers + .env flags) -----------------
+if [[ $SELF_UPDATE -eq 1 ]]; then
+  step "Enabling one-click updates from the web UI..."
+  UPDATE_SCRIPT="$PREFIX/src/deploy/update.sh"
+  if [[ ! -f "$UPDATE_SCRIPT" ]]; then
+    echo "   Note: $UPDATE_SCRIPT not found. One-click update needs the one-line"
+    echo "   installer layout ($PREFIX/src). Updates via 'sudo update.sh' still work."
+  fi
+  SUDOERS=/etc/sudoers.d/offgridcloud
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $UPDATE_SCRIPT" > "$SUDOERS.tmp"
+  if visudo -cf "$SUDOERS.tmp" >/dev/null 2>&1; then
+    install -m 440 "$SUDOERS.tmp" "$SUDOERS"; rm -f "$SUDOERS.tmp"
+    # Wire the app to that command (append once, without touching secrets).
+    grep -q '^OGC_SELF_UPDATE=' "$PREFIX/.env" || echo "OGC_SELF_UPDATE=true" >> "$PREFIX/.env"
+    grep -q '^OGC_UPDATE_COMMAND=' "$PREFIX/.env" || \
+      echo "OGC_UPDATE_COMMAND=sudo $UPDATE_SCRIPT" >> "$PREFIX/.env"
+    chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
+    echo "   One-click update enabled (button appears under System when a release is newer)."
+  else
+    rm -f "$SUDOERS.tmp"
+    echo "   Could not validate sudoers rule — skipped. Use 'sudo update.sh' instead." >&2
+  fi
 fi
 
 # --- Optional start + health check -----------------------------------------

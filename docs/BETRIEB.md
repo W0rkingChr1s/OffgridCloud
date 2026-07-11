@@ -119,6 +119,12 @@ Im Admin-Bereich unter **Bandbreite**:
   Durchsatz darunter liegt (Messung aus realen Transfers, mit Cooldown).
 - **Prioritäten** je Ordner↔Provider setzen (Eilmaterial zuerst).
 
+**Messung ohne Konfiguration:** Der Knopf **„Jetzt messen"** funktioniert sofort
+— es muss nichts eingetragen werden. Er lädt eine öffentliche Test-Datei
+(Standard: Cloudflare) und misst den Durchsatz. Nur wer ein eigenes Testziel
+braucht, trägt unter **System** eine Probe-URL ein (oder setzt
+`OGC_DEFAULT_PROBE_URL`).
+
 ## 5. Speicher-Management
 
 Unter **System**:
@@ -159,7 +165,20 @@ Wiederherstellen:
 
 ## 9. Updates
 
-- **nativ:** `git pull` → `sudo ./deploy/install.sh` → `sudo systemctl restart offgridcloud`
+Instanzen prüfen automatisch gegen die **GitHub-Releases** des Projekts
+(System-Seite zeigt aktuelle vs. neueste Version). Releases entstehen durch
+einen Versions-Tag (`git tag v0.2.0 && git push origin v0.2.0` → Workflow
+`release.yml` baut & veröffentlicht).
+
+- **nativ, ein Befehl** (empfohlen): aktualisiert auf das neueste Release,
+  baut neu, startet den Dienst neu — Daten, `.env` und Port bleiben erhalten:
+  ```bash
+  sudo /opt/offgridcloud/src/deploy/update.sh          # oder --check nur prüfen
+  ```
+- **One-Click im Web-UI:** beim Installieren mit `--self-update` aktivieren
+  (`sudo ./deploy/install.sh --self-update`). Dann erscheint unter **System**
+  ein „Jetzt aktualisieren"-Knopf, sobald ein neueres Release vorliegt. Ohne
+  diese Option zeigt die UI stattdessen den obigen Befehl an.
 - **Docker:** Image neu bauen/ziehen, Container ersetzen (Volume `/data` bleibt erhalten).
 
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht

@@ -17,6 +17,7 @@ from ..bandwidth import (
     record_measurement,
     should_start,
 )
+from ..config import get_settings as get_app_settings
 from ..db import get_db
 from ..deps import require_admin
 from ..models import BandwidthPolicy, User
@@ -88,14 +89,16 @@ def update_bandwidth(
 def run_probe(
     _: User = Depends(require_admin), db: Session = Depends(get_db)
 ) -> BandwidthStatusOut:
-    """Actively measure bandwidth by downloading the configured probe URL."""
-    url = get_system_settings(db).probe_url
-    if not url:
-        raise HTTPException(status_code=400, detail="Keine Probe-URL konfiguriert (System).")
+    """Actively measure bandwidth by downloading a test file.
+
+    Zero-config: uses the built-in default target unless an admin has set a
+    custom probe URL under System — so "measure now" just works.
+    """
+    url = get_system_settings(db).probe_url.strip() or get_app_settings().default_probe_url
     kbps = active_probe(url)
     if kbps <= 0:
         raise HTTPException(
-            status_code=502, detail="Messung fehlgeschlagen (URL nicht erreichbar?)"
+            status_code=502, detail="Messung fehlgeschlagen (Testziel nicht erreichbar?)"
         )
     record_measurement(db, kbps)
     return _status(get_policy(db))
