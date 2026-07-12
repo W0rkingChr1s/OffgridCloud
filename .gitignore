@@ -13,6 +13,9 @@ frontend/dist/
 # Built UI copied into the backend at build time
 backend/app/static/
 
+# Version stamped at install time (from the git tag)
+backend/app/VERSION
+
 # Runtime data & secrets
 data/
 .env

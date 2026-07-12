@@ -45,6 +45,8 @@ jobs:
           cp -r deploy docs "dist/$STAGE/"
           cp README.md LICENSE .env.example "dist/$STAGE/"
           echo "$VERSION" > "dist/$STAGE/VERSION"
+          # Stamp the version the app reads at runtime (for tarball installs).
+          echo "$VERSION" > "dist/$STAGE/backend/app/VERSION"
           tar -C dist -czf "dist/${STAGE}.tar.gz" "$STAGE"
           ls -lh dist/*.tar.gz
 

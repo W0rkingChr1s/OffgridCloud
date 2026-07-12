@@ -108,6 +108,21 @@ rm -rf "$PREFIX/backend/.venv" "$PREFIX/backend/app/static" \
        "$PREFIX/backend/tests" "$PREFIX/backend/.pytest_cache"
 cp -r "$REPO_ROOT/frontend/dist" "$PREFIX/backend/app/static"
 
+# Stamp the deployed version so the UI reports the real release. Prefer the git
+# tag of the source checkout; fall back to a VERSION file shipped in a release
+# tarball. Without either, the app uses its built-in fallback constant.
+VERSION_STR=""
+if git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null &&
+   git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  VERSION_STR="$(git -C "$REPO_ROOT" describe --tags --always 2>/dev/null | sed -E 's/^v\.?//')"
+elif [[ -f "$REPO_ROOT/VERSION" ]]; then
+  VERSION_STR="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+fi
+if [[ -n "$VERSION_STR" ]]; then
+  printf '%s\n' "$VERSION_STR" > "$PREFIX/backend/app/VERSION"
+  echo "   Deployed version: $VERSION_STR"
+fi
+
 # --- Python virtualenv ------------------------------------------------------
 step "Setting up Python virtualenv..."
 python3 -m venv "$PREFIX/backend/.venv"

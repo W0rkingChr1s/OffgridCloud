@@ -2,8 +2,26 @@
 
 from __future__ import annotations
 
-from app import __version__
+from pathlib import Path
+
+import app as app_pkg
+from app import __version__, _read_version
 from app.updater import check_for_update, clear_cache, is_newer, parse_version
+
+
+def test_read_version_prefers_stamped_file_then_falls_back():
+    # The installer writes a VERSION file (from the git tag); the app reads it.
+    vf = Path(app_pkg.__file__).with_name("VERSION")
+    existed = vf.exists()
+    backup = vf.read_text() if existed else None
+    try:
+        vf.write_text("2.3.4\n")
+        assert _read_version() == "2.3.4"
+        vf.unlink()
+        assert _read_version() == "0.1.0"  # built-in fallback for dev checkouts
+    finally:
+        if existed:
+            vf.write_text(backup)
 
 
 def test_parse_version_handles_prefixes_and_junk():
