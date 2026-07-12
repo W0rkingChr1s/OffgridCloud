@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .admin_ops import ensure_system_settings
@@ -99,8 +100,34 @@ def health() -> dict:
 # build. If it isn't present (e.g. raw dev checkout), fall back to a hint.
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
+
+class SPAStaticFiles(StaticFiles):
+    """Serve static files, falling back to ``index.html`` for unknown paths.
+
+    The UI uses client-side (HTML5 history) routing, so deep links like
+    ``/folders/1`` or ``/admin/system`` have no matching file on disk. Without
+    this fallback a browser refresh on such a route hits the server directly and
+    gets a bare ``{"detail":"Not Found"}`` 404. Returning ``index.html`` instead
+    lets the React router take over and render the right view. Genuinely missing
+    assets (e.g. ``/assets/foo.js``) still 404 so broken references stay visible.
+    """
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            unknown_route = (
+                exc.status_code == 404
+                and not path.startswith("api/")
+                and not Path(path).suffix
+            )
+            if unknown_route:
+                return await super().get_response("index.html", scope)
+            raise
+
+
 if _STATIC_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+    app.mount("/", SPAStaticFiles(directory=_STATIC_DIR, html=True), name="static")
 else:
 
     @app.get("/")
