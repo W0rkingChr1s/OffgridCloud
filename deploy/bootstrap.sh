@@ -65,6 +65,8 @@ fi
 # --- Fetch the source -------------------------------------------------------
 if [[ -d "$OGC_SRC/.git" ]]; then
   step "Updating existing checkout in $OGC_SRC..."
+  # The tree may be owned by the service user; allow root's git to use it.
+  git config --global --add safe.directory "$OGC_SRC" 2>/dev/null || true
   git -C "$OGC_SRC" fetch --depth 1 origin "$OGC_BRANCH"
   git -C "$OGC_SRC" checkout -B "$OGC_BRANCH" "origin/$OGC_BRANCH"
 else
