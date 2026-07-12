@@ -123,9 +123,36 @@ def record_measurement(db: Session, kbps: float) -> None:
     db.commit()
 
 
-def _http_download_size(url: str, timeout: float = 20.0) -> int:
+# The probe samples throughput for a short, fixed *time* rather than waiting for
+# a fixed *size* to arrive. On the slow / off-grid links this feature exists to
+# protect, a multi-megabyte download can't finish inside any reasonable socket
+# timeout, so a size-based probe would always fail with "Testziel nicht
+# erreichbar". Time-boxing yields a real measurement from whatever transferred
+# in the window — fast links naturally finish early, slow links stop at the cap.
+PROBE_SAMPLE_SECONDS = 8.0
+PROBE_SOCKET_TIMEOUT = 15.0
+_PROBE_CHUNK = 64 * 1024
+
+
+def _http_download_size(
+    url: str,
+    time_budget: float = PROBE_SAMPLE_SECONDS,
+    timeout: float = PROBE_SOCKET_TIMEOUT,
+) -> int:
+    """Stream ``url`` for up to ``time_budget`` seconds; return the bytes read.
+
+    Reads in chunks and stops once the time budget is spent, so a slow link
+    still produces a usable sample instead of timing out on a large file.
+    """
+    total = 0
+    start = _time.monotonic()
     with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (admin-set URL)
-        return len(resp.read())
+        while _time.monotonic() - start < time_budget:
+            chunk = resp.read(_PROBE_CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+    return total
 
 
 def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:

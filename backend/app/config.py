@@ -50,8 +50,10 @@ class Settings(BaseSettings):
     # Default target for the active bandwidth probe, so admins don't have to
     # configure anything for "measure now" to work. Overridable per-instance
     # via the System settings (probe_url) or this env var. Cloudflare's speed
-    # endpoint lets us request an exact byte count.
-    default_probe_url: str = "https://speed.cloudflare.com/__down?bytes=10000000"
+    # endpoint lets us request an exact byte count. The probe is time-boxed
+    # (see bandwidth.PROBE_SAMPLE_SECONDS), so a generous size just keeps a fast
+    # link streaming for the full sample window; slow links stop at the cap.
+    default_probe_url: str = "https://speed.cloudflare.com/__down?bytes=100000000"
 
     # --- Updates -----------------------------------------------------------
     # GitHub repository (owner/name) used to check for new releases.

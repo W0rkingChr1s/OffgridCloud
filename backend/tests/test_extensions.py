@@ -26,6 +26,38 @@ def test_active_probe_handles_errors():
     assert active_probe("http://x", fetcher=boom) == 0.0
 
 
+def test_http_download_size_is_time_boxed_on_slow_link():
+    # A slow link that never finishes the file must still yield a real sample:
+    # the probe stops at the time budget instead of blocking / timing out.
+    from app import bandwidth
+
+    reads = {"n": 0}
+
+    class _SlowResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self, _size):
+            reads["n"] += 1
+            return b"x" * 1024  # endless stream, one chunk per read
+
+    def _fake_urlopen(url, timeout):
+        return _SlowResp()
+
+    monkeypatched = bandwidth.urllib.request.urlopen
+    bandwidth.urllib.request.urlopen = _fake_urlopen
+    try:
+        size = bandwidth._http_download_size("http://slow", time_budget=0.05)
+    finally:
+        bandwidth.urllib.request.urlopen = monkeypatched
+
+    assert size > 0  # streamed some bytes within the budget
+    assert reads["n"] >= 1
+
+
 def test_probe_endpoint_works_without_configured_url(client, admin_auth, monkeypatch):
     # Zero-config: with no probe URL set, the endpoint falls back to the
     # built-in default target instead of erroring — users enter nothing.
