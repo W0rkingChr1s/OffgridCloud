@@ -35,38 +35,46 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-end justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Ordner</h2>
-          <p className="text-sm text-slate-400">Wähle einen Ordner, um Medien hochzuladen.</p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-bold sm:text-3xl">Ordner</h2>
+          <p className="mt-0.5 text-sm text-slate-400">Wähle einen Ordner, um Medien hochzuladen.</p>
         </div>
         {user?.role === "admin" && (
-          <Link to="/admin/folders" className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5">
-            Ordner verwalten
+          <Link
+            to="/admin/folders"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 active:bg-white/10"
+          >
+            <span className="hidden sm:inline">Ordner verwalten</span>
+            <span className="sm:hidden">Verwalten</span>
           </Link>
         )}
       </div>
 
       {user?.role === "admin" && snapshot?.bandwidth && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-slate-800/40 px-5 py-3 text-sm ring-1 ring-white/5">
-          <span className={`h-2 w-2 rounded-full ${snapshot.bandwidth.gated ? "bg-red-400" : "bg-emerald-400"}`} />
-          <span className="text-slate-300">
-            {snapshot.bandwidth.gated ? "Uploads pausiert" : "Uploads bereit"}
-          </span>
-          <span className="text-slate-500">
-            Limit:{" "}
-            {snapshot.bandwidth.effective_bwlimit_kbps === 0
-              ? "unbegrenzt"
-              : `${snapshot.bandwidth.effective_bwlimit_kbps} KB/s`}
-          </span>
-          {snapshot.bandwidth.last_kbps > 0 && (
-            <span className="text-slate-500">Gemessen: {snapshot.bandwidth.last_kbps.toFixed(0)} KB/s</span>
-          )}
-          {snapshot.transfers && (
-            <span className="ml-auto text-slate-500">
-              {snapshot.transfers.counts.running ?? 0} aktiv · {snapshot.transfers.counts.queued ?? 0} wartend
+        <div className="mb-6 rounded-2xl bg-slate-800/40 px-5 py-3 text-sm ring-1 ring-white/5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${snapshot.bandwidth.gated ? "bg-red-400" : "bg-emerald-400"}`} />
+              <span className="text-slate-300">
+                {snapshot.bandwidth.gated ? "Uploads pausiert" : "Uploads bereit"}
+              </span>
             </span>
-          )}
+            <span className="text-slate-500">
+              Limit:{" "}
+              {snapshot.bandwidth.effective_bwlimit_kbps === 0
+                ? "unbegrenzt"
+                : `${snapshot.bandwidth.effective_bwlimit_kbps} KB/s`}
+            </span>
+            {snapshot.bandwidth.last_kbps > 0 && (
+              <span className="text-slate-500">Gemessen: {snapshot.bandwidth.last_kbps.toFixed(0)} KB/s</span>
+            )}
+            {snapshot.transfers && (
+              <span className="w-full text-slate-500 sm:ml-auto sm:w-auto">
+                {snapshot.transfers.counts.running ?? 0} aktiv · {snapshot.transfers.counts.queued ?? 0} wartend
+              </span>
+            )}
+          </div>
         </div>
       )}
 

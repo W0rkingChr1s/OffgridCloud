@@ -148,36 +148,63 @@ export default function FolderDetail() {
       {media.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Dateien in diesem Ordner.</p>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-white/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-800/80 text-slate-400">
-              <tr>
-                <th className="px-4 py-3">Vorschau</th>
-                <th className="px-4 py-3">Datei</th>
-                <th className="px-4 py-3">Größe</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Hochgeladen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {media.map((m) => (
-                <tr key={m.id} className="border-t border-white/5 bg-slate-900/40">
-                  <td className="px-4 py-3">{m.local_deleted ? <span className="text-xs text-slate-500">gelöscht</span> : <Thumb id={m.id} />}</td>
-                  <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
-                  <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">
-                      {m.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400">
-                    {new Date(m.created_at).toLocaleString()}
-                  </td>
+        <>
+          {/* Mobile: card list */}
+          <div className="space-y-2 md:hidden">
+            {media.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/5">
+                <div className="shrink-0">
+                  {m.local_deleted ? (
+                    <div className="flex h-10 w-14 items-center justify-center rounded bg-slate-700/60 text-xs text-slate-500">gel.</div>
+                  ) : (
+                    <Thumb id={m.id} />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-white">{m.filename}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                    <span>{formatBytes(m.size)}</span>
+                    <span aria-hidden>·</span>
+                    <span>{new Date(m.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">{m.status}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-white/10 md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-800/80 text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Vorschau</th>
+                  <th className="px-4 py-3">Datei</th>
+                  <th className="px-4 py-3">Größe</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Hochgeladen</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {media.map((m) => (
+                  <tr key={m.id} className="border-t border-white/5 bg-slate-900/40">
+                    <td className="px-4 py-3">{m.local_deleted ? <span className="text-xs text-slate-500">gelöscht</span> : <Thumb id={m.id} />}</td>
+                    <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
+                    <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">
+                        {m.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-400">
+                      {new Date(m.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </Layout>
   );
