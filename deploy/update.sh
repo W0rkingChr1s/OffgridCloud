@@ -53,6 +53,10 @@ latest_tag() {
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1
 }
 
+# The source tree is owned by the service user, but we run git as root here —
+# tell git that's fine (avoids "detected dubious ownership"). Idempotent.
+git config --global --add safe.directory "$SRC" 2>/dev/null || true
+
 step "Fetching updates from origin..."
 git -C "$SRC" fetch --tags --prune origin
 
