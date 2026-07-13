@@ -100,7 +100,7 @@ docker run -d --name offgridcloud -p 8000:8000 \
 > ```
 > (docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`). Beim
 > **nativen** Setup auf dem Pi stattdessen `--with-vpn` bei der Installation
-> mitgeben (oder nachträglich `sudo /opt/offgridcloud/deploy/vpn/install.sh`) —
+> mitgeben (oder nachträglich `sudo /opt/offgridcloud/src/deploy/vpn/install.sh`) —
 > das lädt das TUN-Modul und erteilt dem Dienst die Capability. Ohne diese Rechte
 > bleibt die Oberfläche nutzbar und zeigt den passenden Hinweis. Details:
 > [docs/VPN.md](docs/VPN.md).

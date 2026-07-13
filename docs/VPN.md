@@ -24,7 +24,7 @@ Umgebung und zeigt den passenden Weg an.
 Einmalig auf dem Server ausführen:
 
 ```bash
-sudo /opt/offgridcloud/deploy/vpn/install.sh
+sudo /opt/offgridcloud/src/deploy/vpn/install.sh
 ```
 
 Das Skript

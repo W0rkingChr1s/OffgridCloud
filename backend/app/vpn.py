@@ -38,7 +38,7 @@ _WG_IFACE = "ogc-wg"
 _CAP_NET_ADMIN = 12  # capability bit index for CAP_NET_ADMIN
 
 # Path the native install helper uses to grant the systemd service NET_ADMIN.
-_NATIVE_ENABLE_CMD = "sudo /opt/offgridcloud/deploy/vpn/install.sh"
+_NATIVE_ENABLE_CMD = "sudo /opt/offgridcloud/src/deploy/vpn/install.sh"
 
 
 # --- Environment detection ------------------------------------------------

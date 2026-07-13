@@ -119,7 +119,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                 <code className="mx-1 text-amber-200">CAP_NET_ADMIN</code>:
               </p>
               <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-{caps.enable_command || "sudo /opt/offgridcloud/deploy/vpn/install.sh"}</pre>
+{caps.enable_command || "sudo /opt/offgridcloud/src/deploy/vpn/install.sh"}</pre>
               <p className="mt-2 text-xs text-amber-200/70">
                 Danach diese Seite neu laden. Details:{" "}
                 <code className="text-amber-200">docs/VPN.md</code>.
