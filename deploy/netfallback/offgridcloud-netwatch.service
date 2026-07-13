@@ -1,0 +1,18 @@
+# Root watchdog that hosts the fallback Wi-Fi AP when the box loses its uplink.
+# Installed by deploy/netfallback/install.sh. Loop service so the check interval
+# is configurable from the app (a restart picks up new settings).
+[Unit]
+Description=OffgridCloud network watchdog (AP fallback)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/opt/offgridcloud/src/deploy/netfallback/watchdog.sh /opt/offgridcloud/data/network.json
+Restart=always
+RestartSec=5
+# Modest footprint on a 1 GB Pi.
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

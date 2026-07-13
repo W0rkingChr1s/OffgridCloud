@@ -244,6 +244,50 @@ class SystemSettings(Base):
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
 
 
+class NetworkSettings(Base):
+    """Singleton (id=1) for the access-point fallback ("Rückfallebene").
+
+    When the box loses its upstream network it can host its own Wi-Fi AP so the
+    field team keeps a way to upload. Applying this needs root, so the app only
+    stores the desired config here and exports it for the privileged helper +
+    watchdog (see ``network.py`` and ``deploy/netfallback/``).
+    """
+
+    __tablename__ = "network_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Master switch for hosting the fallback AP when no known network is reachable.
+    fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # AP the box hosts as its fallback.
+    ap_ssid: Mapped[str] = mapped_column(String(32), default="OffgridCloud")
+    ap_psk_encrypted: Mapped[str] = mapped_column(Text, default="")  # empty = open
+    ap_hidden: Mapped[bool] = mapped_column(Boolean, default=False)
+    ap_address: Mapped[str] = mapped_column(String(32), default="10.42.0.1/24")
+    country_code: Mapped[str] = mapped_column(String(2), default="")  # regulatory domain
+    # Watchdog tuning: seconds between connectivity checks and how many
+    # consecutive failures flip the box into AP mode.
+    check_interval: Mapped[int] = mapped_column(default=20)
+    fail_threshold: Mapped[int] = mapped_column(default=3)
+
+
+class KnownNetwork(Base):
+    """A Wi-Fi network the box should join automatically when in range.
+
+    These are the "hinterlegten" networks: adding one and applying it tells the
+    box to prefer this uplink over hosting its own AP. Passphrases are encrypted
+    at rest with the same key as provider credentials.
+    """
+
+    __tablename__ = "known_networks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ssid: Mapped[str] = mapped_column(String(32))
+    psk_encrypted: Mapped[str] = mapped_column(Text, default="")  # empty = open
+    priority: Mapped[int] = mapped_column(default=0)  # higher = preferred uplink
+    autoconnect: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class VpnTunnel(Base):
     """A saved VPN client profile (WireGuard/OpenVPN), config encrypted at rest.
 

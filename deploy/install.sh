@@ -17,6 +17,9 @@
 #   --prefix DIR           Install location (default: /opt/offgridcloud).
 #   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
 #   --self-update          Enable one-click updates from the web UI (sudoers).
+#   --with-ap-fallback     Install the network-redundancy layer: the box hosts
+#                          its own Wi-Fi AP when it loses its uplink (needs
+#                          NetworkManager; sets up a watchdog + sudoers rule).
 #   --no-speedtest         Skip installing the Ookla Speedtest CLI (used for the
 #                          bandwidth "measure now"; the HTTP probe still works).
 #   --no-service           Skip installing the systemd unit.
@@ -31,6 +34,7 @@ DO_START=0
 INSTALL_SERVICE=1
 WITH_FFMPEG=0
 SELF_UPDATE=0
+WITH_AP_FALLBACK=0
 WITH_SPEEDTEST=1
 SPEEDTEST_VER="1.2.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -45,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
     --self-update) SELF_UPDATE=1; shift ;;
+    --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
     --no-speedtest) WITH_SPEEDTEST=0; shift ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -224,6 +229,18 @@ if [[ $SELF_UPDATE -eq 1 ]]; then
     rm -f "$SUDOERS.tmp"
     echo "   Could not validate sudoers rule — skipped. Use 'sudo update.sh' instead." >&2
   fi
+fi
+
+# --- Optional: network-redundancy layer (AP fallback) ----------------------
+if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
+  step "Installing the network-redundancy layer (AP fallback)..."
+  # Copy the scripts somewhere persistent so the watchdog/sudoers paths survive
+  # after the source checkout is gone, then run the installer from there.
+  mkdir -p "$PREFIX/deploy"
+  cp -r "$REPO_ROOT/deploy/netfallback" "$PREFIX/deploy/netfallback"
+  chmod +x "$PREFIX/deploy/netfallback/"*.sh "$PREFIX/deploy/netfallback/_apply.py" 2>/dev/null || true
+  bash "$PREFIX/deploy/netfallback/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
+    || echo "   AP-fallback setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
 fi
 
 # --- Optional start + health check -----------------------------------------
