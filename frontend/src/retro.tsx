@@ -19,32 +19,6 @@ function apply(on: boolean) {
 }
 
 /**
- * Hidden-but-findable hint for the retro mode. Printed once to the browser
- * console on load: invisible in the normal UI, but anyone curious enough to
- * open DevTools gets a nudge. Kept deliberately partial — the last few keys
- * are left to memory so finding it still feels earned.
- */
-function printHint() {
-  const banner = [
-    "",
-    "  ▟▛ OFFGRIDCLOUD ▜▙",
-    "  Nostalgie nach grünem Phosphor? Es gibt einen Weg zurück.",
-    "  Der Code, den jedes 80er-Kind auswendig kann:",
-    "  ↑ ↑ ↓ ↓ ← → ← → … den Rest kennst du.",
-    "",
-  ].join("\n");
-  // eslint-disable-next-line no-console
-  console.log(
-    `%c${banner}`,
-    "color:#33ff66;font-family:monospace;text-shadow:0 0 4px rgba(51,255,102,0.6)",
-  );
-}
-
-if (typeof window !== "undefined") {
-  printHint();
-}
-
-/**
  * Hidden 80s-terminal easter egg. Toggle with the Konami code
  * (↑ ↑ ↓ ↓ ← → ← → B A). State persists in localStorage.
  */
