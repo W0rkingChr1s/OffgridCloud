@@ -5,7 +5,7 @@ import { printConsoleBanner } from "./console-banner.ts";
 import "./index.css";
 import "./retro.css";
 
-printConsoleBanner();
+void printConsoleBanner();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

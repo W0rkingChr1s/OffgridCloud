@@ -3,9 +3,27 @@
 // toward the hidden retro mode. Invisible in the normal UI — a little treat
 // for anyone who opens the console.
 
-declare const __APP_VERSION__: string;
+import type { Health } from "./api";
 
 const REPO = "https://github.com/W0rkingChr1s/OffgridCloud";
+
+/**
+ * The real deployed version comes from the backend (`app.__version__`,
+ * stamped from the git tag by the installer) and is exposed unauthenticated
+ * via /api/health. The frontend package.json version is a stale build-time
+ * constant, so we ask the backend instead. Falls back to "dev" when the
+ * backend isn't reachable (plain frontend dev server, offline, etc.).
+ */
+async function fetchVersion(): Promise<string> {
+  try {
+    const res = await fetch("/api/health");
+    if (!res.ok) return "dev";
+    const health = (await res.json()) as Health;
+    return health.version || "dev";
+  } catch {
+    return "dev";
+  }
+}
 
 // Shared style fragments so every line reads as one system.
 const S = {
@@ -23,11 +41,11 @@ const S = {
     "text-shadow:0 0 4px rgba(51,255,102,0.6)",
 };
 
-export function printConsoleBanner() {
+export async function printConsoleBanner() {
   if (typeof window === "undefined" || typeof console === "undefined") return;
 
   const mode = import.meta.env.DEV ? "development" : "production";
-  const version = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
+  const version = await fetchVersion();
 
   // Header + tagline.
   console.log("%cOffgridCloud", S.brand);
