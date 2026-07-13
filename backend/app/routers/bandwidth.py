@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 
 from ..admin_ops import audit, get_system_settings
 from ..bandwidth import (
-    active_probe,
     effective_bwlimit,
     get_policy,
+    measure_probe,
     parse_schedule,
     record_measurement,
     should_start,
@@ -95,10 +95,11 @@ def run_probe(
     custom probe URL under System — so "measure now" just works.
     """
     url = get_system_settings(db).probe_url.strip() or get_app_settings().default_probe_url
-    kbps = active_probe(url)
+    kbps, error = measure_probe(url)
     if kbps <= 0:
-        raise HTTPException(
-            status_code=502, detail="Messung fehlgeschlagen (Testziel nicht erreichbar?)"
-        )
+        detail = "Messung fehlgeschlagen (Testziel nicht erreichbar?)"
+        if error:
+            detail = f"{detail} — {error}"
+        raise HTTPException(status_code=502, detail=detail)
     record_measurement(db, kbps)
     return _status(get_policy(db))
