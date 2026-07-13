@@ -9,6 +9,14 @@ import {
   type NetworkStatus,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortTh, type SortOption, useSort } from "../components/Sort";
+
+const NETWORK_SORT: SortOption<KnownNetwork>[] = [
+  { key: "ssid", label: "SSID", get: (n) => n.ssid },
+  { key: "priority", label: "Priorität", get: (n) => n.priority },
+  { key: "password", label: "Passwort", get: (n) => (n.has_password ? 0 : 1) },
+  { key: "auto", label: "Auto", get: (n) => (n.autoconnect ? 0 : 1) },
+];
 
 const MODE_LABELS: Record<NetworkStatus["mode"], string> = {
   ethernet: "Kabel (Ethernet)",
@@ -302,6 +310,7 @@ function KnownNetworks({
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [priority, setPriority] = useState(0);
+  const sort = useSort(networks, NETWORK_SORT, { key: "priority", dir: "desc" });
 
   async function add() {
     if (!ssid.trim()) return;
@@ -374,15 +383,15 @@ function KnownNetworks({
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
-                <th className="px-4 py-2">SSID</th>
-                <th className="px-4 py-2">Priorität</th>
-                <th className="px-4 py-2">Passwort</th>
-                <th className="px-4 py-2">Auto</th>
+                <SortTh sort={sort} field="ssid" className="!py-2">SSID</SortTh>
+                <SortTh sort={sort} field="priority" className="!py-2">Priorität</SortTh>
+                <SortTh sort={sort} field="password" className="!py-2">Passwort</SortTh>
+                <SortTh sort={sort} field="auto" className="!py-2">Auto</SortTh>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {networks.map((n) => (
+              {sort.sorted.map((n) => (
                 <tr key={n.id} className="border-t border-white/5 bg-slate-900/40">
                   <td className="px-4 py-2 font-medium text-white">{n.ssid}</td>
                   <td className="px-4 py-2 text-slate-400">{n.priority}</td>

@@ -9,6 +9,13 @@ import {
   type User,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
+
+const FOLDER_SORT: SortOption<Folder>[] = [
+  { key: "name", label: "Name", get: (f) => f.name },
+  { key: "media", label: "Dateien", get: (f) => f.media_count },
+  { key: "created", label: "Erstellt", get: (f) => f.created_at },
+];
 
 export default function Folders() {
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -113,6 +120,8 @@ export default function Folders() {
 
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
 
+  const sort = useSort(folders, FOLDER_SORT, { key: "name" });
+
   return (
     <Layout>
       <h2 className="mb-1 text-2xl font-bold">Ordner verwalten</h2>
@@ -130,8 +139,14 @@ export default function Folders() {
         </button>
       </form>
 
+      {folders.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <SortMenu sort={sort} />
+        </div>
+      )}
+
       <div className="space-y-4">
-        {folders.map((f) => (
+        {sort.sorted.map((f) => (
           <div key={f.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
             <div className="flex items-start justify-between">
               <div>

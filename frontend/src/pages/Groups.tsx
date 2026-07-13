@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type Group, type User } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
+
+const GROUP_SORT: SortOption<Group>[] = [
+  { key: "name", label: "Name", get: (g) => g.name },
+  { key: "members", label: "Mitglieder", get: (g) => g.member_ids.length },
+  { key: "created", label: "Erstellt", get: (g) => g.created_at },
+];
 
 export default function Groups() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -55,6 +62,7 @@ export default function Groups() {
 
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
   const members = users.filter((u) => u.role !== "admin");
+  const sort = useSort(groups, GROUP_SORT, { key: "name" });
 
   return (
     <Layout>
@@ -73,9 +81,15 @@ export default function Groups() {
         </button>
       </form>
 
+      {groups.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <SortMenu sort={sort} />
+        </div>
+      )}
+
       <div className="space-y-4">
         {groups.length === 0 && <p className="text-sm text-slate-500">Noch keine Teams.</p>}
-        {groups.map((g) => (
+        {sort.sorted.map((g) => (
           <div key={g.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
             <div className="flex items-start justify-between">
               <div>

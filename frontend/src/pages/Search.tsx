@@ -9,8 +9,17 @@ import {
   type MediaStatus,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
 import { TagEditor } from "../components/Tags";
 import { formatBytes } from "../upload";
+
+const RESULT_SORT: SortOption<MediaSearchResult>[] = [
+  { key: "name", label: "Name", get: (m) => m.filename },
+  { key: "folder", label: "Ordner", get: (m) => m.folder_name },
+  { key: "size", label: "Größe", get: (m) => m.size },
+  { key: "status", label: "Status", get: (m) => m.status },
+  { key: "created", label: "Hochgeladen", get: (m) => m.created_at },
+];
 
 const STATUSES: MediaStatus[] = [
   "received",
@@ -68,6 +77,8 @@ export default function Search() {
   const field =
     "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-none focus:border-ogc-teal/50";
 
+  const sort = useSort(results, RESULT_SORT, { key: "name" });
+
   return (
     <Layout>
       <div className="mb-6">
@@ -114,15 +125,18 @@ export default function Search() {
         <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>
       )}
 
-      <div className="mb-3 text-sm text-slate-400">
-        {loading ? "Suche…" : `${results.length} Treffer`}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-sm text-slate-400">
+          {loading ? "Suche…" : `${results.length} Treffer`}
+        </div>
+        {results.length > 0 && <SortMenu sort={sort} />}
       </div>
 
       {results.length === 0 && !loading ? (
         <p className="text-sm text-slate-500">Keine Medien passen zu den Filtern.</p>
       ) : (
         <div className="space-y-2">
-          {results.map((m) => (
+          {sort.sorted.map((m) => (
             <div
               key={m.id}
               className="flex flex-col gap-2 rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/5 sm:flex-row sm:items-center sm:justify-between"
