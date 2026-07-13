@@ -79,21 +79,6 @@ const NAV: NavItem[] = [
   { to: "/admin/system", label: "System", icon: icons.system, admin: true },
 ];
 
-function DesktopNavLink({ to, label }: { to: string; label: string }) {
-  const { pathname } = useLocation();
-  const active = pathname === to;
-  return (
-    <Link
-      to={to}
-      className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-        active ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-}
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
@@ -128,34 +113,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="whitespace-nowrap text-lg font-bold">OffgridCloud</span>
           </Link>
 
-          {/* Desktop navigation */}
-          <nav className="hidden min-w-0 items-center gap-1 overflow-x-auto lg:flex">
-            {items.map((n) => (
-              <DesktopNavLink key={n.to} to={n.to} label={n.label} />
-            ))}
-          </nav>
-
-          <div className="ml-auto hidden shrink-0 items-center gap-3 lg:flex">
-            <span className="whitespace-nowrap text-sm text-slate-400">
-              {user?.name || user?.email}
-              {user?.role === "admin" && (
-                <span className="ml-2 rounded bg-ogc-teal/20 px-1.5 py-0.5 text-xs text-ogc-teal">Admin</span>
-              )}
-            </span>
-            <button
-              onClick={logout}
-              className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 hover:bg-white/5"
-            >
-              Abmelden
-            </button>
-          </div>
-
-          {/* Mobile menu button */}
+          {/* Menu button (all breakpoints) */}
           <button
             onClick={() => setOpen(true)}
             aria-label="Menü öffnen"
             aria-expanded={open}
-            className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-200 active:bg-white/10 lg:hidden"
+            className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-200 hover:bg-white/5 active:bg-white/10"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M4 7h16M4 12h16M4 17h16" />
@@ -164,8 +127,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Mobile drawer */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+      {/* Drawer (all breakpoints) */}
+      <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
         <div
           onClick={() => setOpen(false)}
           className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
