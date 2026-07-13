@@ -9,7 +9,9 @@ import Folders from "./pages/Folders";
 import Groups from "./pages/Groups";
 import Login from "./pages/Login";
 import Network from "./pages/Network";
+import Pool from "./pages/Pool";
 import Providers from "./pages/Providers";
+import Search from "./pages/Search";
 import System from "./pages/System";
 import Transfers from "./pages/Transfers";
 import Users from "./pages/Users";
@@ -35,6 +37,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <FolderDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <ProtectedRoute>
+                <Search />
               </ProtectedRoute>
             }
           />
@@ -83,6 +93,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Network />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/pool"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Pool />
               </ProtectedRoute>
             }
           />

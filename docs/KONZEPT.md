@@ -200,5 +200,19 @@ harten Grenzen. Die Architektur ist explizit darauf ausgelegt.
 ## 10. Nicht-Ziele (MVP)
 
 - Keine Medien-Bearbeitung/Transcoding im Server.
-- Keine feingranularen Rechte über Admin/User hinaus (erst später Teams/Gruppen).
 - Kein bidirektionaler Sync (nur Upload Feld → Cloud).
+
+## 11. Umgesetzte Erweiterungen (nach dem MVP)
+
+Der ursprüngliche Backlog ist vollständig abgearbeitet — der Vollständigkeit halber:
+
+- **Teams/Gruppen** — Ordner-Freigabe an ganze Teams statt nur Einzelbenutzer.
+- **Thumbnails**, **PWA fürs Feld**, **Fertig-Webhook**, **aktive Bandbreiten-Probe**.
+- **Netzwerk-Redundanz** — Rückfall-WLAN bei Router-Ausfall (`docs/NETZWERK-REDUNDANZ.md`).
+- **VPN-Client** — ins Heimnetz einwählen, um interne Ziele zu erreichen (`docs/VPN.md`).
+- **Tags & Suche** — freie Tags je Medium + ordnerübergreifende, zugriffsgeschützte Suche.
+- **Multi-Server-Pool** — mehrere Boxen als Flotte in einer Übersicht (read-only-
+  Aggregation über ein Shared-Token, keine verteilte Koordination) —
+  `docs/MULTI-SERVER-POOL.md`.
+
+Details in der Roadmap (`docs/ENTWICKLUNGSPLAN.md`).
