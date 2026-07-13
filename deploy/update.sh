@@ -45,7 +45,10 @@ if [[ ! -d "$SRC/.git" ]]; then
 fi
 
 current_version() {
-  sed -n 's/^__version__ = "\(.*\)"/\1/p' "$SRC/backend/app/__init__.py" 2>/dev/null || echo "unknown"
+  # The deployed version is the stamp the app actually reads.
+  local v=""
+  [[ -f "$PREFIX/backend/app/VERSION" ]] && v="$(tr -d '[:space:]' < "$PREFIX/backend/app/VERSION")"
+  echo "${v:-unknown}"
 }
 
 latest_tag() {
@@ -94,9 +97,17 @@ fi
 step "Checking out $TARGET_LABEL..."
 git -C "$SRC" checkout -f "$TARGET"
 
+# Stamp the exact target release, so the version is right even when several tags
+# point at the same commit (git describe would otherwise pick one arbitrarily).
+# For the main channel, leave it unset and let install.sh derive it via describe.
+STAMP=""
+if [[ "$CHANNEL" != "main" && -n "${TAG:-}" ]]; then
+  STAMP="$(printf '%s' "$TAG" | sed -E 's/^v\.?//')"
+fi
+
 step "Rebuilding and reinstalling (keeps data & .env)..."
 chmod +x "$SRC/deploy/install.sh"
-bash "$SRC/deploy/install.sh" --prefix "$PREFIX" --port "$PORT"
+OGC_STAMP_VERSION="$STAMP" bash "$SRC/deploy/install.sh" --prefix "$PREFIX" --port "$PORT"
 
 step "Restarting the service..."
 systemctl restart offgridcloud
