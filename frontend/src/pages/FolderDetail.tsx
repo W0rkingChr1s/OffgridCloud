@@ -113,6 +113,10 @@ export default function FolderDetail() {
     loadMedia();
   }, [folderId, loadMedia]);
 
+  const patchTags = useCallback((mediaId: number, tags: string[]) => {
+    setMedia((prev) => prev.map((m) => (m.id === mediaId ? { ...m, tags } : m)));
+  }, []);
+
   // Files whose local copy is still present (downloadable / selectable).
   const available = useMemo(() => media.filter((m) => !m.local_deleted), [media]);
   const availableIds = useMemo(() => available.map((m) => m.id), [available]);
@@ -168,13 +172,6 @@ export default function FolderDetail() {
     setDragOver(false);
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   }
-
-  const [busyId, setBusyId] = useState<number | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const patchTags = useCallback((mediaId: number, tags: string[]) => {
-    setMedia((prev) => prev.map((m) => (m.id === mediaId ? { ...m, tags } : m)));
-  }, []);
 
   const remove = useCallback(
     async (m: MediaItem) => {
@@ -340,7 +337,7 @@ export default function FolderDetail() {
               return (
                 <div
                   key={m.id}
-                  className={`flex items-center gap-3 rounded-xl p-3 ring-1 transition ${
+                  className={`flex items-start gap-3 rounded-xl p-3 ring-1 transition ${
                     isSel ? "bg-ogc-teal/10 ring-ogc-teal/40" : "bg-slate-800/60 ring-white/5"
                   }`}
                 >
@@ -350,7 +347,7 @@ export default function FolderDetail() {
                       checked={isSel}
                       onChange={() => toggle(m.id)}
                       aria-label={`${m.filename} auswählen`}
-                      className="h-4 w-4 shrink-0 accent-ogc-teal"
+                      className="mt-1 h-4 w-4 shrink-0 accent-ogc-teal"
                     />
                   )}
                   <div className="shrink-0">
@@ -371,6 +368,9 @@ export default function FolderDetail() {
                       <span aria-hidden>·</span>
                       <StatusPill status={m.status} />
                     </div>
+                    <div className="mt-1.5">
+                      <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
+                    </div>
                     <div className="mt-1.5 flex items-center gap-3 text-xs">
                       {m.local_deleted ? (
                         <span className="text-slate-500">lokal entfernt</span>
@@ -387,9 +387,6 @@ export default function FolderDetail() {
                         {busyId === m.id ? "…" : "Löschen"}
                       </button>
                     </div>
-                  </div>
-                  <div className="mt-1.5">
-                    <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
                   </div>
                 </div>
               );
@@ -431,24 +428,6 @@ export default function FolderDetail() {
                       }`}
                     >
                       <td className="px-4 py-3">
-                {media.map((m) => (
-                  <tr key={m.id} className="border-t border-white/5 bg-slate-900/40">
-                    <td className="px-4 py-3">{m.local_deleted ? <span className="text-xs text-slate-500">gelöscht</span> : <Thumb id={m.id} />}</td>
-                    <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
-                    <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
-                    <td className="px-4 py-3">
-                      <span className="rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">
-                        {m.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
-                    </td>
-                    <td className="px-4 py-3 text-slate-400">
-                      {new Date(m.created_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
                         {!m.local_deleted && (
                           <input
                             type="checkbox"
@@ -470,6 +449,9 @@ export default function FolderDetail() {
                       <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
                       <td className="px-4 py-3">
                         <StatusPill status={m.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
                       </td>
                       <td className="px-4 py-3 text-slate-400">
                         {new Date(m.created_at).toLocaleString()}
