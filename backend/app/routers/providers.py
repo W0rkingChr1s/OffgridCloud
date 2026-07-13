@@ -14,7 +14,7 @@ from ..crypto import decrypt, encrypt
 from ..db import get_db
 from ..deps import require_admin
 from ..models import CloudProvider, ProviderStatus, User
-from ..providers_registry import get_type, registry_json, validate_config
+from ..providers_registry import categories_json, get_type, registry_json, validate_config
 from ..rclone import test_remote
 from ..schemas import (
     ProviderCreate,
@@ -89,6 +89,11 @@ def _merge_config(
 @router.get("/types")
 def provider_types() -> list[dict]:
     return registry_json()
+
+
+@router.get("/categories")
+def provider_categories() -> list[dict]:
+    return categories_json()
 
 
 # --- CRUD -----------------------------------------------------------------
