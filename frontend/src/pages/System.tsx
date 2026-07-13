@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type AuditEvent, type SystemStatus, type UpdateInfo } from "../api";
+import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
 import { formatBytes } from "../upload";
 
@@ -38,9 +39,12 @@ export default function System() {
     }
   }
   const toggleDelete = (value: boolean) => save({ delete_local_after_upload: value });
+  const toggleRemoteDelete = (value: boolean) => save({ delete_remote_on_local_delete: value });
+  const toggleAutoResync = (value: boolean) => save({ auto_resync: value });
 
   const disk = status?.disk;
   const pct = disk ? Math.round(disk.percent_used) : 0;
+  const resyncMinutes = status ? Math.round(status.reconcile_interval / 60) : 0;
 
   return (
     <Layout>
@@ -80,6 +84,7 @@ export default function System() {
           <div className="text-2xl font-bold text-white">
             {status ? (status.rclone_available ? "rclone bereit" : "rclone fehlt") : "…"}
           </div>
+
           <label className="mt-4 flex items-start gap-3 text-sm">
             <input
               type="checkbox"
@@ -88,9 +93,48 @@ export default function System() {
               onChange={(e) => toggleDelete(e.target.checked)}
             />
             <span className="text-slate-300">
-              Lokale Kopie nach erfolgreichem Upload löschen
+              <span className="inline-flex items-center gap-1.5">
+                Lokale Kopie nach erfolgreichem Upload löschen
+                <InfoTip text="Sobald ein Medium an ALLE verknüpften Ziele bestätigt hochgeladen wurde, wird die lokale Pufferdatei entfernt, um Speicher (z. B. auf der SD-Karte) zu sparen. Erst nach erfolgreicher Prüfung – nie vorher. Danach ist kein lokaler Download mehr möglich." />
+              </span>
               <span className="mt-0.5 block text-xs text-slate-500">
                 Entfernt die Pufferdatei, sobald alle Zielprovider bestätigt sind.
+              </span>
+            </span>
+          </label>
+
+          <label className="mt-4 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={status?.delete_remote_on_local_delete ?? false}
+              onChange={(e) => toggleRemoteDelete(e.target.checked)}
+            />
+            <span className="text-slate-300">
+              <span className="inline-flex items-center gap-1.5">
+                Beim lokalen Löschen auch remote löschen
+                <InfoTip text="Wenn du eine Datei aus einem Ordner löschst, wird sie zusätzlich bei allen Zielen entfernt, zu denen sie bereits hochgeladen wurde (per rclone). Achtung: unwiderruflich – die Cloud-Kopie ist danach weg. Ohne diesen Haken bleibt die Remote-Kopie als Backup erhalten." />
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Standard: aus. Löscht die Cloud-Kopien mit – unwiderruflich.
+              </span>
+            </span>
+          </label>
+
+          <label className="mt-4 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={status?.auto_resync ?? false}
+              onChange={(e) => toggleAutoResync(e.target.checked)}
+            />
+            <span className="text-slate-300">
+              <span className="inline-flex items-center gap-1.5">
+                Automatischer Re-Sync
+                <InfoTip text={`Prüft im Hintergrund regelmäßig${resyncMinutes ? ` (alle ~${resyncMinutes} Min.)` : ""} alle Ziele: fehlgeschlagene Transfers werden erneut eingereiht und fehlende Jobs nachgezogen. So heilt eine kurze Störung (offline, Ziel nicht erreichbar) von selbst, sobald die Verbindung zurück ist – ganz ohne manuelles „Erneut".`} />
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Wiederholt hängengebliebene Uploads automatisch, sobald wieder Verbindung besteht.
               </span>
             </span>
           </label>
@@ -101,7 +145,10 @@ export default function System() {
         <div className="mb-3 text-sm font-medium text-slate-400">Integrationen</div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="mb-1 block text-slate-400">Bandbreiten-Probe-URL (optional)</span>
+            <span className="mb-1 flex items-center gap-1.5 text-slate-400">
+              Bandbreiten-Probe-URL (optional)
+              <InfoTip text="Ziel-Datei, die für die aktive Durchsatzmessung heruntergeladen wird. Leer lassen nutzt eine öffentliche Cloudflare-Testdatei – für „Jetzt messen“ musst du hier nichts eintragen. Nur setzen, wenn du bewusst ein eigenes Testziel (z. B. im lokalen Netz) verwenden willst." />
+            </span>
             <input
               className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
               placeholder="Standard: öffentliche Test-Datei (Cloudflare)"
@@ -114,7 +161,10 @@ export default function System() {
             </span>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-slate-400">Webhook-URL (bei „fertig“)</span>
+            <span className="mb-1 flex items-center gap-1.5 text-slate-400">
+              Webhook-URL (bei „fertig“)
+              <InfoTip text="Sobald ein Medium an alle Ziele hochgeladen ist, wird an diese URL einmalig ein JSON-POST gesendet (Dateiname, Größe, SHA-256, Ordner). Ideal, um andere Systeme zu benachrichtigen oder Automatisierungen anzustoßen. Leer lassen = deaktiviert." />
+            </span>
             <input
               className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
               placeholder="https://… (POST bei fertigem Upload)"

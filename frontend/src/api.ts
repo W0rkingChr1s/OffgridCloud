@@ -176,10 +176,20 @@ export interface DiskUsage {
 
 export interface SystemStatus {
   delete_local_after_upload: boolean;
+  delete_remote_on_local_delete: boolean;
+  auto_resync: boolean;
+  reconcile_interval: number;
   probe_url: string;
   webhook_url: string;
   disk: DiskUsage;
   rclone_available: boolean;
+}
+
+export interface MediaDeleteResult {
+  deleted: boolean;
+  remote_attempted: number;
+  remote_deleted: number;
+  remote_errors: string[];
 }
 
 export interface NetworkStatus {

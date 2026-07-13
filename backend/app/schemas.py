@@ -299,6 +299,9 @@ class DiskUsageOut(BaseModel):
 
 class SystemStatusOut(BaseModel):
     delete_local_after_upload: bool
+    delete_remote_on_local_delete: bool
+    auto_resync: bool
+    reconcile_interval: float
     probe_url: str
     webhook_url: str
     disk: DiskUsageOut
@@ -307,10 +310,17 @@ class SystemStatusOut(BaseModel):
 
 class SystemSettingsUpdate(BaseModel):
     delete_local_after_upload: bool | None = None
+    delete_remote_on_local_delete: bool | None = None
+    auto_resync: bool | None = None
     probe_url: str | None = None
     webhook_url: str | None = None
 
 
+class MediaDeleteResult(BaseModel):
+    deleted: bool
+    remote_attempted: int = 0
+    remote_deleted: int = 0
+    remote_errors: list[str] = []
 # --- Network redundancy / AP fallback -------------------------------------
 
 

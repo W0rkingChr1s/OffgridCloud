@@ -40,7 +40,7 @@ from .routers import (
     users,
     vpn,
 )
-from .transfers import worker_loop
+from .transfers import reconcile_loop, worker_loop
 
 settings = get_settings()
 
@@ -56,14 +56,15 @@ async def lifespan(app: FastAPI):
     autostart_vpn()
 
     stop = asyncio.Event()
-    task: asyncio.Task | None = None
+    tasks: list[asyncio.Task] = []
     if settings.worker_enabled:
-        task = asyncio.create_task(worker_loop(stop))
+        tasks.append(asyncio.create_task(worker_loop(stop)))
+        tasks.append(asyncio.create_task(reconcile_loop(stop)))
     try:
         yield
     finally:
         stop.set()
-        if task is not None:
+        for task in tasks:
             await task
 
 

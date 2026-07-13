@@ -100,6 +100,46 @@ def test_remote(options: dict[str, str], subpath: str = "") -> TestResult:
     return TestResult(False, err_lines[-1] if err_lines else "Verbindung fehlgeschlagen")
 
 
+@dataclass(frozen=True)
+class DeleteResult:
+    ok: bool
+    message: str = ""
+
+
+def delete_remote(options: dict[str, str], dest: str) -> DeleteResult:
+    """Delete a single file at ``remote:dest`` via ``rclone deletefile``.
+
+    A missing file is treated as success (idempotent): the goal state — "the
+    object is not on the remote" — is already met.
+    """
+    binary = get_settings().rclone_binary
+    if shutil.which(binary) is None:
+        return DeleteResult(False, f"rclone ('{binary}') ist nicht installiert")
+
+    cmd = [
+        binary, "deletefile", f"{_REMOTE}:{dest}",
+        "--low-level-retries", "2", "--retries", "1",
+        "--contimeout", "15s", "--timeout", "30s",
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60, env=_remote_env(options)
+        )
+    except subprocess.TimeoutExpired:
+        return DeleteResult(False, "Zeitüberschreitung beim Löschen")
+    except OSError as exc:  # pragma: no cover
+        return DeleteResult(False, str(exc))
+
+    if result.returncode == 0:
+        return DeleteResult(True, "Gelöscht")
+    err_lines = [ln for ln in (result.stderr or "").splitlines() if ln.strip()]
+    tail = err_lines[-1] if err_lines else ""
+    # rclone exits non-zero when the object is already gone; treat as success.
+    if "not found" in tail.lower() or "does not exist" in tail.lower():
+        return DeleteResult(True, "Bereits entfernt")
+    return DeleteResult(False, tail or "Löschen fehlgeschlagen")
+
+
 @dataclass
 class UploadResult:
     ok: bool
