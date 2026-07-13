@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
+from .rclone_obscure import obscure
+
 
 @dataclass(frozen=True)
 class Field:
@@ -24,6 +26,11 @@ class Field:
     help: str = ""
     default: str = ""
     options: tuple[str, ...] = ()
+    # rclone stores certain password options "obscured" (reversibly scrambled).
+    # SMB/SFTP/FTP/WebDAV/MEGA reject a plain password with
+    # "base64 decode failed when revealing password". Mark those fields so the
+    # value is obscured when the rclone remote options are built.
+    obscure: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,8 @@ class ProviderType:
             if f.type == "bool":
                 truthy = str(value).lower() in ("true", "1", "yes", "on")
                 opts[f.key] = "true" if truthy else "false"
+            elif f.obscure:
+                opts[f.key] = obscure(str(value))
             else:
                 opts[f.key] = str(value)
         return opts
@@ -91,7 +100,10 @@ CATEGORIES: tuple[Category, ...] = (
 
 _HOST = Field("host", "Host", help="Hostname oder IP")
 _USER = Field("user", "Benutzer")
-_PASS = Field("pass", "Passwort", type="password", secret=True)
+# ``pass`` maps to rclone's obscured-password option on every backend that uses
+# this shared field (WebDAV/Nextcloud/ownCloud, FTP, SMB, SFTP, MEGA), so it is
+# always obscured before reaching rclone.
+_PASS = Field("pass", "Passwort", type="password", secret=True, obscure=True)
 _ACCESS_KEY = Field("access_key_id", "Access Key ID")
 _SECRET_KEY = Field("secret_access_key", "Secret Access Key", type="password", secret=True)
 
@@ -422,7 +434,7 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
             _HOST,
             Field("port", "Port", type="number", required=False, default="22"),
             _USER,
-            Field("pass", "Passwort", type="password", required=False, secret=True),
+            Field("pass", "Passwort", type="password", required=False, secret=True, obscure=True),
             Field("key_pem", "SSH-Private-Key (PEM)", type="textarea", required=False, secret=True,
                   help="Alternativ zum Passwort"),
         ),

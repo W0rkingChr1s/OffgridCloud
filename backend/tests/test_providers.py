@@ -141,6 +141,42 @@ def test_test_endpoint_reports_when_rclone_missing(client, admin_auth):
     assert resp.json()["ok"] is False
 
 
+def test_obscure_roundtrip_matches_rclone_scheme():
+    from app.rclone_obscure import obscure, reveal
+
+    token = obscure("s3cr3t-pw")
+    assert token != "s3cr3t-pw"
+    # Fresh IV each call -> non-deterministic ciphertext.
+    assert obscure("s3cr3t-pw") != token
+    # ...but always reversible back to the original.
+    assert reveal(token) == "s3cr3t-pw"
+    assert obscure("") == ""
+
+
+def test_smb_password_is_obscured_in_rclone_options():
+    from app.providers_registry import get_type
+    from app.rclone_obscure import reveal
+
+    pt = get_type("smb")
+    opts = pt.to_rclone_options(
+        {"host": "192.168.178.5", "port": "445", "user": "u", "pass": "hunter2"}
+    )
+    # Host/port stay verbatim; the password is obscured (rclone-revealable).
+    assert opts["host"] == "192.168.178.5"
+    assert opts["port"] == "445"
+    assert opts["pass"] != "hunter2"
+    assert reveal(opts["pass"]) == "hunter2"
+
+
+def test_s3_secret_is_not_obscured():
+    from app.providers_registry import get_type
+
+    pt = get_type("s3")
+    opts = pt.to_rclone_options({"access_key_id": "AK", "secret_access_key": "plainsecret"})
+    # S3 secrets are passed verbatim (not an rclone obscured-password field).
+    assert opts["secret_access_key"] == "plainsecret"
+
+
 def test_non_admin_cannot_list_providers(client, admin_auth):
     client.post(
         "/api/users",
