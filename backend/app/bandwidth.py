@@ -18,6 +18,7 @@ import subprocess
 import time as _time
 import urllib.request
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta
 
 from sqlalchemy.orm import Session
@@ -231,21 +232,50 @@ def speedtest_probe(timeout: float = SPEEDTEST_TIMEOUT) -> tuple[float, str | No
     return bps / 1024.0, None
 
 
+# A single TCP stream is throughput-limited by the bandwidth-delay product, so
+# on any link with real latency it badly under-reports the available bandwidth
+# (e.g. 170 KB/s measured on a 28 Mbit/s line). Real speed tests open several
+# connections at once and sum them; the admin "measure now" does the same. The
+# worker's passive self-heal stays single-stream to keep its data use tiny.
+PROBE_STREAMS = 4
+
+
 def _http_measure(
-    url: str, fetcher: Callable[[str], int] = _http_download_size
+    url: str,
+    fetcher: Callable[[str], int] = _http_download_size,
+    streams: int = 1,
 ) -> tuple[float, str | None]:
-    """Measure throughput by downloading ``url``. Returns ``(KiB/s, error)``."""
+    """Measure throughput by downloading ``url``. Returns ``(KiB/s, error)``.
+
+    With ``streams > 1`` the download runs over that many concurrent
+    connections and their bytes are summed against wall-clock time, which
+    approximates a real speed test far better than a single stream.
+    """
     if not url:
         return 0.0, "Kein Testziel konfiguriert"
     start = _time.monotonic()
-    try:
-        size = fetcher(url)
-    except Exception as exc:  # noqa: BLE001 - any network error -> no measurement
-        return 0.0, f"{type(exc).__name__}: {exc}"
+    sizes: list[int] = []
+    errors: list[str] = []
+    with ThreadPoolExecutor(max_workers=streams) as pool:
+        for result in pool.map(lambda _i: _run_stream(fetcher, url), range(max(1, streams))):
+            size, error = result
+            if error:
+                errors.append(error)
+            else:
+                sizes.append(size)
     elapsed = max(_time.monotonic() - start, 0.001)
-    if size <= 0:
-        return 0.0, "Keine Daten empfangen"
-    return size / 1024.0 / elapsed, None
+    total = sum(sizes)
+    if total <= 0:
+        return 0.0, errors[0] if errors else "Keine Daten empfangen"
+    return total / 1024.0 / elapsed, None
+
+
+def _run_stream(fetcher: Callable[[str], int], url: str) -> tuple[int, str | None]:
+    """Run one download stream; return ``(bytes, error)``."""
+    try:
+        return fetcher(url), None
+    except Exception as exc:  # noqa: BLE001 - any network error -> no measurement
+        return 0, f"{type(exc).__name__}: {exc}"
 
 
 # Extra public test files tried if the primary HTTP target fails, before the
@@ -278,7 +308,7 @@ def measure_probe(
         if not candidate or candidate in tried:
             continue
         tried.add(candidate)
-        kbps, error = _http_measure(candidate, fetcher)
+        kbps, error = _http_measure(candidate, fetcher, streams=PROBE_STREAMS)
         if kbps > 0:
             return kbps, None
         if error:

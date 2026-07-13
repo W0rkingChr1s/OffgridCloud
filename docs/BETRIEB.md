@@ -124,9 +124,13 @@ Im Admin-Bereich unter **Bandbreite**:
 Wege und nimmt das erste Ergebnis:
 
 1. **HTTP-Probe** (schnell): lädt eine öffentliche Test-Datei (Standard:
-   Cloudflare) und misst den Durchsatz. Schlägt das primäre Ziel fehl, wird
-   automatisch ein zweites Ziel versucht. Ein eigenes Ziel lässt sich unter
-   **System** eintragen (Probe-URL bzw. `OGC_DEFAULT_PROBE_URL`).
+   Cloudflare) über **mehrere parallele Verbindungen** und summiert den
+   Durchsatz — ein einzelner TCP-Stream unterschätzt die Bandbreite auf Leitungen
+   mit Latenz stark. Schlägt das primäre Ziel fehl, wird automatisch ein zweites
+   Ziel versucht. Ein eigenes Ziel lässt sich unter **System** eintragen
+   (Probe-URL bzw. `OGC_DEFAULT_PROBE_URL`). Der Wert ist eine Schätzung des
+   Downloads und kann von dedizierten Speedtests (mehr Streams, näherer Server)
+   abweichen.
 2. **Ookla Speedtest CLI** (`speedtest`, letzter Ausweg): greift, wenn die
    HTTP-Ziele z. B. mit **HTTP 403** (Bot-Sperre eines CDN) blocken. Misst den
    Upload gegen einen nahen Speedtest-Server. `deploy/install.sh` installiert sie
