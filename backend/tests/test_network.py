@@ -42,6 +42,18 @@ def test_build_status_client_mode():
     assert status.ap_active is False
 
 
+def test_build_status_online_when_connected_despite_no_portal():
+    # Connected as a client with an IP, but NM's internet check says "none"
+    # (checking disabled / networkd-rendered). Must still read as online, not
+    # "offline" — otherwise the UI shows a dead link and the fallback looks armed.
+    devices = [
+        {"device": "wlan0", "type": "wifi", "state": "connected", "connection": "MartinRouterKing"},
+    ]
+    status = network.build_status(devices=devices, connectivity="none", wifi_ip="192.168.178.70")
+    assert status.mode == "client"
+    assert status.online is True
+
+
 def test_build_status_ap_mode_detected():
     devices = [
         {

@@ -52,14 +52,24 @@ PY
 
 # True if the box currently has a usable upstream (not counting our own AP).
 has_upstream() {
-  local ap_name="$1"
-  local conn
-  conn="$(nmcli networking connectivity check 2>/dev/null || echo unknown)"
-  # An active connection other than the AP means we have a real uplink.
-  local active
-  active="$(nmcli -t -f NAME,TYPE connection show --active 2>/dev/null \
-            | grep -Ev ":(loopback)$" | grep -v "^${ap_name}:" || true)"
-  [[ -n "$active" && "$conn" != "none" ]]
+  # We have a usable uplink if any device other than our AP is connected AND
+  # carries an IPv4 address. This is the signal that matters for the fallback:
+  # "the router is reachable and gave us a lease". We deliberately do NOT gate on
+  # `nmcli networking connectivity`, which probes *internet* reachability and
+  # returns "none"/"unknown" on many setups (checking disabled, or
+  # netplan/networkd-rendered profiles) even while a real LAN link with an IP is
+  # up — that false negative would drop the box into AP mode while still online.
+  local ap_name="$1" dev type state conn
+  while IFS=: read -r dev type state conn; do
+    [[ -z "$dev" || "$type" == "loopback" || "$type" == "" ]] && continue
+    [[ "$conn" == "$ap_name" ]] && continue
+    [[ "$state" == connected* ]] || continue
+    if nmcli -t -f IP4.ADDRESS device show "$dev" 2>/dev/null \
+         | grep -qE '[0-9]{1,3}(\.[0-9]{1,3}){3}'; then
+      return 0
+    fi
+  done < <(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null)
+  return 1
 }
 
 evaluate_once() {
