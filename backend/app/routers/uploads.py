@@ -109,6 +109,12 @@ async def upload_chunk(
             if chunk:
                 fh.write(chunk)
                 written += len(chunk)
+        # Force the bytes to the platter BEFORE we advance the committed offset.
+        # On a battery-powered Pi this ordering is what makes the resume point
+        # trustworthy after a power cut: the DB never claims bytes the disk lost
+        # (see integrity.reconcile_upload_sessions).
+        fh.flush()
+        os.fsync(fh.fileno())
 
     session.received += written
     db.commit()

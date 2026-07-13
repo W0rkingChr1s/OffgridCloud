@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import tempfile
+import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from ..admin_ops import audit
-from ..db import get_db
-from ..deps import get_current_user, require_admin
+from ..db import SessionLocal, get_db
+from ..deps import get_current_user, require_admin, user_from_query_token
 from ..models import (
     CloudProvider,
     FolderAccess,
@@ -33,6 +38,8 @@ from ..schemas import (
     FolderProviderLinkOut,
     FolderProviderLinkUpdate,
     FolderUpdate,
+    MediaBulkDelete,
+    MediaBulkDeleteResult,
     MediaDeleteResult,
     MediaItemOut,
 )
@@ -387,3 +394,145 @@ def delete_media_item(
     result = delete_media(db, media_id)
     audit(db, user, "media.delete", f"folder={folder_id} file={filename}")
     return MediaDeleteResult(**result)
+
+
+@router.post("/{folder_id}/media/bulk-delete", response_model=MediaBulkDeleteResult)
+def bulk_delete_media(
+    folder_id: int,
+    payload: MediaBulkDelete,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MediaBulkDeleteResult:
+    """Delete several media items from a folder in one request.
+
+    Same folder-scoped permission as the single delete. Ids that don't exist (or
+    live in another folder) are reported back rather than failing the whole
+    batch, so a partially stale UI selection still deletes what it can.
+    """
+    _get_folder(db, folder_id)
+    if not user_can_access_folder(db, user, folder_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
+
+    requested = list(dict.fromkeys(payload.media_ids))  # de-dupe, keep order
+    deleted = 0
+    not_found: list[int] = []
+    remote_attempted = 0
+    remote_deleted = 0
+    remote_errors: list[str] = []
+
+    for media_id in requested:
+        media = db.get(MediaItem, media_id)
+        if media is None or media.folder_id != folder_id:
+            not_found.append(media_id)
+            continue
+        res = delete_media(db, media_id)
+        if res["deleted"]:
+            deleted += 1
+        remote_attempted += res["remote_attempted"]
+        remote_deleted += res["remote_deleted"]
+        remote_errors.extend(res["remote_errors"])
+
+    audit(
+        db, user, "media.bulk_delete",
+        f"folder={folder_id} deleted={deleted}/{len(requested)}",
+    )
+    return MediaBulkDeleteResult(
+        requested=len(requested),
+        deleted=deleted,
+        not_found=not_found,
+        remote_attempted=remote_attempted,
+        remote_deleted=remote_deleted,
+        remote_errors=remote_errors,
+    )
+
+
+@router.get("/{folder_id}/download")
+def bulk_download(
+    folder_id: int,
+    token: str,
+    ids: str = Query(default="", description="Comma-separated media ids; empty = whole folder"),
+) -> FileResponse:
+    """Stream a ZIP of several media items as one download.
+
+    Auth rides in the query string (like the single-file download) so the link
+    works from a plain ``<a href>``. The archive is built with ZIP_STORED (no
+    compression) — the files are already compressed video/images, so this keeps
+    CPU and memory low on the Pi. Only local copies that still exist are
+    included; anything removed or corrupted is skipped.
+    """
+    with SessionLocal() as db:
+        user = user_from_query_token(db, token)
+        folder = db.get(UploadFolder, folder_id)
+        if folder is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found")
+        if not user_can_access_folder(db, user, folder_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
+
+        wanted: set[int] | None = None
+        if ids.strip():
+            try:
+                wanted = {int(x) for x in ids.split(",") if x.strip()}
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Ungültige ids") from None
+
+        query = select(MediaItem).where(
+            MediaItem.folder_id == folder_id,
+            MediaItem.local_deleted.is_(False),
+        )
+        if wanted is not None:
+            query = query.where(MediaItem.id.in_(wanted))
+        items = list(db.scalars(query.order_by(MediaItem.created_at)))
+
+        # Keep only items whose local file is actually present.
+        present = [m for m in items if os.path.exists(m.stored_path)]
+        if not present:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Keine herunterladbaren Dateien in der Auswahl",
+            )
+
+        folder_name = folder.name
+
+    # Build the archive to a temp file, then stream it and clean up afterwards.
+    tmp = tempfile.NamedTemporaryFile(prefix="ogc-bundle-", suffix=".zip", delete=False)
+    tmp.close()
+    try:
+        used: dict[str, int] = {}
+        with zipfile.ZipFile(tmp.name, "w", compression=zipfile.ZIP_STORED) as zf:
+            for media in present:
+                name = _zip_safe_name(media.filename, media.id, used)
+                zf.write(media.stored_path, arcname=name)
+    except OSError:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail="Archiv konnte nicht erstellt werden") from None
+
+    archive_name = f"{_zip_safe_name(folder_name, folder_id, {})}.zip"
+    return FileResponse(
+        tmp.name,
+        media_type="application/zip",
+        filename=archive_name,
+        background=BackgroundTask(_cleanup_file, tmp.name),
+    )
+
+
+def _zip_safe_name(name: str, unique_id: int, used: dict[str, int]) -> str:
+    """A filesystem-safe, collision-free entry name for the archive."""
+    cleaned = "".join(c for c in name if c.isprintable() and c not in '\\/:*?"<>|').strip()
+    cleaned = cleaned or f"datei-{unique_id}"
+    if cleaned in used:
+        used[cleaned] += 1
+        stem, dot, ext = cleaned.partition(".")
+        cleaned = f"{stem}_{used[cleaned]}{dot}{ext}" if dot else f"{cleaned}_{used[cleaned]}"
+    else:
+        used[cleaned] = 0
+    return cleaned
+
+
+def _cleanup_file(path: str) -> None:
+    try:
+        os.unlink(path)
+    except OSError:  # pragma: no cover
+        pass
