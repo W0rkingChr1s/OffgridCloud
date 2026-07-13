@@ -110,6 +110,21 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 **Damit ist der ursprünglich geplante Backlog vollständig abgearbeitet.** Weitere
 Ideen entstehen künftig als GitHub-Issues.
 
+## Phase 9 — Desktop-Client (Auto-Upload-Agent) ◐
+
+*Ergebnis: ein schlanker Hintergrund-Agent für macOS/Linux/Windows, der lokale
+Ordner überwacht und neue Dateien automatisch (resumable) in die Box lädt sowie
+die Server-Statusmeldungen durchreicht. Nutzt die bestehende API — am Server nur
+kleine, optionale Ergänzungen.*
+
+- ☐ Uploader-Kern über das bestehende Chunk-Protokoll (open → PUT/X-Offset → complete)
+- ☐ Ordner-Watchdog (fsnotify + Quiescence + Rescan) + persistente Queue
+- ☐ Server-Watchdog (Erreichbarkeit, Pause/Resume, Backoff) + SSE-Status durchreichen
+- ☐ Desktop-Integration: System-Tray + Dienst (systemd/launchd/Windows-Service)
+- ☐ Auslieferung: signierte Pakete, TLS-Pinning (TOFU), Doku
+
+Detailkonzept, Architektur und Phasenplan: **[docs/CLIENT.md](CLIENT.md)**.
+
 ---
 
 ## Meilensteine
