@@ -183,9 +183,13 @@ Wiederherstellen:
 ## 9. Updates
 
 Instanzen prüfen automatisch gegen die **GitHub-Releases** des Projekts
-(System-Seite zeigt aktuelle vs. neueste Version). Releases entstehen durch
-einen Versions-Tag (`git tag v0.2.0 && git push origin v0.2.0` → Workflow
-`release.yml` baut & veröffentlicht).
+(System-Seite zeigt aktuelle vs. neueste Version).
+
+**Release schneiden — ohne Terminal (empfohlen):** auf GitHub unter
+**Actions → „Release" → „Run workflow"** die Version eintippen (z. B. `0.2.0`)
+und starten. Der Workflow `release.yml` setzt den Tag, baut die UI und
+veröffentlicht das Release automatisch. Alternativ per Terminal über einen
+Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
 
 - **nativ, ein Befehl** (empfohlen): aktualisiert auf das neueste Release,
   baut neu, startet den Dienst neu — Daten, `.env` und Port bleiben erhalten:
