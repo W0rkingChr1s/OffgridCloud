@@ -168,7 +168,6 @@ def build_status(
 ) -> NetworkStatus:
     """Derive a :class:`NetworkStatus` from parsed nmcli output (pure)."""
     status = NetworkStatus(supported=True, connectivity=connectivity)
-    status.online = connectivity in {"full", "limited", "portal"}
 
     for dev in devices:
         connected = dev["state"].startswith("connected")
@@ -182,6 +181,15 @@ def build_status(
             else:
                 status.wifi_ssid = conn
                 status.wifi_ip = wifi_ip
+
+    # "Online" means the box has a usable uplink so the fallback AP isn't needed.
+    # An active client/Ethernet connection IS that uplink — don't rely solely on
+    # NetworkManager's internet portal check, which returns "none"/"unknown" on
+    # many setups (connectivity checking disabled, netplan/networkd-rendered
+    # profiles) even while a real network with an IP is connected. That false
+    # "offline" would otherwise read as a dead link in the UI.
+    has_uplink = status.ethernet or bool(status.wifi_ssid)
+    status.online = has_uplink or connectivity in {"full", "limited", "portal"}
 
     if status.ap_active:
         status.mode = "ap"
@@ -335,8 +343,9 @@ def apply_config(db: Session) -> ApplyResult:
             ok=False,
             message=(
                 "Konfiguration gespeichert. Automatisches Anwenden ist nicht "
-                "eingerichtet — auf dem Server ausführen: "
-                "sudo /opt/offgridcloud/src/deploy/netfallback/apply.sh"
+                "eingerichtet — einmalig auf dem Server einrichten: "
+                "sudo /opt/offgridcloud/src/deploy/netfallback/install.sh "
+                "(danach wirkt „Anwenden“ automatisch)."
             ),
         )
     try:
