@@ -4,7 +4,7 @@ from app.bandwidth import active_probe
 from app.db import SessionLocal
 from app.models import MediaItem, TransferJob
 from app.transfers import maybe_notify, process_job
-from tests.test_transfers import _folder, _provider, _upload, ok_fn
+from tests.test_transfers import _folder, _provider, _upload, fail_fn, ok_fn
 
 # --- Active bandwidth probe ----------------------------------------------
 
@@ -284,3 +284,232 @@ def test_webhook_not_sent_when_unset(client, admin_auth):
     with SessionLocal() as db:
         maybe_notify(db, media["id"], send_fn=lambda u, p: calls.append(1))
     assert calls == []
+
+
+# --- Info-Service: multi-channel dispatch ---------------------------------
+
+
+def _fake_senders(webhook, telegram, email):
+    from app.notify import Senders
+
+    return Senders(webhook=webhook, telegram=telegram, email=email)
+
+
+def test_dispatch_fans_out_to_telegram_and_email():
+    from app.crypto import encrypt
+    from app.models import SystemSettings
+    from app.notify import dispatch
+
+    # A transient (un-persisted) settings row keeps the shared test DB clean.
+    settings = SystemSettings(
+        webhook_url="",
+        notify_on_done=True,
+        telegram_bot_token_encrypted=encrypt("tok"),
+        telegram_chat_id="42",
+        smtp_host="smtp.local",
+        smtp_to="ops@field.local",
+        smtp_tls=True,
+    )
+    wh, tg, em = [], [], []
+    ok = dispatch(
+        settings,
+        "media.done",
+        "Upload fertig",
+        "Datei da.",
+        {"event": "media.done"},
+        senders=_fake_senders(
+            lambda u, p: wh.append((u, p)),
+            lambda t, c, text: tg.append((t, c, text)),
+            lambda s, subj, body: em.append((subj, body)),
+        ),
+    )
+    assert ok is True
+    assert wh == []  # no webhook URL configured
+    assert tg and tg[0][0] == "tok" and tg[0][1] == "42" and "Upload fertig" in tg[0][2]
+    assert em and em[0][0] == "Upload fertig"
+
+
+def test_dispatch_skips_disabled_event():
+    from app.models import SystemSettings
+    from app.notify import dispatch
+
+    settings = SystemSettings(webhook_url="http://hook.local/x", notify_on_received=False)
+    calls = []
+    ok = dispatch(
+        settings,
+        "media.received",
+        "t",
+        "m",
+        {},
+        senders=_fake_senders(
+            lambda *a: calls.append(1), lambda *a: calls.append(1), lambda *a: calls.append(1)
+        ),
+    )
+    assert ok is False
+    assert calls == []
+
+
+def test_channel_failure_never_propagates():
+    from app.crypto import encrypt
+    from app.models import SystemSettings
+    from app.notify import dispatch
+
+    settings = SystemSettings(
+        webhook_url="http://hook.local/x",
+        notify_on_done=True,
+        telegram_bot_token_encrypted=encrypt("tok"),
+        telegram_chat_id="42",
+    )
+
+    def boom(*_a):
+        raise OSError("network down")
+
+    # A raising webhook must not stop Telegram, and dispatch must still succeed.
+    tg = []
+    ok = dispatch(
+        settings,
+        "media.done",
+        "t",
+        "m",
+        {},
+        senders=_fake_senders(boom, lambda t, c, text: tg.append(1), boom),
+    )
+    assert ok is True
+    assert tg == [1]
+
+
+def test_media_failed_notifies_once(client, admin_auth, monkeypatch):
+    from app.models import MediaItem, MediaStatus
+    from app.transfers import maybe_notify_failed
+
+    prov = _provider(client, admin_auth)
+    folder = _folder(client, admin_auth)
+    client.post(
+        f"/api/folders/{folder['id']}/providers",
+        headers=admin_auth,
+        json={"provider_id": prov["id"]},
+    )
+    media = _upload(client, admin_auth, folder["id"], "boom.mp4", b"data")
+
+    with SessionLocal() as db:
+        for _ in range(10):
+            job = db.scalar(select(TransferJob).where(TransferJob.media_id == media["id"]))
+            if job.status.value == "failed":
+                break
+            process_job(db, job, fail_fn)
+        m = db.get(MediaItem, media["id"])
+        assert m.status == MediaStatus.FAILED
+        m.notified_failed = False  # process_job already armed it; reset to assert dedup
+        db.commit()
+
+    import app.notify as notifymod
+
+    events: list[str] = []
+    monkeypatch.setattr(
+        notifymod,
+        "notify_event",
+        lambda db, event, *a, **k: (events.append(event) or True),
+    )
+    with SessionLocal() as db:
+        maybe_notify_failed(db, media["id"])
+        maybe_notify_failed(db, media["id"])  # deduped by notified_failed flag
+    assert events == ["media.failed"]
+
+    # The shared test DB is global; drop this FAILED job so it can't inflate the
+    # global reconcile count asserted by later modules (see test_media_ops).
+    with SessionLocal() as db:
+        m = db.get(MediaItem, media["id"])
+        if m is not None:
+            db.delete(m)
+            db.commit()
+
+
+def _disk(low: bool) -> dict:
+    return {
+        "total": 100,
+        "used": 95 if low else 10,
+        "free": 5 if low else 90,
+        "percent_used": 95.0 if low else 10.0,
+        "low_space": low,
+    }
+
+
+def test_low_space_alerts_once_then_rearms(client, admin_auth, monkeypatch):
+    from app.admin_ops import get_system_settings
+    from app.transfers import check_low_space
+
+    with SessionLocal() as db:
+        get_system_settings(db).low_space_notified = False
+        db.commit()
+
+    import app.admin_ops as admin_ops
+    import app.notify as notifymod
+
+    sends: list[str] = []
+    monkeypatch.setattr(
+        notifymod, "dispatch", lambda settings, event, *a, **k: (sends.append(event) or True)
+    )
+
+    monkeypatch.setattr(admin_ops, "disk_usage", lambda: _disk(low=True))
+    with SessionLocal() as db:
+        check_low_space(db)
+        check_low_space(db)  # still low -> deduped
+    assert sends == ["disk.low"]
+
+    monkeypatch.setattr(admin_ops, "disk_usage", lambda: _disk(low=False))
+    with SessionLocal() as db:
+        check_low_space(db)  # recovered -> re-arm, no send
+    assert sends == ["disk.low"]
+
+    monkeypatch.setattr(admin_ops, "disk_usage", lambda: _disk(low=True))
+    with SessionLocal() as db:
+        check_low_space(db)  # low again -> alerts again
+    assert sends == ["disk.low", "disk.low"]
+
+
+def test_notify_settings_roundtrip_hides_secrets(client, admin_auth):
+    try:
+        r = client.put(
+            "/api/system",
+            headers=admin_auth,
+            json={
+                "notify_on_received": True,
+                "telegram_bot_token": "123:ABC",
+                "telegram_chat_id": "555",
+                "smtp_host": "smtp.example.com",
+                "smtp_port": 2525,
+                "smtp_username": "user",
+                "smtp_password": "hunter2",
+                "smtp_from": "box@field.local",
+                "smtp_to": "ops@office.local",
+                "smtp_tls": True,
+            },
+        )
+        assert r.status_code == 200, r.text
+        s = r.json()
+        assert s["notify_on_received"] is True
+        assert s["telegram_chat_id"] == "555"
+        assert s["telegram_configured"] is True
+        assert s["smtp_host"] == "smtp.example.com"
+        assert s["smtp_port"] == 2525
+        assert s["smtp_configured"] is True
+        # Secrets are write-only and never echoed back.
+        assert "telegram_bot_token" not in s
+        assert "smtp_password" not in s
+    finally:
+        # Clear channel config so it can't leak into later modules' process_job.
+        client.put(
+            "/api/system",
+            headers=admin_auth,
+            json={
+                "notify_on_received": False,
+                "telegram_bot_token": "",
+                "telegram_chat_id": "",
+                "smtp_host": "",
+                "smtp_username": "",
+                "smtp_password": "",
+                "smtp_from": "",
+                "smtp_to": "",
+                "webhook_url": "",
+            },
+        )

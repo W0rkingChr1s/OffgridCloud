@@ -54,6 +54,22 @@ def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
 _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "delete_remote_on_local_delete", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "auto_resync", "BOOLEAN NOT NULL DEFAULT 1"),
+    # Notification "Info-Service" — added after the original webhook column.
+    ("media_items", "notified_failed", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "notify_on_received", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "notify_on_done", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "notify_on_failed", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "notify_on_low_space", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "telegram_bot_token_encrypted", "TEXT NOT NULL DEFAULT ''"),
+    ("system_settings", "telegram_chat_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_host", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_port", "INTEGER NOT NULL DEFAULT 587"),
+    ("system_settings", "smtp_username", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_password_encrypted", "TEXT NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_from", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_to", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
 ]
 

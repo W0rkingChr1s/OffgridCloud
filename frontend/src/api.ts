@@ -190,6 +190,21 @@ export interface SystemStatus {
   webhook_url: string;
   disk: DiskUsage;
   rclone_available: boolean;
+  // Notifications ("Info-Service"). Secrets are never returned — only whether
+  // each channel is configured.
+  notify_on_received: boolean;
+  notify_on_done: boolean;
+  notify_on_failed: boolean;
+  notify_on_low_space: boolean;
+  telegram_chat_id: string;
+  telegram_configured: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_from: string;
+  smtp_to: string;
+  smtp_tls: boolean;
+  smtp_configured: boolean;
 }
 
 export interface MediaDeleteResult {

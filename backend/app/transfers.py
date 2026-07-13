@@ -248,49 +248,120 @@ def process_job(
     recompute_media_status(db, media.id)
     db.commit()
     maybe_notify(db, media.id)
+    maybe_notify_failed(db, media.id)
     maybe_delete_local(db, media.id)
     return job
 
 
-def _http_post_json(url: str, payload: dict) -> None:
-    import urllib.request
+def _format_bytes(num: int) -> str:
+    value = float(num)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} TB"
 
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    urllib.request.urlopen(req, timeout=10).close()  # noqa: S310 (admin-set URL)
 
-
-def maybe_notify(
-    db: Session,
-    media_id: int,
-    send_fn: Callable[[str, dict], None] = _http_post_json,
-) -> None:
-    """If a webhook is configured, notify once when a media item is fully uploaded."""
-    from .admin_ops import get_system_settings
-
-    url = get_system_settings(db).webhook_url
-    if not url:
-        return
-    media = db.get(MediaItem, media_id)
-    if media is None or media.status != MediaStatus.DONE or media.notified:
-        return
-    payload = {
-        "event": "media.done",
+def _media_payload(media: MediaItem, event: str) -> dict:
+    return {
+        "event": event,
         "media_id": media.id,
         "folder_id": media.folder_id,
         "filename": media.filename,
         "size": media.size,
         "sha256": media.sha256,
     }
-    try:
-        send_fn(url, payload)
-    except Exception as exc:  # noqa: BLE001 - webhook failures must not break uploads
-        logger.warning("Webhook notify failed for media %d: %s", media_id, exc)
+
+
+def notify_received(db: Session, media_id: int) -> None:
+    """Notify (if enabled) that a fresh upload was accepted and queued."""
+    from . import notify
+
+    media = db.get(MediaItem, media_id)
+    if media is None:
         return
-    media.notified = True
-    db.commit()
+    notify.notify_event(
+        db,
+        "media.received",
+        "Upload angenommen",
+        f'„{media.filename}" wurde angenommen — Cloud-Transfer beginnt.',
+        _media_payload(media, "media.received"),
+    )
+
+
+def maybe_notify(
+    db: Session,
+    media_id: int,
+    send_fn: Callable[[str, dict], None] | None = None,
+) -> None:
+    """Notify once when a media item finishes uploading everywhere.
+
+    Best-effort across every configured channel (webhook/Telegram/e-mail). The
+    ``send_fn`` override replaces just the webhook transport (kept for tests).
+    """
+    from . import notify
+
+    media = db.get(MediaItem, media_id)
+    if media is None or media.status != MediaStatus.DONE or media.notified:
+        return
+    senders = None
+    if send_fn is not None:
+        senders = notify.Senders(
+            webhook=send_fn, telegram=notify._send_telegram, email=notify._send_email
+        )
+    notified = notify.notify_event(
+        db,
+        "media.done",
+        "Upload fertig",
+        f'„{media.filename}" wurde in alle Ziele hochgeladen.',
+        _media_payload(media, "media.done"),
+        **({"senders": senders} if senders is not None else {}),
+    )
+    if notified:
+        media.notified = True
+        db.commit()
+
+
+def maybe_notify_failed(db: Session, media_id: int) -> None:
+    """Notify once when a media item's transfer has finally failed."""
+    from . import notify
+
+    media = db.get(MediaItem, media_id)
+    if media is None or media.status != MediaStatus.FAILED or media.notified_failed:
+        return
+    notified = notify.notify_event(
+        db,
+        "media.failed",
+        "Transfer fehlgeschlagen",
+        f'„{media.filename}" konnte nicht hochgeladen werden (nach mehreren Versuchen).',
+        _media_payload(media, "media.failed"),
+    )
+    if notified:
+        media.notified_failed = True
+        db.commit()
+
+
+def check_low_space(db: Session) -> None:
+    """Send a one-shot alert when the buffer runs low; re-arm once it recovers."""
+    from . import notify
+    from .admin_ops import disk_usage, get_system_settings
+
+    settings = get_system_settings(db)
+    usage = disk_usage()
+    if usage["low_space"] and not settings.low_space_notified:
+        free = _format_bytes(usage["free"])
+        notify.dispatch(
+            settings,
+            "disk.low",
+            "Speicher wird knapp",
+            f"Nur noch {free} freier Puffer-Speicher ({usage['percent_used']}% belegt).",
+            {"event": "disk.low", **usage},
+        )
+        settings.low_space_notified = True
+        db.commit()
+    elif not usage["low_space"] and settings.low_space_notified:
+        settings.low_space_notified = False  # re-arm for the next episode
+        db.commit()
 
 
 def maybe_delete_local(db: Session, media_id: int) -> None:
@@ -466,6 +537,7 @@ def reconcile_once(db: Session) -> dict:
         job.attempts = 0
         job.last_error = ""
         job.next_attempt_at = None
+        media.notified_failed = False  # re-arm: a fresh failure should re-notify
         requeued += 1
         affected_media.add(job.media_id)
 
@@ -506,6 +578,12 @@ def _reconcile_tick() -> None:
     from .admin_ops import get_system_settings
 
     with SessionLocal() as db:
+        # Disk alert is independent of auto-resync — a full buffer stops uploads
+        # regardless, so the field team should hear about it either way.
+        try:
+            check_low_space(db)
+        except Exception:  # pragma: no cover - alerting must never break reconcile
+            logger.debug("Low-space check skipped", exc_info=True)
         if not get_system_settings(db).auto_resync:
             return
         result = reconcile_once(db)

@@ -30,6 +30,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - ☁️ **Viele Cloud-Ziele** — Amazon S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
 - 🗂️ **Ordner ↔ Provider** — ein Ordner kann an mehrere Cloud-Ziele gespiegelt werden
 - 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
+- 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen) plus Push-Benachrichtigungen per Webhook, **Telegram** oder **E-Mail** (inkl. Speicher-knapp-Warnung)
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
 ---
@@ -92,6 +93,22 @@ pytest -q && ruff check .                # Tests & Lint
 cd frontend && npm install && npm run dev # http://localhost:5173
 ```
 
+Tests & Lint: `cd backend && pytest -q && ruff check .`. Beiträge:
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Status
+
+✅ **Produktionsreif.** Die Phasen 0–8 sind umgesetzt; alle Meilensteine
+(**M1** Walking Skeleton → **M4** Feldtauglich) sind erreicht:
+
+- **Phase 0–2** — Grundgerüst, Auth/User-Management, Ordner & **chunked/resumable** lokale Uploads.
+- **Phase 3–4** — Cloud-Provider (11 Typen via rclone, Verbindungstest, verschlüsselte Credentials) & automatische **Transfer-Engine** (Retry/Backoff, Resume, Integritäts-Check).
+- **Phase 5–6** — **Bandbreiten-Steuerung** (`--bwlimit`, Zeitfenster, Mindest-Bandbreite-Gate, Prioritäten) & **Live-Dashboard** per SSE.
+- **Phase 7** — Härtung: Audit-Log, Speicher-Management, Disk-Monitoring, Backup, Reverse-Proxy-Configs, [Betriebshandbuch](docs/BETRIEB.md).
+- **Phase 8** — Teams/Gruppen, Thumbnails (Pillow/ffmpeg), PWA fürs Feld, Info-Service (Toasts + Webhook/Telegram/E-Mail), aktive Bandbreiten-Probe.
+
+Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche — siehe
+[Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 Beiträge willkommen — siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dokumentation
