@@ -63,11 +63,55 @@ def test_probe_endpoint_works_without_configured_url(client, admin_auth, monkeyp
     # built-in default target instead of erroring — users enter nothing.
     import app.routers.bandwidth as bw
 
-    monkeypatch.setattr(bw, "active_probe", lambda url: 2048.0)
+    monkeypatch.setattr(bw, "measure_probe", lambda url: (2048.0, None))
     client.put("/api/system", headers=admin_auth, json={"probe_url": ""})
     resp = client.post("/api/bandwidth/probe", headers=admin_auth)
     assert resp.status_code == 200
     assert resp.json()["last_kbps"] == 2048.0
+
+
+def test_probe_endpoint_surfaces_error_reason(client, admin_auth, monkeypatch):
+    # A failed measurement must report *why*, not just "unreachable", so the
+    # admin can tell a 403/DNS/timeout apart.
+    import app.routers.bandwidth as bw
+
+    monkeypatch.setattr(bw, "measure_probe", lambda url: (0.0, "HTTPError: 403 Forbidden"))
+    resp = client.post("/api/bandwidth/probe", headers=admin_auth)
+    assert resp.status_code == 502
+    assert "403 Forbidden" in resp.json()["detail"]
+
+
+def test_measure_probe_sends_browser_user_agent():
+    # The bare urllib User-Agent is 403'd by many CDNs; the probe must identify
+    # as a normal client. Capture the Request the probe builds.
+    from app import bandwidth
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self, _size):
+            return b""  # nothing to read; we only care about the request headers
+
+    def _fake_urlopen(req, timeout):
+        captured["headers"] = req.headers
+        return _Resp()
+
+    original = bandwidth.urllib.request.urlopen
+    bandwidth.urllib.request.urlopen = _fake_urlopen
+    try:
+        bandwidth._http_download_size("http://x")
+    finally:
+        bandwidth.urllib.request.urlopen = original
+
+    # urllib title-cases header keys on the Request object.
+    assert "User-agent" in captured["headers"]
+    assert "python-urllib" not in captured["headers"]["User-agent"].lower()
 
 
 # --- Webhook notification -------------------------------------------------

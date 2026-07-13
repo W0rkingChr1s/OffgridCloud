@@ -132,6 +132,13 @@ def record_measurement(db: Session, kbps: float) -> None:
 PROBE_SAMPLE_SECONDS = 8.0
 PROBE_SOCKET_TIMEOUT = 15.0
 _PROBE_CHUNK = 64 * 1024
+# urllib's default ``User-Agent: Python-urllib/x.y`` is rejected with 403 by many
+# CDNs and WAFs (Cloudflare's speed endpoint among them), which surfaced as the
+# opaque "Testziel nicht erreichbar". Identify as a normal client instead.
+_PROBE_HEADERS = {
+    "User-Agent": "OffgridCloud/bandwidth-probe (+https://github.com/W0rkingChr1s/OffgridCloud)",
+    "Accept": "*/*",
+}
 
 
 def _http_download_size(
@@ -146,7 +153,8 @@ def _http_download_size(
     """
     total = 0
     start = _time.monotonic()
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (admin-set URL)
+    req = urllib.request.Request(url, headers=_PROBE_HEADERS)  # noqa: S310 (admin-set URL)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (admin-set URL)
         while _time.monotonic() - start < time_budget:
             chunk = resp.read(_PROBE_CHUNK)
             if not chunk:
@@ -155,14 +163,29 @@ def _http_download_size(
     return total
 
 
-def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:
-    """Actively measure throughput by downloading ``url``. Returns KiB/s (0 on error)."""
+def measure_probe(
+    url: str, fetcher: Callable[[str], int] = _http_download_size
+) -> tuple[float, str | None]:
+    """Measure throughput by downloading ``url``.
+
+    Returns ``(kbps, error)``: on success ``error`` is ``None``; on failure
+    ``kbps`` is 0 and ``error`` carries the reason so callers can surface it
+    instead of a blanket "unreachable" message.
+    """
     if not url:
-        return 0.0
+        return 0.0, "Kein Testziel konfiguriert"
     start = _time.monotonic()
     try:
         size = fetcher(url)
-    except Exception:  # noqa: BLE001 - any network error -> no measurement
-        return 0.0
+    except Exception as exc:  # noqa: BLE001 - any network error -> no measurement
+        return 0.0, f"{type(exc).__name__}: {exc}"
     elapsed = max(_time.monotonic() - start, 0.001)
-    return size / 1024.0 / elapsed
+    if size <= 0:
+        return 0.0, "Keine Daten empfangen"
+    return size / 1024.0 / elapsed, None
+
+
+def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:
+    """Actively measure throughput by downloading ``url``. Returns KiB/s (0 on error)."""
+    kbps, _ = measure_probe(url, fetcher)
+    return kbps
