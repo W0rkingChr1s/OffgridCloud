@@ -321,6 +321,85 @@ class MediaDeleteResult(BaseModel):
     remote_attempted: int = 0
     remote_deleted: int = 0
     remote_errors: list[str] = []
+# --- Network redundancy / AP fallback -------------------------------------
+
+
+class NetworkStatusOut(BaseModel):
+    supported: bool
+    apply_wired: bool
+    mode: str
+    online: bool
+    connectivity: str
+    ethernet: bool
+    wifi_ssid: str | None = None
+    wifi_ip: str | None = None
+    ap_active: bool
+    ap_ssid: str | None = None
+    detail: str = ""
+
+
+class KnownNetworkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ssid: str
+    priority: int
+    autoconnect: bool
+    has_password: bool = False
+    created_at: datetime
+
+
+class KnownNetworkCreate(BaseModel):
+    ssid: str = Field(min_length=1, max_length=32)
+    password: str = ""
+    priority: int = Field(default=0, ge=0)
+    autoconnect: bool = True
+
+
+class KnownNetworkUpdate(BaseModel):
+    password: str | None = None
+    priority: int | None = Field(default=None, ge=0)
+    autoconnect: bool | None = None
+
+
+class NetworkSettingsOut(BaseModel):
+    fallback_enabled: bool
+    ap_ssid: str
+    ap_hidden: bool
+    ap_address: str
+    country_code: str
+    check_interval: int
+    fail_threshold: int
+    ap_has_password: bool = False
+
+
+class NetworkSettingsUpdate(BaseModel):
+    fallback_enabled: bool | None = None
+    ap_ssid: str | None = Field(default=None, min_length=1, max_length=32)
+    ap_password: str | None = None
+    ap_hidden: bool | None = None
+    ap_address: str | None = None
+    country_code: str | None = None
+    check_interval: int | None = Field(default=None, ge=5, le=3600)
+    fail_threshold: int | None = Field(default=None, ge=1, le=20)
+
+
+class NetworkOverviewOut(BaseModel):
+    """Everything the Network admin page needs in one call."""
+
+    status: NetworkStatusOut
+    settings: NetworkSettingsOut
+    known_networks: list[KnownNetworkOut]
+
+
+class NetworkApplyResult(BaseModel):
+    ok: bool
+    message: str
+    output: str = ""
+
+
+class WifiScanOut(BaseModel):
+    ssids: list[str]
 
 
 class UpdateInfoOut(BaseModel):

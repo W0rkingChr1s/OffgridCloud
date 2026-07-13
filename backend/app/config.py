@@ -64,6 +64,19 @@ class Settings(BaseSettings):
     self_update: bool = False
     update_command: str = ""
 
+    # --- Network redundancy / AP fallback ----------------------------------
+    # Where the desired network config is exported for the privileged apply
+    # helper + root watchdog to consume. Contains Wi-Fi passphrases in the
+    # clear (NetworkManager needs them so), so it is written 0600. Unset →
+    # ``<data_dir>/network.json`` (see ``network_config_path``); set
+    # OGC_NET_CONFIG_FILE to relocate.
+    net_config_file: Path | None = None
+    # Opt-in privileged command that applies the exported config (creates the
+    # NetworkManager connections + AP). Wired up by
+    # ``deploy/netfallback/install.sh`` via a NOPASSWD sudoers rule, off by
+    # default — flipping real network state needs root, so it must be deliberate.
+    net_apply_command: str = ""
+
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
 
@@ -82,6 +95,11 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         return f"sqlite:///{(self.data_dir / 'offgridcloud.db').resolve()}"
+
+    @property
+    def network_config_path(self) -> Path:
+        """Resolved location of the exported network config (see network.py)."""
+        return self.net_config_file or (self.data_dir / "network.json")
 
     def ensure_dirs(self) -> None:
         """Create the data and buffer directories if they don't exist."""
