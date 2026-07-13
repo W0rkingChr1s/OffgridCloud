@@ -285,6 +285,9 @@ class KnownNetwork(Base):
     psk_encrypted: Mapped[str] = mapped_column(Text, default="")  # empty = open
     priority: Mapped[int] = mapped_column(default=0)  # higher = preferred uplink
     autoconnect: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class VpnTunnel(Base):
     """A saved VPN client profile (WireGuard/OpenVPN), config encrypted at rest.
 
