@@ -32,12 +32,35 @@ def test_capabilities_supports_and_blocker():
     assert "tun" in missing.blocker("wireguard").lower()
 
 
+def test_blocker_is_environment_aware():
+    missing = vpnsvc.Capabilities(net_admin=False, tun_device=True, wireguard=True, openvpn=True)
+    docker_msg = missing.blocker("wireguard", docker=True)
+    native_msg = missing.blocker("wireguard", docker=False)
+    assert "cap-add" in docker_msg.lower()
+    assert "cap-add" not in native_msg.lower()
+    # The native remediation points at the enable helper, not Docker flags.
+    assert "install.sh" in native_msg
+
+
+def test_in_docker_respects_override(monkeypatch):
+    monkeypatch.setenv("OGC_IN_DOCKER", "true")
+    assert vpnsvc.in_docker() is True
+    monkeypatch.setenv("OGC_IN_DOCKER", "0")
+    assert vpnsvc.in_docker() is False
+
+
 def test_capabilities_endpoint(client, admin_auth):
     caps = client.get("/api/vpn/capabilities", headers=admin_auth).json()
-    for key in ("net_admin", "tun_device", "wireguard", "openvpn", "ready", "message"):
+    for key in (
+        "net_admin", "tun_device", "wireguard", "openvpn",
+        "ready", "message", "docker", "enable_command",
+    ):
         assert key in caps
     # ready == base requirements; message set only when not ready.
     assert caps["ready"] == (caps["net_admin"] and caps["tun_device"])
+    # Native (non-Docker) hosts advertise the enable helper.
+    if not caps["docker"] and not caps["ready"]:
+        assert "install.sh" in caps["enable_command"]
 
 
 # --- CRUD -----------------------------------------------------------------

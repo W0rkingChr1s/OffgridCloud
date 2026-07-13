@@ -164,6 +164,8 @@ export interface VpnCapabilities {
   openvpn: boolean;
   ready: boolean;
   message: string;
+  docker: boolean;
+  enable_command: string;
 }
 
 export interface DiskUsage {

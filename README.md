@@ -94,12 +94,16 @@ docker run -d --name offgridcloud -p 8000:8000 \
 > **VPN-Client (optional):** Läuft OffgridCloud außerhalb des Heimnetzes und soll
 > ein internes Ziel (z. B. NAS per SMB) erreichen, kann unter **VPN** ein
 > WireGuard- oder OpenVPN-Profil hinterlegt werden. Der Tunnel-Aufbau braucht
-> erhöhte Container-Rechte — dann zusätzlich starten mit:
+> `CAP_NET_ADMIN` + `/dev/net/tun`. Im **Docker**-Betrieb zusätzlich starten mit:
 > ```bash
 > docker run … --cap-add=NET_ADMIN --device=/dev/net/tun offgridcloud
 > ```
-> (docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`). Ohne
-> diese Rechte bleibt die Oberfläche nutzbar und zeigt einen klaren Hinweis.
+> (docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`). Beim
+> **nativen** Setup auf dem Pi stattdessen `--with-vpn` bei der Installation
+> mitgeben (oder nachträglich `sudo /opt/offgridcloud/deploy/vpn/install.sh`) —
+> das lädt das TUN-Modul und erteilt dem Dienst die Capability. Ohne diese Rechte
+> bleibt die Oberfläche nutzbar und zeigt den passenden Hinweis. Details:
+> [docs/VPN.md](docs/VPN.md).
 
 ### 🪟 Windows (PowerShell)
 

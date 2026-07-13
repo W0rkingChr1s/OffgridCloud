@@ -97,15 +97,35 @@ export default function Vpn() {
 
       {caps && !caps.ready && (
         <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-          <div className="font-semibold">VPN benötigt erhöhte Container-Rechte</div>
+          <div className="font-semibold">
+            VPN benötigt erhöhte {caps.docker ? "Container-Rechte" : "Rechte"}
+          </div>
           <p className="mt-1 text-amber-200/90">{caps.message}</p>
-          <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+          {caps.docker ? (
+            <>
+              <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
 docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
-          <p className="mt-2 text-xs text-amber-200/70">
-            Bei docker-compose:{" "}
-            <code className="text-amber-200">cap_add: [NET_ADMIN]</code> und{" "}
-            <code className="text-amber-200">devices: ["/dev/net/tun"]</code>.
-          </p>
+              <p className="mt-2 text-xs text-amber-200/70">
+                Bei docker-compose:{" "}
+                <code className="text-amber-200">cap_add: [NET_ADMIN]</code> und{" "}
+                <code className="text-amber-200">devices: ["/dev/net/tun"]</code>.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-xs text-amber-200/90">
+                Nativer Betrieb (systemd auf dem Raspberry Pi): Einmalig auf dem Server ausführen —
+                installiert wireguard-tools/openvpn, lädt das TUN-Modul und erteilt dem Dienst
+                <code className="mx-1 text-amber-200">CAP_NET_ADMIN</code>:
+              </p>
+              <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+{caps.enable_command || "sudo /opt/offgridcloud/deploy/vpn/install.sh"}</pre>
+              <p className="mt-2 text-xs text-amber-200/70">
+                Danach diese Seite neu laden. Details:{" "}
+                <code className="text-amber-200">docs/VPN.md</code>.
+              </p>
+            </>
+          )}
         </div>
       )}
 
