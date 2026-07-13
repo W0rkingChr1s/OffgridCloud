@@ -323,6 +323,21 @@ class MediaDeleteResult(BaseModel):
     remote_attempted: int = 0
     remote_deleted: int = 0
     remote_errors: list[str] = []
+
+
+class MediaBulkDelete(BaseModel):
+    """Delete several media items from a folder in one request."""
+
+    media_ids: list[int] = Field(min_length=1)
+
+
+class MediaBulkDeleteResult(BaseModel):
+    requested: int
+    deleted: int
+    not_found: list[int] = []
+    remote_attempted: int = 0
+    remote_deleted: int = 0
+    remote_errors: list[str] = []
 # --- Network redundancy / AP fallback -------------------------------------
 
 

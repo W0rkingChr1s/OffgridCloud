@@ -194,6 +194,15 @@ export interface MediaDeleteResult {
   remote_errors: string[];
 }
 
+export interface MediaBulkDeleteResult {
+  requested: number;
+  deleted: number;
+  not_found: number[];
+  remote_attempted: number;
+  remote_deleted: number;
+  remote_errors: string[];
+}
+
 export interface NetworkStatus {
   supported: boolean;
   apply_wired: boolean;
