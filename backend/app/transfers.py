@@ -32,7 +32,7 @@ from .models import (
     TransferStatus,
 )
 from .providers_registry import get_type
-from .rclone import UploadResult, run_upload
+from .rclone import DeleteResult, UploadResult, delete_remote, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
 
@@ -312,6 +312,228 @@ def maybe_delete_local(db: Session, media_id: int) -> None:
     media.local_deleted = True
     db.commit()
     logger.info("Deleted local copy of media %d after verified upload", media_id)
+
+
+# --- Deletion -------------------------------------------------------------
+
+# Signature: (rclone_options, dest) -> DeleteResult
+DeleteFn = Callable[[dict, str], DeleteResult]
+
+
+def _provider_options(provider: CloudProvider) -> dict:
+    """Decrypt a provider's credentials into rclone options (empty on error)."""
+    pt = get_type(provider.type)
+    if pt is None:
+        return {}
+    try:
+        config = json.loads(decrypt(provider.config_encrypted) or "{}")
+    except json.JSONDecodeError:
+        config = {}
+    return pt.to_rclone_options(config)
+
+
+def delete_media(
+    db: Session,
+    media_id: int,
+    delete_fn: DeleteFn = delete_remote,
+) -> dict:
+    """Delete a media item: its local buffer copy and DB row (cascading its
+    transfer jobs). If the ``delete_remote_on_local_delete`` setting is on, also
+    remove the copies already uploaded to each linked provider.
+
+    Returns a summary dict with the remote-deletion outcome so the caller (and
+    UI) can surface any provider that refused.
+    """
+    from .admin_ops import get_system_settings
+
+    media = db.get(MediaItem, media_id)
+    if media is None:
+        return {
+            "deleted": False,
+            "remote_attempted": 0,
+            "remote_deleted": 0,
+            "remote_errors": [],
+        }
+
+    remote_deleted = 0
+    remote_errors: list[str] = []
+    attempted = 0
+
+    if get_system_settings(db).delete_remote_on_local_delete:
+        # Only touch providers the file actually reached (a DONE job exists), so
+        # we never issue deletes for uploads that never completed.
+        done_provider_ids = set(
+            db.scalars(
+                select(TransferJob.provider_id).where(
+                    TransferJob.media_id == media_id,
+                    TransferJob.status == TransferStatus.DONE,
+                )
+            )
+        )
+        for provider_id in done_provider_ids:
+            provider = db.get(CloudProvider, provider_id)
+            if provider is None:
+                continue
+            link = db.scalar(
+                select(FolderProviderLink).where(
+                    FolderProviderLink.folder_id == media.folder_id,
+                    FolderProviderLink.provider_id == provider_id,
+                )
+            )
+            dest = _build_dest(link.dest_path if link else "", media.filename)
+            attempted += 1
+            result = delete_fn(_provider_options(provider), dest)
+            if result.ok:
+                remote_deleted += 1
+            else:
+                remote_errors.append(f"{provider.name}: {result.message}")
+
+    # Remove the local buffer copy (best-effort — it may already be gone).
+    if not media.local_deleted:
+        try:
+            os.unlink(media.stored_path)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:  # pragma: no cover
+            logger.warning("Could not delete local copy %s: %s", media.stored_path, exc)
+
+    filename = media.filename
+    db.delete(media)  # cascades transfer jobs
+    db.commit()
+    logger.info(
+        "Deleted media %d (%s); remote deleted %d/%d",
+        media_id, filename, remote_deleted, attempted,
+    )
+    return {
+        "deleted": True,
+        "remote_attempted": attempted,
+        "remote_deleted": remote_deleted,
+        "remote_errors": remote_errors,
+    }
+
+
+# --- Reconciliation -------------------------------------------------------
+
+
+def reconcile_once(db: Session) -> dict:
+    """Self-heal transfers so temporary outages recover without manual action.
+
+    Two passes:
+      1. Backfill — every media in a folder with an *enabled* provider link gets
+         a job for that provider if one is missing.
+      2. Re-queue — failed/exhausted jobs whose source file is still on disk get
+         a fresh attempt budget and go back to ``QUEUED``.
+
+    Returns {"backfilled": int, "requeued": int}.
+    """
+    backfilled = 0
+    links = db.scalars(
+        select(FolderProviderLink).where(FolderProviderLink.enabled.is_(True))
+    ).all()
+    for link in links:
+        media_ids = list(
+            db.scalars(select(MediaItem.id).where(MediaItem.folder_id == link.folder_id))
+        )
+        for media_id in media_ids:
+            exists = db.scalar(
+                select(TransferJob.id).where(
+                    TransferJob.media_id == media_id,
+                    TransferJob.provider_id == link.provider_id,
+                )
+            )
+            if exists is None:
+                db.add(
+                    TransferJob(
+                        media_id=media_id,
+                        provider_id=link.provider_id,
+                        priority=link.priority,
+                    )
+                )
+                backfilled += 1
+    if backfilled:
+        db.flush()
+
+    failed = db.scalars(
+        select(TransferJob).where(TransferJob.status == TransferStatus.FAILED)
+    ).all()
+    requeued = 0
+    affected_media: set[int] = set()
+    for job in failed:
+        media = db.get(MediaItem, job.media_id)
+        if media is None or media.local_deleted:
+            continue  # a deleted source can't be re-uploaded
+        job.status = TransferStatus.QUEUED
+        job.attempts = 0
+        job.last_error = ""
+        job.next_attempt_at = None
+        requeued += 1
+        affected_media.add(job.media_id)
+
+    db.commit()
+    # Backfilled + requeued media need their aggregate status recomputed.
+    for link in links:
+        affected_media.update(
+            db.scalars(select(MediaItem.id).where(MediaItem.folder_id == link.folder_id))
+        )
+    for media_id in affected_media:
+        recompute_media_status(db, media_id)
+    if affected_media:
+        db.commit()
+    return {"backfilled": backfilled, "requeued": requeued}
+
+
+def _vpn_watchdog() -> None:
+    """Best-effort: bring a dropped autostart VPN tunnel back up.
+
+    VPN is an optional convenience (reaching a LAN-only target), never a hard
+    requirement — so any failure here is swallowed and must not disturb the
+    reconcile loop or the connection-independent re-sync above.
+    """
+    try:
+        from . import vpn as vpnsvc
+        from .bootstrap import autostart_vpn
+
+        caps = vpnsvc.capabilities()
+        if not (caps.net_admin and caps.tun_device):
+            return
+        if vpnsvc.active_id() is None:
+            autostart_vpn()
+    except Exception:  # pragma: no cover - watchdog must never raise
+        logger.debug("VPN watchdog skipped", exc_info=True)
+
+
+def _reconcile_tick() -> None:
+    from .admin_ops import get_system_settings
+
+    with SessionLocal() as db:
+        if not get_system_settings(db).auto_resync:
+            return
+        result = reconcile_once(db)
+    if result["backfilled"] or result["requeued"]:
+        logger.info(
+            "Reconcile: backfilled %d, re-queued %d transfer job(s)",
+            result["backfilled"], result["requeued"],
+        )
+    _vpn_watchdog()
+
+
+async def reconcile_loop(stop: asyncio.Event) -> None:
+    """Periodically self-heal transfers (see :func:`reconcile_once`)."""
+    interval = get_settings().reconcile_interval
+    if interval <= 0:
+        return
+    logger.info("Transfer reconciler started (every %.0fs)", interval)
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+            break  # stop was signalled during the wait
+        except TimeoutError:
+            pass
+        try:
+            await asyncio.to_thread(_reconcile_tick)
+        except Exception:  # pragma: no cover - keep the loop alive
+            logger.exception("Reconciler error")
+    logger.info("Transfer reconciler stopped")
 
 
 # --- Worker loop ----------------------------------------------------------

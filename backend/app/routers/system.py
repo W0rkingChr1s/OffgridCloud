@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..admin_ops import audit, disk_usage, get_system_settings
+from ..config import get_settings
 from ..db import get_db
 from ..deps import require_admin
 from ..models import AuditEvent, User
@@ -25,6 +26,9 @@ def _status(db: Session) -> SystemStatusOut:
     settings_row = get_system_settings(db)
     return SystemStatusOut(
         delete_local_after_upload=settings_row.delete_local_after_upload,
+        delete_remote_on_local_delete=settings_row.delete_remote_on_local_delete,
+        auto_resync=settings_row.auto_resync,
+        reconcile_interval=get_settings().reconcile_interval,
         probe_url=settings_row.probe_url,
         webhook_url=settings_row.webhook_url,
         disk=DiskUsageOut(**disk_usage()),
@@ -48,6 +52,12 @@ def update_settings(
     if payload.delete_local_after_upload is not None:
         row.delete_local_after_upload = payload.delete_local_after_upload
         changed.append(f"delete_local={payload.delete_local_after_upload}")
+    if payload.delete_remote_on_local_delete is not None:
+        row.delete_remote_on_local_delete = payload.delete_remote_on_local_delete
+        changed.append(f"delete_remote={payload.delete_remote_on_local_delete}")
+    if payload.auto_resync is not None:
+        row.auto_resync = payload.auto_resync
+        changed.append(f"auto_resync={payload.auto_resync}")
     if payload.probe_url is not None:
         row.probe_url = payload.probe_url.strip()
         changed.append("probe_url")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import jwt
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
@@ -43,3 +45,32 @@ def thumbnail(media_id: int, token: str) -> FileResponse:
         if thumb is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
         return FileResponse(thumb, media_type="image/jpeg")
+
+
+@router.get("/{media_id}/download")
+def download(media_id: int, token: str) -> FileResponse:
+    """Stream the original file as an attachment.
+
+    The token is taken from the query string (not a header) so it can be used
+    directly in a browser download link / ``<a href>``, mirroring the thumbnail
+    endpoint. Access is scoped to folders the user may see.
+    """
+    with SessionLocal() as db:
+        user = _user_from_token(db, token)
+        media = db.get(MediaItem, media_id)
+        if media is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+        if not user_can_access_folder(db, user, media.folder_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access")
+        if media.local_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="Lokale Kopie wurde entfernt — Download nicht möglich",
+            )
+        if not os.path.exists(media.stored_path):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Datei fehlt")
+        return FileResponse(
+            media.stored_path,
+            media_type="application/octet-stream",
+            filename=media.filename,
+        )

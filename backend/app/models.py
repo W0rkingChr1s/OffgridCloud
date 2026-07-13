@@ -238,6 +238,14 @@ class SystemSettings(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Delete the local buffer copy once all transfers for a media item succeed.
     delete_local_after_upload: Mapped[bool] = mapped_column(Boolean, default=False)
+    # When a media item is deleted locally, also remove the copies already
+    # uploaded to every linked provider (via rclone). Off by default — deleting
+    # remote data is destructive and should be opted into deliberately.
+    delete_remote_on_local_delete: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Periodically re-queue failed/stuck transfers and backfill any missing jobs
+    # so a temporary outage (offline, provider down) self-heals once connectivity
+    # returns — no manual "retry" needed.
+    auto_resync: Mapped[bool] = mapped_column(Boolean, default=True)
     # Optional URL whose download is used to actively measure bandwidth.
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.

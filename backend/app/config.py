@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     worker_poll_interval: float = 3.0  # seconds between idle polls
     worker_max_attempts: int = 5
 
+    # Background reconciler: how often (seconds) to re-queue failed/stuck
+    # transfers and backfill any missing jobs, so a temporary outage self-heals
+    # once connectivity returns. 0 disables the loop. Gated per-instance by the
+    # ``auto_resync`` system setting (default on).
+    reconcile_interval: float = 900.0
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{(self.data_dir / 'offgridcloud.db').resolve()}"

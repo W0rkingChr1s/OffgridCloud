@@ -33,10 +33,11 @@ from ..schemas import (
     FolderProviderLinkOut,
     FolderProviderLinkUpdate,
     FolderUpdate,
+    MediaDeleteResult,
     MediaItemOut,
 )
 from ..storage import accessible_folder_ids, folder_dir, user_can_access_folder
-from ..transfers import enqueue_for_link
+from ..transfers import delete_media, enqueue_for_link
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -344,3 +345,28 @@ def list_media(
             .order_by(MediaItem.created_at.desc())
         )
     )
+
+
+@router.delete("/{folder_id}/media/{media_id}", response_model=MediaDeleteResult)
+def delete_media_item(
+    folder_id: int,
+    media_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MediaDeleteResult:
+    """Delete a media item locally (and remotely, if that system setting is on).
+
+    Scoped to users who may access the folder — the same permission required to
+    upload into it. Whether the already-uploaded remote copies are also removed
+    is governed globally by the ``delete_remote_on_local_delete`` setting.
+    """
+    _get_folder(db, folder_id)
+    if not user_can_access_folder(db, user, folder_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
+    media = db.get(MediaItem, media_id)
+    if media is None or media.folder_id != folder_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media not found")
+    filename = media.filename
+    result = delete_media(db, media_id)
+    audit(db, user, "media.delete", f"folder={folder_id} file={filename}")
+    return MediaDeleteResult(**result)

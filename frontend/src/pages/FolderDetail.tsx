@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError, type Folder, getToken, type MediaItem } from "../api";
+import {
+  api,
+  ApiError,
+  type Folder,
+  getToken,
+  type MediaDeleteResult,
+  type MediaItem,
+} from "../api";
 import Layout from "../components/Layout";
 import { formatBytes, uploadFile } from "../upload";
+
+function downloadUrl(id: number): string {
+  return `/api/media/${id}/download?token=${encodeURIComponent(getToken() ?? "")}`;
+}
 
 function Thumb({ id }: { id: number }) {
   const [failed, setFailed] = useState(false);
@@ -81,6 +92,35 @@ export default function FolderDetail() {
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   }
 
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const remove = useCallback(
+    async (m: MediaItem) => {
+      if (!window.confirm(`„${m.filename}" wirklich löschen?`)) return;
+      setBusyId(m.id);
+      setError(null);
+      setNotice(null);
+      try {
+        const res = await api<MediaDeleteResult>(
+          `/api/folders/${folderId}/media/${m.id}`,
+          { method: "DELETE" },
+        );
+        if (res.remote_errors.length) {
+          setError(`Remote nicht überall gelöscht: ${res.remote_errors.join("; ")}`);
+        } else if (res.remote_deleted > 0) {
+          setNotice(`Gelöscht – auch bei ${res.remote_deleted} Ziel(en) entfernt.`);
+        }
+        loadMedia();
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "Löschen fehlgeschlagen");
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [folderId, loadMedia],
+  );
+
   return (
     <Layout>
       <div className="mb-6">
@@ -93,6 +133,9 @@ export default function FolderDetail() {
 
       {error && (
         <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>
+      )}
+      {notice && (
+        <div className="mb-4 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm text-emerald-300">{notice}</div>
       )}
 
       <div
@@ -166,9 +209,26 @@ export default function FolderDetail() {
                     <span>{formatBytes(m.size)}</span>
                     <span aria-hidden>·</span>
                     <span>{new Date(m.created_at).toLocaleDateString()}</span>
+                    <span aria-hidden>·</span>
+                    <span className="text-ogc-teal">{m.status}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-3 text-xs">
+                    {m.local_deleted ? (
+                      <span className="text-slate-500">lokal entfernt</span>
+                    ) : (
+                      <a href={downloadUrl(m.id)} download className="text-ogc-teal hover:underline">
+                        Herunterladen
+                      </a>
+                    )}
+                    <button
+                      onClick={() => remove(m)}
+                      disabled={busyId === m.id}
+                      className="text-red-300 hover:underline disabled:opacity-50"
+                    >
+                      {busyId === m.id ? "…" : "Löschen"}
+                    </button>
                   </div>
                 </div>
-                <span className="shrink-0 rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">{m.status}</span>
               </div>
             ))}
           </div>
@@ -183,6 +243,7 @@ export default function FolderDetail() {
                   <th className="px-4 py-3">Größe</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Hochgeladen</th>
+                  <th className="px-4 py-3 text-right">Aktion</th>
                 </tr>
               </thead>
               <tbody>
@@ -198,6 +259,26 @@ export default function FolderDetail() {
                     </td>
                     <td className="px-4 py-3 text-slate-400">
                       {new Date(m.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {!m.local_deleted && (
+                          <a
+                            href={downloadUrl(m.id)}
+                            download
+                            className="rounded border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
+                          >
+                            Download
+                          </a>
+                        )}
+                        <button
+                          onClick={() => remove(m)}
+                          disabled={busyId === m.id}
+                          className="rounded border border-red-500/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                        >
+                          {busyId === m.id ? "…" : "Löschen"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
