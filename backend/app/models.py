@@ -52,6 +52,11 @@ class MediaStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class VpnType(str, enum.Enum):
+    WIREGUARD = "wireguard"
+    OPENVPN = "openvpn"
+
+
 def _utcnow() -> datetime:
     return datetime.now(UTC)
 
@@ -237,6 +242,28 @@ class SystemSettings(Base):
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
+
+
+class VpnTunnel(Base):
+    """A saved VPN client profile (WireGuard/OpenVPN), config encrypted at rest.
+
+    Lets an off-site OffgridCloud dial into a home LAN so internal targets
+    (e.g. a NAS reachable only via SMB on a private IP) become usable. Only one
+    tunnel is active at a time; ``active_since`` marks the currently-connected
+    profile (best-effort, reconciled against the live interface).
+    """
+
+    __tablename__ = "vpn_tunnels"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    type: Mapped[VpnType] = mapped_column(Enum(VpnType), default=VpnType.WIREGUARD)
+    # Encrypted JSON: {"config": "<raw .conf/.ovpn>", "username": "", "password": ""}
+    config_encrypted: Mapped[str] = mapped_column(Text)
+    autostart: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    active_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class AuditEvent(Base):

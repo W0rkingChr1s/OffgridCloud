@@ -12,6 +12,7 @@ import Providers from "./pages/Providers";
 import System from "./pages/System";
 import Transfers from "./pages/Transfers";
 import Users from "./pages/Users";
+import Vpn from "./pages/Vpn";
 
 export default function App() {
   return (
@@ -49,6 +50,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Providers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/vpn"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Vpn />
               </ProtectedRoute>
             }
           />

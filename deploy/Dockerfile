@@ -12,8 +12,17 @@ RUN npm run build
 FROM python:3.11-slim AS runtime
 
 # rclone = universal transfer engine. Installed from Debian for multi-arch.
+# wireguard-tools/openvpn = optional built-in VPN client (needs the container to
+# run with --cap-add=NET_ADMIN --device=/dev/net/tun to actually connect).
+# openresolv lets wg-quick apply a config's DNS line without failing.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends rclone \
+    && apt-get install -y --no-install-recommends \
+        rclone \
+        wireguard-tools \
+        openvpn \
+        iproute2 \
+        iptables \
+        openresolv \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
