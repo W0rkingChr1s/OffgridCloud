@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__
 from .admin_ops import ensure_system_settings
 from .bandwidth import ensure_policy
-from .bootstrap import ensure_initial_admin
+from .bootstrap import autostart_vpn, ensure_initial_admin
 from .config import get_settings
 from .db import init_db
 from .network import ensure_network_settings
@@ -38,6 +38,7 @@ from .routers import (
     updates,
     uploads,
     users,
+    vpn,
 )
 from .transfers import worker_loop
 
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     ensure_policy()
     ensure_system_settings()
     ensure_network_settings()
+    autostart_vpn()
 
     stop = asyncio.Event()
     task: asyncio.Task | None = None
@@ -80,6 +82,7 @@ app.include_router(system.router)
 app.include_router(media.router)
 app.include_router(updates.router)
 app.include_router(network.router)
+app.include_router(vpn.router)
 
 
 @app.get("/api/health")

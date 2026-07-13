@@ -91,6 +91,16 @@ docker run -d --name offgridcloud -p 8000:8000 \
   -v /mnt/ssd/offgrid:/data --env-file .env --restart unless-stopped offgridcloud
 ```
 
+> **VPN-Client (optional):** Läuft OffgridCloud außerhalb des Heimnetzes und soll
+> ein internes Ziel (z. B. NAS per SMB) erreichen, kann unter **VPN** ein
+> WireGuard- oder OpenVPN-Profil hinterlegt werden. Der Tunnel-Aufbau braucht
+> erhöhte Container-Rechte — dann zusätzlich starten mit:
+> ```bash
+> docker run … --cap-add=NET_ADMIN --device=/dev/net/tun offgridcloud
+> ```
+> (docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`). Ohne
+> diese Rechte bleibt die Oberfläche nutzbar und zeigt einen klaren Hinweis.
+
 ### 🪟 Windows (PowerShell)
 
 ```powershell

@@ -11,7 +11,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import MediaStatus, ProviderStatus, Role, TransferStatus
+from .models import MediaStatus, ProviderStatus, Role, TransferStatus, VpnType
 
 
 def _normalise_email(value: str) -> str:
@@ -187,6 +187,54 @@ class ProviderOut(BaseModel):
     last_tested_at: datetime | None
     created_at: datetime
     config: dict[str, str]  # secrets masked
+
+
+# --- VPN client -----------------------------------------------------------
+
+
+class VpnCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    type: VpnType = VpnType.WIREGUARD
+    config: str = Field(min_length=1)  # raw .conf / .ovpn text
+    username: str = ""  # OpenVPN auth-user-pass (optional)
+    password: str = ""
+    autostart: bool = False
+
+
+class VpnUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    config: str | None = None
+    username: str | None = None
+    password: str | None = None
+    autostart: bool | None = None
+
+
+class VpnStatusOut(BaseModel):
+    active_id: int | None = None
+    state: str = "down"  # down | up | error
+    detail: str = ""
+    endpoint: str = ""
+    last_handshake: str = ""
+
+
+class VpnTunnelOut(BaseModel):
+    id: int
+    name: str
+    type: VpnType
+    autostart: bool
+    last_error: str
+    created_at: datetime
+    has_username: bool
+    active: bool
+
+
+class VpnCapabilitiesOut(BaseModel):
+    net_admin: bool
+    tun_device: bool
+    wireguard: bool
+    openvpn: bool
+    ready: bool  # net_admin and tun_device (base requirements met)
+    message: str = ""  # explanation when not ready
 
 
 # --- Folder <-> Provider links & transfers --------------------------------

@@ -136,6 +136,36 @@ export interface ProviderCategory {
   icon: string;
 }
 
+export type VpnType = "wireguard" | "openvpn";
+
+export interface VpnTunnel {
+  id: number;
+  name: string;
+  type: VpnType;
+  autostart: boolean;
+  last_error: string;
+  created_at: string;
+  has_username: boolean;
+  active: boolean;
+}
+
+export interface VpnStatus {
+  active_id: number | null;
+  state: "down" | "up" | "error";
+  detail: string;
+  endpoint: string;
+  last_handshake: string;
+}
+
+export interface VpnCapabilities {
+  net_admin: boolean;
+  tun_device: boolean;
+  wireguard: boolean;
+  openvpn: boolean;
+  ready: boolean;
+  message: string;
+}
+
 export interface DiskUsage {
   total: number;
   used: number;
