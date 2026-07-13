@@ -134,6 +134,19 @@ class MediaItemOut(BaseModel):
     local_deleted: bool = False
     uploaded_by: int | None
     created_at: datetime
+    tags: list[str] = []
+
+
+class MediaSearchOut(MediaItemOut):
+    """A search hit, enriched with the folder name for the global search view."""
+
+    folder_name: str = ""
+
+
+class TagsUpdate(BaseModel):
+    """Replace the full tag set of a media item."""
+
+    tags: list[str] = []
 
 
 class UploadCreate(BaseModel):
@@ -354,6 +367,21 @@ class MediaDeleteResult(BaseModel):
     remote_attempted: int = 0
     remote_deleted: int = 0
     remote_errors: list[str] = []
+
+
+class MediaBulkDelete(BaseModel):
+    """Delete several media items from a folder in one request."""
+
+    media_ids: list[int] = Field(min_length=1)
+
+
+class MediaBulkDeleteResult(BaseModel):
+    requested: int
+    deleted: int
+    not_found: list[int] = []
+    remote_attempted: int = 0
+    remote_deleted: int = 0
+    remote_errors: list[str] = []
 # --- Network redundancy / AP fallback -------------------------------------
 
 
@@ -480,3 +508,78 @@ class TransferJobOut(BaseModel):
     media_filename: str = ""
     provider_name: str = ""
     folder_id: int | None = None
+
+
+# --- Multi-server pooling -------------------------------------------------
+
+
+class PoolNodeStatus(BaseModel):
+    """Compact status of one node (this box or a polled peer)."""
+
+    name: str
+    version: str = ""
+    reachable: bool = True
+    error: str = ""
+    base_url: str = ""  # empty for this node
+    peer_id: int | None = None  # set for peers
+    media: dict[str, int] = {}  # media counts keyed by status
+    media_total: int = 0
+    active_transfers: int = 0
+    throughput_kbps: float = 0.0
+    disk_free: int = 0
+    disk_total: int = 0
+
+
+class PoolTotals(BaseModel):
+    nodes: int = 0
+    nodes_online: int = 0
+    media_total: int = 0
+    active_transfers: int = 0
+    throughput_kbps: float = 0.0
+    disk_free: int = 0
+    disk_total: int = 0
+
+
+class PoolOverviewOut(BaseModel):
+    """Everything the Pool admin page renders in one call."""
+
+    self_node: PoolNodeStatus = Field(alias="self")
+    peers: list[PoolNodeStatus] = []
+    totals: PoolTotals = PoolTotals()
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PoolPeerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    base_url: str
+    enabled: bool
+    has_token: bool = False
+    created_at: datetime
+
+
+class PoolPeerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    base_url: str = Field(min_length=1, max_length=500)
+    token: str = ""
+
+
+class PoolPeerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    base_url: str | None = Field(default=None, min_length=1, max_length=500)
+    token: str | None = None
+    enabled: bool | None = None
+
+
+class PoolSelfOut(BaseModel):
+    """This node's own poolability: whether it exposes a token, and the value."""
+
+    pool_token: str = ""
+    token_set: bool = False
+
+
+class PoolTokenOut(BaseModel):
+    pool_token: str

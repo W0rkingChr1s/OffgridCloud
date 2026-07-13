@@ -22,6 +22,7 @@ from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
 from .config import get_settings
 from .db import init_db
+from .integrity import run_startup_checks
 from .network import ensure_network_settings
 from .rclone import check_rclone
 from .routers import (
@@ -32,6 +33,7 @@ from .routers import (
     groups,
     media,
     network,
+    pool,
     providers,
     system,
     transfers,
@@ -53,6 +55,9 @@ async def lifespan(app: FastAPI):
     ensure_policy()
     ensure_system_settings()
     ensure_network_settings()
+    # Battery-bank hardening: repair any upload/media state left inconsistent by
+    # a power cut before serving traffic (see integrity.py).
+    run_startup_checks()
     autostart_vpn()
 
     stop = asyncio.Event()
@@ -81,6 +86,7 @@ app.include_router(bandwidth.router)
 app.include_router(events.router)
 app.include_router(system.router)
 app.include_router(media.router)
+app.include_router(pool.router)
 app.include_router(updates.router)
 app.include_router(network.router)
 app.include_router(vpn.router)

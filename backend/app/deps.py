@@ -35,6 +35,23 @@ def get_current_user(
     return user
 
 
+def user_from_query_token(db: Session, token: str) -> User:
+    """Resolve a user from a JWT passed in the query string.
+
+    Used by download/thumbnail links that must live in a plain ``<a href>`` /
+    ``<img src>`` where an ``Authorization`` header can't be set.
+    """
+    invalid = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        payload = decode_access_token(token)
+        user = db.get(User, int(payload["sub"]))
+    except (jwt.PyJWTError, KeyError, ValueError):
+        raise invalid from None
+    if user is None or not user.active:
+        raise invalid
+    return user
+
+
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != Role.ADMIN:
         raise HTTPException(

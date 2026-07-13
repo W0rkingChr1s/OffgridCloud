@@ -153,6 +153,45 @@ class MediaItem(Base):
     folder: Mapped[UploadFolder] = relationship(back_populates="media")
 
 
+class MediaTag(Base):
+    """A free-form label on a media item, for search & filtering.
+
+    Tags are lower-cased and de-duplicated per item. The FK cascade (enforced on
+    SQLite via the ``PRAGMA foreign_keys`` hook in ``db.py``) drops tags with
+    their media item, so no ORM relationship is needed here.
+    """
+
+    __tablename__ = "media_tags"
+    __table_args__ = (UniqueConstraint("media_id", "tag"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    media_id: Mapped[int] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+    tag: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class PoolPeer(Base):
+    """Another OffgridCloud node in the fleet, polled for an aggregated view.
+
+    Multi-server pooling stays deliberately simple and safe for the Pi target:
+    one node acts as a hub that periodically reads each peer's compact
+    ``/api/pool/status`` (authenticated by the peer's shared pool token, stored
+    here encrypted at rest). It is read-only aggregation — no distributed
+    coordination, no writes across nodes.
+    """
+
+    __tablename__ = "pool_peers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    base_url: Mapped[str] = mapped_column(String(500))  # e.g. https://box2.local:8000
+    token_encrypted: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class CloudProvider(Base):
     """A configured upload target. Credentials are stored encrypted as JSON."""
 
@@ -252,6 +291,10 @@ class SystemSettings(Base):
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
+    # Shared token a pool hub must present (header ``X-Pool-Token``) to read this
+    # node's ``/api/pool/status``. Empty = this node does not expose itself as a
+    # poolable peer. Rotate/clear from the Pool admin page.
+    pool_token: Mapped[str] = mapped_column(String(128), default="")
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

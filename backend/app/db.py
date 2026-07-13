@@ -70,6 +70,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "smtp_to", "VARCHAR(255) NOT NULL DEFAULT ''"),
     ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
 ]
 
 
