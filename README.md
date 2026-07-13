@@ -104,6 +104,7 @@ Die ausführlichen Anleitungen liegen unter [`docs/`](docs/) (und sind für das
 - 📡 [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md) — WLAN-Rückfallebene bei Router-Ausfall
 - 🔐 [VPN-Client](docs/VPN.md) — ins Heimnetz einwählen (WireGuard/OpenVPN)
 - 🛰️ [Multi-Server-Pool](docs/MULTI-SERVER-POOL.md) — mehrere Boxen als Flotte
+- 💻 [Desktop-Client](docs/CLIENT.md) — Auto-Upload-Agent für macOS/Linux/Windows (Plan)
 - 🗺️ [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) — Roadmap in Phasen & Meilensteinen
 
 <!--
