@@ -144,7 +144,9 @@ class MediaItem(Base):
     sha256: Mapped[str] = mapped_column(String(64), default="")
     status: Mapped[MediaStatus] = mapped_column(Enum(MediaStatus), default=MediaStatus.RECEIVED)
     local_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Dedup flags so a given notification is sent at most once per episode.
+    notified: Mapped[bool] = mapped_column(Boolean, default=False)  # "done" sent
+    notified_failed: Mapped[bool] = mapped_column(Boolean, default=False)  # "failed" sent
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -250,6 +252,30 @@ class SystemSettings(Base):
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
+
+    # --- Notifications ("Info-Service") ----------------------------------
+    # Which events emit a notification on every configured channel (webhook,
+    # Telegram, e-mail). "done" defaults on to preserve the original webhook
+    # behaviour; the noisier "received" defaults off.
+    notify_on_received: Mapped[bool] = mapped_column(Boolean, default=False)
+    notify_on_done: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_on_failed: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_on_low_space: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Telegram bot channel. Token encrypted at rest with the same key as
+    # provider credentials; empty token = channel disabled.
+    telegram_bot_token_encrypted: Mapped[str] = mapped_column(Text, default="")
+    telegram_chat_id: Mapped[str] = mapped_column(String(64), default="")
+    # SMTP e-mail channel. Password encrypted at rest; empty host = disabled.
+    smtp_host: Mapped[str] = mapped_column(String(255), default="")
+    smtp_port: Mapped[int] = mapped_column(default=587)
+    smtp_username: Mapped[str] = mapped_column(String(255), default="")
+    smtp_password_encrypted: Mapped[str] = mapped_column(Text, default="")
+    smtp_from: Mapped[str] = mapped_column(String(255), default="")
+    smtp_to: Mapped[str] = mapped_column(String(255), default="")
+    smtp_tls: Mapped[bool] = mapped_column(Boolean, default=True)  # STARTTLS
+    # Transient dedup: a low-space alert is sent once per episode and re-armed
+    # when free space recovers above the threshold.
+    low_space_notified: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class NetworkSettings(Base):

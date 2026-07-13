@@ -308,6 +308,21 @@ class SystemStatusOut(BaseModel):
     webhook_url: str
     disk: DiskUsageOut
     rclone_available: bool
+    # Notifications ("Info-Service"). Secrets are never returned — only whether
+    # each channel is configured.
+    notify_on_received: bool
+    notify_on_done: bool
+    notify_on_failed: bool
+    notify_on_low_space: bool
+    telegram_chat_id: str
+    telegram_configured: bool
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_from: str
+    smtp_to: str
+    smtp_tls: bool
+    smtp_configured: bool
 
 
 class SystemSettingsUpdate(BaseModel):
@@ -316,6 +331,22 @@ class SystemSettingsUpdate(BaseModel):
     auto_resync: bool | None = None
     probe_url: str | None = None
     webhook_url: str | None = None
+    # Notification event toggles.
+    notify_on_received: bool | None = None
+    notify_on_done: bool | None = None
+    notify_on_failed: bool | None = None
+    notify_on_low_space: bool | None = None
+    # Telegram channel (token is write-only; "" clears it).
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+    # SMTP channel (password is write-only; "" clears it).
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_to: str | None = None
+    smtp_tls: bool | None = None
 
 
 class MediaDeleteResult(BaseModel):

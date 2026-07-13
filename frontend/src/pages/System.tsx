@@ -177,6 +177,8 @@ export default function System() {
         </div>
       </div>
 
+      {status && <NotificationsCard status={status} save={save} />}
+
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Aktivität</h3>
       {audit.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Einträge.</p>
@@ -207,6 +209,235 @@ export default function System() {
         </div>
       )}
     </Layout>
+  );
+}
+
+const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] = [
+  {
+    key: "notify_on_received",
+    label: "Upload angenommen",
+    help: "Meldet, sobald das Feld-Team eine Datei lokal fertig hochgeladen hat und der Cloud-Transfer eingereiht wird. Kann bei vielen Dateien laut werden – Standard: aus.",
+  },
+  {
+    key: "notify_on_done",
+    label: "Transfer fertig",
+    help: "Meldet, sobald ein Medium erfolgreich in ALLE verknüpften Cloud-Ziele übertragen wurde. Steuert auch den bestehenden Webhook.",
+  },
+  {
+    key: "notify_on_failed",
+    label: "Transfer fehlgeschlagen",
+    help: "Meldet, wenn ein Transfer nach allen Wiederholungen endgültig scheitert – wichtig fürs Feld, damit ein Problem nicht unbemerkt bleibt.",
+  },
+  {
+    key: "notify_on_low_space",
+    label: "Speicher wird knapp",
+    help: "Meldet einmalig, wenn der Puffer-Speicher zur Neige geht (weitere Uploads würden sonst stoppen). Wird erneut scharfgeschaltet, sobald wieder Platz frei ist.",
+  },
+];
+
+function NotificationsCard({
+  status,
+  save,
+}: {
+  status: SystemStatus;
+  save: (patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [chatId, setChatId] = useState(status.telegram_chat_id);
+  const [token, setToken] = useState("");
+  const [smtp, setSmtp] = useState({
+    smtp_host: status.smtp_host,
+    smtp_port: status.smtp_port,
+    smtp_username: status.smtp_username,
+    smtp_from: status.smtp_from,
+    smtp_to: status.smtp_to,
+    smtp_tls: status.smtp_tls,
+  });
+  const [smtpPassword, setSmtpPassword] = useState("");
+
+  useEffect(() => {
+    setChatId(status.telegram_chat_id);
+    setSmtp({
+      smtp_host: status.smtp_host,
+      smtp_port: status.smtp_port,
+      smtp_username: status.smtp_username,
+      smtp_from: status.smtp_from,
+      smtp_to: status.smtp_to,
+      smtp_tls: status.smtp_tls,
+    });
+  }, [status]);
+
+  async function saveTelegram() {
+    const patch: Record<string, unknown> = { telegram_chat_id: chatId };
+    if (token) patch.telegram_bot_token = token; // only overwrite when newly entered
+    await save(patch);
+    setToken("");
+  }
+  async function saveEmail() {
+    const patch: Record<string, unknown> = { ...smtp };
+    if (smtpPassword) patch.smtp_password = smtpPassword;
+    await save(patch);
+    setSmtpPassword("");
+  }
+
+  const inputCls =
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  const btnCls =
+    "rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+        Benachrichtigungen (Info-Service)
+        <InfoTip text="Statusmeldungen an zusätzliche Kanäle: Telegram und E-Mail (der Webhook oben läuft parallel weiter). Wähle unten, welche Ereignisse eine Nachricht auslösen. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt." />
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Sendet Statusmeldungen an Telegram und/oder E-Mail. Ohne konfigurierten Kanal passiert nichts.
+      </p>
+
+      {/* Which events notify */}
+      <div className="mb-5 grid gap-2 sm:grid-cols-2">
+        {EVENT_TOGGLES.map((t) => (
+          <label key={t.key} className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={Boolean(status[t.key])}
+              onChange={(e) => save({ [t.key]: e.target.checked })}
+            />
+            <span className="text-slate-300">
+              <span className="inline-flex items-center gap-1.5">
+                {t.label}
+                <InfoTip text={t.help} />
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        {/* Telegram */}
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-300">
+            Telegram
+            {status.telegram_configured && (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+                konfiguriert
+              </span>
+            )}
+            <InfoTip text="Erstelle bei @BotFather einen Bot, trage hier den Bot-Token ein und die Chat-ID des Empfängers (z. B. via @userinfobot). Die Box sendet Statusmeldungen dann per Bot-API – kein eigener Server nötig." />
+          </div>
+          <label className="mb-2 block text-sm">
+            <span className="mb-1 block text-slate-400">Bot-Token</span>
+            <input
+              className={inputCls}
+              type="password"
+              placeholder={status.telegram_configured ? "•••••• (gespeichert – zum Ändern neu eingeben)" : "123456:ABC-DEF…"}
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+          </label>
+          <label className="mb-3 block text-sm">
+            <span className="mb-1 block text-slate-400">Chat-ID</span>
+            <input
+              className={inputCls}
+              placeholder="z. B. 123456789 oder -100…"
+              value={chatId}
+              onChange={(e) => setChatId(e.target.value)}
+            />
+          </label>
+          <button type="button" onClick={saveTelegram} className={btnCls}>
+            Telegram speichern
+          </button>
+        </div>
+
+        {/* E-Mail (SMTP) */}
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-300">
+            E-Mail (SMTP)
+            {status.smtp_configured && (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+                Passwort gespeichert
+              </span>
+            )}
+            <InfoTip text="Trage die Zugangsdaten eines erreichbaren SMTP-Servers ein. STARTTLS empfohlen (Port 587). Die Box verschickt Statusmeldungen dann als E-Mail an den Empfänger." />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <label className="col-span-2 block text-sm">
+              <span className="mb-1 block text-slate-400">Server</span>
+              <input
+                className={inputCls}
+                placeholder="smtp.example.com"
+                value={smtp.smtp_host}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_host: e.target.value }))}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Port</span>
+              <input
+                className={inputCls}
+                type="number"
+                value={smtp.smtp_port}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_port: Number(e.target.value) }))}
+              />
+            </label>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Benutzer</span>
+              <input
+                className={inputCls}
+                placeholder="login"
+                value={smtp.smtp_username}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_username: e.target.value }))}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Passwort</span>
+              <input
+                className={inputCls}
+                type="password"
+                placeholder={status.smtp_configured ? "•••••• (gespeichert)" : ""}
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Absender</span>
+              <input
+                className={inputCls}
+                placeholder="box@field.local"
+                value={smtp.smtp_from}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_from: e.target.value }))}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Empfänger</span>
+              <input
+                className={inputCls}
+                placeholder="ops@office.local"
+                value={smtp.smtp_to}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_to: e.target.value }))}
+              />
+            </label>
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={smtp.smtp_tls}
+              onChange={(e) => setSmtp((s) => ({ ...s, smtp_tls: e.target.checked }))}
+            />
+            STARTTLS verwenden (empfohlen)
+          </label>
+          <div className="mt-3">
+            <button type="button" onClick={saveEmail} className={btnCls}>
+              E-Mail speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -9,6 +9,7 @@ import {
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
+import { useToast } from "../toast";
 import { formatBytes, uploadFile } from "../upload";
 
 function downloadUrl(id: number): string {
@@ -52,6 +53,7 @@ export default function FolderDetail() {
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
 
   const loadMedia = useCallback(() => {
     api<MediaItem[]>(`/api/folders/${folderId}/media`)
@@ -77,13 +79,16 @@ export default function FolderDetail() {
         try {
           await uploadFile(folderId, file, (frac) => update({ progress: frac }));
           update({ progress: 1, done: true });
+          toast.success("Upload fertig", `„${file.name}" ist da – Cloud-Transfer startet.`);
         } catch (e) {
-          update({ error: e instanceof ApiError ? e.message : "Upload fehlgeschlagen" });
+          const msg = e instanceof ApiError ? e.message : "Upload fehlgeschlagen";
+          update({ error: msg });
+          toast.error("Upload fehlgeschlagen", `„${file.name}": ${msg}`);
         }
       }
       loadMedia();
     },
-    [folderId, loadMedia],
+    [folderId, loadMedia, toast],
   );
 
   function onDrop(e: React.DragEvent) {

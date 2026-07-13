@@ -155,11 +155,12 @@ def complete_upload(
     db.refresh(media)
 
     # Queue transfers to every provider linked to this folder.
-    from ..transfers import enqueue_for_media
+    from ..transfers import enqueue_for_media, notify_received
 
     enqueue_for_media(db, media)
     db.commit()
     db.refresh(media)
+    notify_received(db, media.id)
     return media
 
 

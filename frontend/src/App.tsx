@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { RetroEasterEgg } from "./retro";
+import { ToastProvider } from "./toast";
+import TransferToaster from "./TransferToaster";
 import Bandwidth from "./pages/Bandwidth";
 import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
@@ -20,7 +22,9 @@ export default function App() {
     <BrowserRouter>
       <RetroEasterEgg />
       <AuthProvider>
-        <Routes>
+        <ToastProvider>
+          <TransferToaster />
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route
             path="/"
@@ -110,8 +114,9 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
