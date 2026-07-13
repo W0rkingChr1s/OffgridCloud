@@ -115,13 +115,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           {/* Desktop navigation */}
-          <nav className="hidden min-w-0 items-center gap-1 overflow-x-auto md:flex">
+          <nav className="hidden min-w-0 items-center gap-1 overflow-x-auto lg:flex">
             {items.map((n) => (
               <DesktopNavLink key={n.to} to={n.to} label={n.label} />
             ))}
           </nav>
 
-          <div className="ml-auto hidden shrink-0 items-center gap-3 md:flex">
+          <div className="ml-auto hidden shrink-0 items-center gap-3 lg:flex">
             <span className="whitespace-nowrap text-sm text-slate-400">
               {user?.name || user?.email}
               {user?.role === "admin" && (
@@ -141,7 +141,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={() => setOpen(true)}
             aria-label="Menü öffnen"
             aria-expanded={open}
-            className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-200 active:bg-white/10 md:hidden"
+            className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-200 active:bg-white/10 lg:hidden"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M4 7h16M4 12h16M4 17h16" />
@@ -151,7 +151,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Mobile drawer */}
-      <div className={`fixed inset-0 z-50 md:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+      <div className={`fixed inset-0 z-50 lg:hidden ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
         <div
           onClick={() => setOpen(false)}
           className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
