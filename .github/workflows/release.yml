@@ -1,12 +1,23 @@
 name: Release
 
-# Cut a release by pushing a semver tag, e.g.:
-#   git tag v0.1.0 && git push origin v0.1.0
-# This builds the frontend, bundles a Node-free install tarball, and publishes a
-# GitHub Release. Instances check this release (GET /api/updates) and update via
+# Cut a release WITHOUT a terminal:
+#   GitHub → Actions → "Release" → "Run workflow" → type the version (e.g. 0.2.0).
+# This tags the current commit, builds the frontend, bundles a Node-free install
+# tarball, and publishes a GitHub Release.
+#
+# Terminal alternative (still supported): push a semver tag
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Instances check the published release (GET /api/updates) and update via
 # deploy/update.sh.
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (a leading 'v' is optional)"
+        required: true
+        type: string
   push:
     tags: ["v*.*.*"]
 
@@ -19,6 +30,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Determine version + tag
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RAW="${{ github.event.inputs.version }}"
+          else
+            RAW="${GITHUB_REF_NAME}"
+          fi
+          # Normalise: trim whitespace and strip a single leading "v".
+          RAW="$(printf '%s' "$RAW" | tr -d '[:space:]')"
+          VERSION="${RAW#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version '$RAW'. Use semver like 0.2.0 (optionally v0.2.0)." >&2
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "::error::Tag ${TAG} already exists. Pick a new version." >&2
+              exit 1
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG (version $VERSION)"
 
       - uses: actions/setup-node@v4
         with:
@@ -34,7 +71,7 @@ jobs:
 
       - name: Assemble install tarball (prebuilt UI, no Node needed)
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ steps.ver.outputs.version }}"
           STAGE="offgridcloud-${VERSION}"
           mkdir -p "dist/$STAGE"
           cp -r backend "dist/$STAGE/"
@@ -54,8 +91,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
+          VERSION="${{ steps.ver.outputs.version }}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          # On workflow_dispatch there is no tag yet: gh creates it at this commit.
+          # On a tag push the tag already exists and is reused as-is.
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
             "dist/offgridcloud-${VERSION}.tar.gz" \
-            --title "OffgridCloud $GITHUB_REF_NAME" \
+            --title "OffgridCloud $TAG" \
             --generate-notes
