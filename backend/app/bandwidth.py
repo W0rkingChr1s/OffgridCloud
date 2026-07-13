@@ -132,12 +132,18 @@ def record_measurement(db: Session, kbps: float) -> None:
 PROBE_SAMPLE_SECONDS = 8.0
 PROBE_SOCKET_TIMEOUT = 15.0
 _PROBE_CHUNK = 64 * 1024
-# urllib's default ``User-Agent: Python-urllib/x.y`` is rejected with 403 by many
-# CDNs and WAFs (Cloudflare's speed endpoint among them), which surfaced as the
-# opaque "Testziel nicht erreichbar". Identify as a normal client instead.
+# Cloudflare's speed endpoint (the default target) is meant for browsers and its
+# bot management answers non-browser clients with 403 Forbidden — both urllib's
+# default ``Python-urllib/x.y`` and a custom app agent get rejected. Present a
+# mainstream browser User-Agent so the download is allowed. ``Accept-Encoding:
+# identity`` disables compression so the byte count reflects real wire bytes.
 _PROBE_HEADERS = {
-    "User-Agent": "OffgridCloud/bandwidth-probe (+https://github.com/W0rkingChr1s/OffgridCloud)",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
     "Accept": "*/*",
+    "Accept-Encoding": "identity",
 }
 
 
