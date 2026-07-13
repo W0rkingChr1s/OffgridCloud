@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { osNotify } from "./notifications";
 
 export type ToastVariant = "success" | "error" | "info" | "warning";
 
@@ -18,8 +19,11 @@ export interface Toast {
   message?: string;
 }
 
+/** `os: true` also raises a system notification (when enabled + page hidden). */
+type ToastInput = Omit<Toast, "id"> & { os?: boolean };
+
 interface ToastApi {
-  push: (t: Omit<Toast, "id">) => number;
+  push: (t: ToastInput) => number;
   dismiss: (id: number) => void;
   success: (title: string, message?: string) => number;
   error: (title: string, message?: string) => number;
@@ -40,10 +44,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((ts) => ts.filter((t) => t.id !== id));
   }, []);
 
-  const push = useCallback((t: Omit<Toast, "id">) => {
+  const push = useCallback((t: ToastInput) => {
     const id = (seq.current += 1);
+    const { os, ...toast } = t;
     // Newest on top; cap the stack so a burst can't fill the screen.
-    setToasts((ts) => [{ ...t, id }, ...ts].slice(0, MAX_VISIBLE));
+    setToasts((ts) => [{ ...toast, id }, ...ts].slice(0, MAX_VISIBLE));
+    if (os) osNotify(toast.title, toast.message);
     return id;
   }, []);
 

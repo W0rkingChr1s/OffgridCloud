@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import NotifyToggle from "./NotifyToggle";
 
 type IconProps = { className?: string };
 
@@ -193,6 +194,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="border-t border-white/5 px-3 py-3">
+            <div className="mb-2">
+              <NotifyToggle />
+            </div>
             <button
               onClick={logout}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-slate-200 active:bg-white/5"

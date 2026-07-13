@@ -34,16 +34,20 @@ export default function TransferToaster() {
         const newlyDone = done - prev.current.done;
         const newlyFailed = failed - prev.current.failed;
         if (newlyDone > 0) {
-          toast.success(
-            "Transfer abgeschlossen",
-            `${newlyDone} Transfer${newlyDone > 1 ? "s" : ""} in die Cloud fertig.`,
-          );
+          toast.push({
+            variant: "success",
+            title: "Transfer abgeschlossen",
+            message: `${newlyDone} Transfer${newlyDone > 1 ? "s" : ""} in die Cloud fertig.`,
+            os: true,
+          });
         }
         if (newlyFailed > 0) {
-          toast.error(
-            "Transfer fehlgeschlagen",
-            `${newlyFailed} Transfer${newlyFailed > 1 ? "s" : ""} endgültig gescheitert.`,
-          );
+          toast.push({
+            variant: "error",
+            title: "Transfer fehlgeschlagen",
+            message: `${newlyFailed} Transfer${newlyFailed > 1 ? "s" : ""} endgültig gescheitert.`,
+            os: true,
+          });
         }
       }
       prev.current = { done, failed };

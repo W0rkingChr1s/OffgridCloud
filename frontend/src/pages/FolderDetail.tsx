@@ -79,11 +79,21 @@ export default function FolderDetail() {
         try {
           await uploadFile(folderId, file, (frac) => update({ progress: frac }));
           update({ progress: 1, done: true });
-          toast.success("Upload fertig", `„${file.name}" ist da – Cloud-Transfer startet.`);
+          toast.push({
+            variant: "success",
+            title: "Upload fertig",
+            message: `„${file.name}" ist da – Cloud-Transfer startet.`,
+            os: true,
+          });
         } catch (e) {
           const msg = e instanceof ApiError ? e.message : "Upload fehlgeschlagen";
           update({ error: msg });
-          toast.error("Upload fehlgeschlagen", `„${file.name}": ${msg}`);
+          toast.push({
+            variant: "error",
+            title: "Upload fehlgeschlagen",
+            message: `„${file.name}": ${msg}`,
+            os: true,
+          });
         }
       }
       loadMedia();
