@@ -190,6 +190,8 @@ export interface MediaDeleteResult {
   remote_attempted: number;
   remote_deleted: number;
   remote_errors: string[];
+}
+
 export interface NetworkStatus {
   supported: boolean;
   apply_wired: boolean;
