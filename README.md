@@ -14,18 +14,10 @@ Ein selbst-gehosteter Mini-Server, der Medien-Uploads aus dem Feld von instabile
 Verbindungen **entkoppelt** und sie zuverlässig in Public-Cloud-Speicher überträgt —
 **sobald ausreichend Bandbreite vorhanden ist.**
 
-## Das Szenario
-
-Ein Team ist mit Auto, Boot oder LKW unterwegs und hat mal besseren, mal
-schlechteren Empfang. Ein Social-Media-Team im Office übernimmt die
-Berichterstattung — braucht dafür aber verlässlich die Bilder und Videos aus
-dem Feld. Direkter Upload in die Cloud scheitert an Verbindungsabbrüchen und
-Timeouts.
-
-**OffgridCloud löst die Blockade:** Das Feld-Team lädt alle Medien **lokal und
-schnell** auf den Mini-Server. Dieser übernimmt den Upload in die Cloud
-**autonom, bandbreiten-bewusst und resilient** (resumable, mit Retry) und hält
-den Status für alle transparent.
+Ein Team ist mit Auto, Boot oder LKW unterwegs, der Empfang schwankt. Das Feld-Team
+lädt alle Medien **lokal und schnell** auf die Box; diese übernimmt den Cloud-Upload
+**autonom, bandbreiten-bewusst und resilient** (resumable, mit Retry) und hält den
+Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 
 ## Kernfunktionen
 
@@ -43,49 +35,34 @@ den Status für alle transparent.
 ---
 
 ## Installation
+- ☁️ **Viele Cloud-Ziele** — S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
+- 👥 **User & Teams** — Admin verwaltet Provider/Ordner; Benutzer laden in freigegebene Ordner (auch per Team-Freigabe)
+- 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter
+- 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene
+- 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht
+- 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode, PWA fürs Feld
 
-### 🚀 One-Liner (empfohlen — Linux / Raspberry Pi OS)
+## Schnellstart
 
-Auf einem frischen Raspberry Pi (oder Debian/Ubuntu/Fedora/Arch) reicht **ein
-Befehl**. Er installiert alle Abhängigkeiten (git, Node, Python, rclone), baut
-das Frontend, richtet einen systemd-Dienst ein, **startet ihn und prüft den
-Health-Endpoint**:
+**One-Liner (empfohlen — Linux / Raspberry Pi OS).** Installiert alle Abhängigkeiten
+(git, Node, Python, rclone), baut das Frontend, richtet einen systemd-Dienst ein,
+startet ihn und prüft den Health-Endpoint:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
 ```
 
-Optionen werden nach `--` durchgereicht — z. B. ffmpeg für Video-Thumbnails,
-eigener Port und Admin-Login:
+Am Ende zeigt der Installer **einmalig** ein zufälliges Admin-Passwort — notieren.
+Danach `http://<host-ip>:8000` und Login mit `admin@offgrid.local`.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
-  | sudo bash -s -- --with-ffmpeg --port 8080 --admin-email admin@example.com
-```
-
-Am Ende zeigt der Installer **einmalig** ein zufällig generiertes Admin-Passwort
-— unbedingt notieren. Danach:
-
-```
-http://<host-ip>:8000     →  Login mit admin@offgrid.local / <angezeigtes Passwort>
-```
-
-> Der Installer legt Repo + App unter `/opt/offgridcloud` ab. **Updates:** den
-> One-Liner erneut ausführen (Daten & `.env` bleiben erhalten).
-
-### 🧪 Lokal ausprobieren (ohne Installation)
-
-Repo klonen und in einem Befehl im Vordergrund starten — kein root, kein systemd:
+**Lokal ausprobieren (ohne Installation)** — braucht nur `python3` und `npm`:
 
 ```bash
 git clone https://github.com/W0rkingChr1s/OffgridCloud.git && cd OffgridCloud
 ./quickstart.sh                       # http://localhost:8000, Ctrl-C beendet
 ```
 
-Braucht nur `python3` und (fürs UI) `npm`. Das generierte Admin-Passwort wird
-angezeigt und in `.env` abgelegt.
-
-### 🐳 Docker (ein Image, plattformübergreifend)
+**Docker (ein Image, plattformübergreifend):**
 
 ```bash
 docker build -f deploy/Dockerfile -t offgridcloud .
@@ -93,127 +70,40 @@ docker run -d --name offgridcloud -p 8000:8000 \
   -v /mnt/ssd/offgrid:/data --env-file .env --restart unless-stopped offgridcloud
 ```
 
-> **VPN-Client (optional):** Läuft OffgridCloud außerhalb des Heimnetzes und soll
-> ein internes Ziel (z. B. NAS per SMB) erreichen, kann unter **VPN** ein
-> WireGuard- oder OpenVPN-Profil hinterlegt werden. Der Tunnel-Aufbau braucht
-> `CAP_NET_ADMIN` + `/dev/net/tun`. Im **Docker**-Betrieb zusätzlich starten mit:
-> ```bash
-> docker run … --cap-add=NET_ADMIN --device=/dev/net/tun offgridcloud
-> ```
-> (docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`). Beim
-> **nativen** Setup auf dem Pi stattdessen `--with-vpn` bei der Installation
-> mitgeben (oder nachträglich `sudo /opt/offgridcloud/src/deploy/vpn/install.sh`) —
-> das lädt das TUN-Modul und erteilt dem Dienst die Capability. Ohne diese Rechte
-> bleibt die Oberfläche nutzbar und zeigt den passenden Hinweis. Details:
-> [docs/VPN.md](docs/VPN.md).
-
-### 🪟 Windows (PowerShell)
-
-```powershell
-# fehlende Tools (Python/Node/rclone) werden via winget nachgezogen
-powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Setup (erzeugt Admin-Passwort)
-powershell -ExecutionPolicy Bypass -File deploy\run.ps1                # starten
-powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -InstallService   # optional Autostart (Admin)
-```
-
-### Manuell / Optionen / Deinstallieren
-
-```bash
-sudo ./deploy/install.sh --help       # alle Flags: --start --admin-email --port --with-ffmpeg --no-service ...
-sudo ./deploy/uninstall.sh            # entfernen (behält Daten; --purge löscht alles)
-```
-
----
-
-## Produktiv betreiben — Checkliste
-
-Nach der Installation für den echten Einsatz:
-
-1. **TLS/HTTPS davor setzen.** OffgridCloud lauscht intern auf HTTP (Port 8000).
-   Einen Reverse-Proxy mit Zertifikat vorschalten — Vorlagen liegen bei:
-   `deploy/Caddyfile` (Auto-TLS, `tls internal` fürs Offline-Feld) oder
-   `deploy/nginx.conf.example` (inkl. SSE-tauglicher `/api/events`-Location).
-2. **Admin-Passwort ändern** nach dem ersten Login.
-3. **Puffer auf externe SSD.** `OGC_BUFFER_DIR` in `/opt/offgridcloud/.env` auf eine
-   USB-SSD legen — **nicht** auf die microSD-Karte (Schreibverschleiß, Kapazität).
-4. **`OGC_SECRET_KEY` sichern.** Er entschlüsselt die Provider-Credentials — geht
-   er verloren, müssen alle Provider neu eingerichtet werden. Getrennt aufbewahren.
-5. **Backups.** `deploy/backup.sh` sichert DB + `.env` (nicht den Medien-Puffer).
-6. **Monitoring.** `GET /api/health` (ohne Auth) für Uptime-Checks; Logs via
-   `journalctl -u offgridcloud -f`.
-7. **Updates.** Instanzen zeigen unter **System** die aktuelle vs. neueste
-   Version (aus den GitHub-Releases). Aktualisieren mit einem Befehl:
-   `sudo /opt/offgridcloud/src/deploy/update.sh` — Daten, `.env` und Port bleiben
-   erhalten. Für einen **One-Click-Knopf im Web-UI** bei der Installation
-   `--self-update` mitgeben.
-8. **Netzwerk-Redundanz (optional).** Damit die Box bei Router-Ausfall ihr
-   eigenes WLAN als Rückfallebene öffnet, bei der Installation
-   `--with-ap-fallback` mitgeben (oder nachträglich
-   `sudo /opt/offgridcloud/deploy/netfallback/install.sh`). Danach im Web-UI
-   unter **Netzwerk** AP + Uplinks einrichten. Details:
-   [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md).
-
-Alles im Detail im **[Betriebshandbuch](docs/BETRIEB.md)** — Reverse-Proxy,
-Bandbreiten-Steuerung, Speicher-Management, Audit-Log, Backup/Restore,
-Updates, Troubleshooting.
-
-## Konfiguration (`.env`)
-
-Die Installer erzeugen `.env` mit zufälligem Key & Passwort. Wichtigste Variablen:
-
-| Variable | Bedeutung |
-|----------|-----------|
-| `OGC_SECRET_KEY` | **Kritisch.** Signiert JWTs & verschlüsselt Provider-Credentials. Sichern, nicht ändern. |
-| `OGC_INITIAL_ADMIN_EMAIL` / `OGC_INITIAL_ADMIN_PASSWORD` | Initial-Admin beim ersten Start. Passwort nach Login ändern. |
-| `OGC_DATA_DIR` | SQLite-DB & App-Status. |
-| `OGC_BUFFER_DIR` | Medien-Puffer — **auf externe USB-SSD** legen. |
-| `OGC_RCLONE_BINARY` | Pfad/Name des rclone-Binaries (Default `rclone`). |
-
-Vollständige Vorlage: [`.env.example`](.env.example).
+> Weitere Wege (Windows/PowerShell, manuelle Optionen, Deinstallation, Updates) und
+> die **Produktiv-Checkliste** (TLS-Reverse-Proxy, Puffer auf USB-SSD, `OGC_SECRET_KEY`
+> sichern, Backups, Monitoring) stehen im **[Betriebshandbuch](docs/BETRIEB.md)**.
 
 ## Architektur in einem Satz
 
-FastAPI-Backend + **rclone** als universelle Transfer-Engine (deckt alle Provider ab)
-+ bandbreiten-gesteuerter In-Process-Worker + React/Vite-Kachel-UI (als statische Dateien
-ausgeliefert). Läuft als **ein Prozess** — sparsam genug für einen **Raspberry Pi 3**
-(nativer systemd-Service oder ein einziges Docker-Image, ~150–250 MB RAM).
-Details im [Konzept](docs/KONZEPT.md).
+FastAPI-Backend + **rclone** als universelle Transfer-Engine + bandbreiten-gesteuerter
+In-Process-Worker + React/Vite-Kachel-UI (statisch ausgeliefert). Läuft als **ein
+Prozess** (nativer systemd-Service oder ein Docker-Image, ~150–250 MB RAM). Details im
+**[Konzept](docs/KONZEPT.md)**.
 
 ## Entwicklung
 
 ```bash
-# Backend (Terminal 1) — Live-Reload
-cd backend
-python3 -m venv .venv && source .venv/bin/activate
+cd backend && python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-uvicorn app.main:app --reload          # http://localhost:8000
+uvicorn app.main:app --reload            # http://localhost:8000
+pytest -q && ruff check .                # Tests & Lint
 
-# Frontend (Terminal 2)
-cd frontend && npm install && npm run dev   # http://localhost:5173
+cd frontend && npm install && npm run dev # http://localhost:5173
 ```
 
-Tests & Lint: `cd backend && pytest -q && ruff check .`. Beiträge:
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Status
-
-✅ **Produktionsreif.** Die Phasen 0–8 sind umgesetzt; alle Meilensteine
-(**M1** Walking Skeleton → **M4** Feldtauglich) sind erreicht:
-
-- **Phase 0–2** — Grundgerüst, Auth/User-Management, Ordner & **chunked/resumable** lokale Uploads.
-- **Phase 3–4** — Cloud-Provider (11 Typen via rclone, Verbindungstest, verschlüsselte Credentials) & automatische **Transfer-Engine** (Retry/Backoff, Resume, Integritäts-Check).
-- **Phase 5–6** — **Bandbreiten-Steuerung** (`--bwlimit`, Zeitfenster, Mindest-Bandbreite-Gate, Prioritäten) & **Live-Dashboard** per SSE.
-- **Phase 7** — Härtung: Audit-Log, Speicher-Management, Disk-Monitoring, Backup, Reverse-Proxy-Configs, [Betriebshandbuch](docs/BETRIEB.md).
-- **Phase 8** — Teams/Gruppen, Thumbnails (Pillow/ffmpeg), PWA fürs Feld, Fertig-Webhook, aktive Bandbreiten-Probe.
-
-Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche — siehe
-[Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Beiträge willkommen — siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dokumentation
 
-- 📗 [Betriebshandbuch](docs/BETRIEB.md) — Installation, Absicherung, Betrieb
-- 📡 [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md) — WLAN-Rückfallebene bei Router-Ausfall
+Die ausführlichen Anleitungen liegen unter [`docs/`](docs/) (und sind für das
+**[Projekt-Wiki](https://github.com/W0rkingChr1s/OffgridCloud/wiki)** aufbereitet):
+
+- 📗 [Betriebshandbuch](docs/BETRIEB.md) — Installation, Absicherung, Betrieb, Troubleshooting
 - 📘 [Konzept](docs/KONZEPT.md) — Vision, Architektur, Datenmodell, Tech-Stack
+- 📡 [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md) — WLAN-Rückfallebene bei Router-Ausfall
+- 🔐 [VPN-Client](docs/VPN.md) — ins Heimnetz einwählen (WireGuard/OpenVPN)
+- 🛰️ [Multi-Server-Pool](docs/MULTI-SERVER-POOL.md) — mehrere Boxen als Flotte
 - 🗺️ [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) — Roadmap in Phasen & Meilensteinen
 
 <!--

@@ -1,15 +1,16 @@
-# Contributing to OffgridCloud
+# Beiträge zu OffgridCloud
 
-Thanks for helping out! This document covers local setup and conventions.
+Danke fürs Mithelfen! Dieses Dokument beschreibt das lokale Setup und die
+Konventionen.
 
-## Repository layout
+## Repo-Struktur
 
 ```
-backend/    FastAPI app (API + serves the static UI + drives rclone)
-frontend/   React + Vite + TypeScript + Tailwind (built to static files)
-deploy/     Dockerfile, systemd unit, native install script
-docs/        Concept & development plan
-assets/      Logo & brand assets
+backend/    FastAPI-App (API + liefert das statische UI aus + steuert rclone)
+frontend/   React + Vite + TypeScript + Tailwind (zu statischen Dateien gebaut)
+deploy/     Dockerfile, systemd-Unit, native Install-Skripte
+docs/        Konzept, Betriebshandbuch & Entwicklungsplan
+assets/      Logo & Brand-Assets
 ```
 
 ## Backend (Python 3.11+)
@@ -18,8 +19,8 @@ assets/      Logo & brand assets
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-ruff check .          # lint
-pytest -q             # tests
+ruff check .          # Lint
+pytest -q             # Tests
 uvicorn app.main:app --reload   # http://localhost:8000
 ```
 
@@ -28,23 +29,24 @@ uvicorn app.main:app --reload   # http://localhost:8000
 ```bash
 cd frontend
 npm install
-npm run dev           # http://localhost:5173 (proxies /api to :8000)
-npm run build         # production build into dist/
+npm run dev           # http://localhost:5173 (proxyt /api nach :8000)
+npm run build         # Produktions-Build nach dist/
 ```
 
-For a production-like run, build the frontend and copy `frontend/dist` to
-`backend/app/static`; FastAPI then serves the UI from `/` as a single process.
+Für einen produktionsnahen Lauf das Frontend bauen und `frontend/dist` nach
+`backend/app/static` kopieren; FastAPI liefert das UI dann unter `/` als ein
+einziger Prozess aus.
 
-## Conventions
+## Konventionen
 
-- **Backend:** ruff-clean, type hints, small focused modules.
-- **Frontend:** TypeScript strict mode, Tailwind for styling, brand palette
+- **Backend:** ruff-sauber, Type-Hints, kleine fokussierte Module.
+- **Frontend:** TypeScript strict mode, Tailwind fürs Styling, Brand-Palette
   (`ogc.teal` / `ogc.blue` / `ogc.indigo`).
-- **Commits:** clear, imperative messages.
-- **Raspberry Pi 3 first:** keep the runtime to one process; avoid adding
-  always-on services (Redis, etc.) without a strong reason. Never buffer whole
-  media files in RAM — stream to disk.
+- **Commits:** klare Nachrichten im Imperativ.
+- **Raspberry Pi 3 zuerst:** die Laufzeit auf einen Prozess beschränken;
+  keine Dauer-Dienste (Redis o. Ä.) ohne triftigen Grund. Nie ganze Mediendateien
+  im RAM puffern — auf Platte streamen.
 
 ## Roadmap
 
-See [docs/ENTWICKLUNGSPLAN.md](docs/ENTWICKLUNGSPLAN.md).
+Siehe [docs/ENTWICKLUNGSPLAN.md](docs/ENTWICKLUNGSPLAN.md).

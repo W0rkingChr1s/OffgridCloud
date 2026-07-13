@@ -47,6 +47,11 @@ export interface MediaItem {
   local_deleted: boolean;
   uploaded_by: number | null;
   created_at: string;
+  tags: string[];
+}
+
+export interface MediaSearchResult extends MediaItem {
+  folder_name: string;
 }
 
 export interface FolderProviderLink {
@@ -267,6 +272,53 @@ export interface AuditEvent {
   user_email: string;
   action: string;
   detail: string;
+}
+
+// --- Multi-server pooling ---------------------------------------------------
+
+export interface PoolNodeStatus {
+  name: string;
+  version: string;
+  reachable: boolean;
+  error: string;
+  base_url: string;
+  peer_id: number | null;
+  media: Record<string, number>;
+  media_total: number;
+  active_transfers: number;
+  throughput_kbps: number;
+  disk_free: number;
+  disk_total: number;
+}
+
+export interface PoolTotals {
+  nodes: number;
+  nodes_online: number;
+  media_total: number;
+  active_transfers: number;
+  throughput_kbps: number;
+  disk_free: number;
+  disk_total: number;
+}
+
+export interface PoolOverview {
+  self: PoolNodeStatus;
+  peers: PoolNodeStatus[];
+  totals: PoolTotals;
+}
+
+export interface PoolPeer {
+  id: number;
+  name: string;
+  base_url: string;
+  enabled: boolean;
+  has_token: boolean;
+  created_at: string;
+}
+
+export interface PoolSelf {
+  pool_token: string;
+  token_set: boolean;
 }
 
 export interface Health {

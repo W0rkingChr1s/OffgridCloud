@@ -224,6 +224,28 @@ automatisch um; beobachten mit `journalctl -u offgridcloud-netwatch -f`.
 Vollständige Beschreibung (Architektur, Sicherheit, Grenzen):
 **[docs/NETZWERK-REDUNDANZ.md](NETZWERK-REDUNDANZ.md)**.
 
+## 9b. Multi-Server-Pool (mehrere Boxen)
+
+Sind mehrere OffgridCloud-Boxen im Einsatz (z. B. je Fahrzeug eine), lässt sich
+eine als **Hub** einrichten, die alle anderen abfragt und eine gemeinsame
+Flottenübersicht zeigt — Knoten online, Medien, aktive Transfers, Durchsatz,
+Speicher. Es ist reine **read-only-Aggregation** (keine verteilte Koordination),
+also sparsam genug für den Pi.
+
+1. Auf jeder **Peer-Box** unter **Pool** ein Pool-Token erzeugen.
+2. Auf der **Hub-Box** unter **Pool** jeden Peer mit *Name*, *URL*
+   (`https://box2.local:8000`) und dessen *Token* eintragen.
+
+Vollständige Beschreibung: **[docs/MULTI-SERVER-POOL.md](MULTI-SERVER-POOL.md)**.
+
+## 9c. Tags & Suche
+
+Jedes Medium kann **frei mit Tags versehen** werden (z. B. `interview`, `drohne`,
+`eilig`) — direkt in der Ordner- oder Suchansicht. Unter **Suche** findet man
+Medien **ordnerübergreifend** nach Dateiname, Tag, Status und Ordner. Die Suche
+ist zugriffsgeschützt: Benutzer sehen nur Ordner, für die sie freigegeben sind;
+Admins sehen alles.
+
 ## 10. Troubleshooting
 
 | Symptom | Ursache / Lösung |

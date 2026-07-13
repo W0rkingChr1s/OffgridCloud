@@ -10,6 +10,7 @@ import {
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
+import { TagEditor } from "../components/Tags";
 import { formatBytes, uploadFile } from "../upload";
 
 function downloadUrl(id: number): string {
@@ -167,6 +168,13 @@ export default function FolderDetail() {
     setDragOver(false);
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   }
+
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const patchTags = useCallback((mediaId: number, tags: string[]) => {
+    setMedia((prev) => prev.map((m) => (m.id === mediaId ? { ...m, tags } : m)));
+  }, []);
 
   const remove = useCallback(
     async (m: MediaItem) => {
@@ -380,6 +388,9 @@ export default function FolderDetail() {
                       </button>
                     </div>
                   </div>
+                  <div className="mt-1.5">
+                    <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
+                  </div>
                 </div>
               );
             })}
@@ -404,6 +415,7 @@ export default function FolderDetail() {
                   <th className="px-4 py-3">Datei</th>
                   <th className="px-4 py-3">Größe</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Tags</th>
                   <th className="px-4 py-3">Hochgeladen</th>
                   <th className="px-4 py-3 text-right">Aktion</th>
                 </tr>
@@ -419,6 +431,24 @@ export default function FolderDetail() {
                       }`}
                     >
                       <td className="px-4 py-3">
+                {media.map((m) => (
+                  <tr key={m.id} className="border-t border-white/5 bg-slate-900/40">
+                    <td className="px-4 py-3">{m.local_deleted ? <span className="text-xs text-slate-500">gelöscht</span> : <Thumb id={m.id} />}</td>
+                    <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
+                    <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">
+                        {m.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
+                    </td>
+                    <td className="px-4 py-3 text-slate-400">
+                      {new Date(m.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
                         {!m.local_deleted && (
                           <input
                             type="checkbox"
