@@ -13,6 +13,8 @@ Pure helpers take plain values so they're easy to unit-test.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import time as _time
 import urllib.request
 from collections.abc import Callable
@@ -169,15 +171,70 @@ def _http_download_size(
     return total
 
 
-def measure_probe(
+# --- Ookla Speedtest CLI -----------------------------------------------------
+# The HTTP probe depends on a public CDN file, which some networks answer with
+# 403 (bot management) no matter what headers we send. Ookla's official CLI
+# ``speedtest`` measures real upload throughput against a nearby server over a
+# dedicated protocol, sidestepping that entirely. It's optional: when the binary
+# is present we prefer it, otherwise we fall back to the HTTP probe.
+SPEEDTEST_TIMEOUT = 90.0  # a full Ookla run can take ~60s on a slow link
+
+
+def speedtest_cli_path() -> str | None:
+    """Return the path to the Ookla ``speedtest`` binary, or ``None`` if absent."""
+    return shutil.which("speedtest")
+
+
+def _speedtest_error(proc: subprocess.CompletedProcess) -> str:
+    """Pull a human-readable reason out of a failed Ookla run.
+
+    With ``--format=json`` the CLI emits JSON log lines on error; prefer the
+    ``message`` field of the last one, else fall back to the raw tail.
+    """
+    tail = (proc.stderr or proc.stdout or "").strip().splitlines()
+    if not tail:
+        return f"Exit {proc.returncode}"
+    last = tail[-1]
+    try:
+        return str(json.loads(last).get("message", last))
+    except json.JSONDecodeError:
+        return last
+
+
+def speedtest_probe(timeout: float = SPEEDTEST_TIMEOUT) -> tuple[float, str | None]:
+    """Measure upload throughput via the Ookla Speedtest CLI. Returns ``(KiB/s, error)``."""
+    binary = speedtest_cli_path()
+    if binary is None:
+        return 0.0, "Speedtest-CLI nicht installiert"
+    try:
+        proc = subprocess.run(  # noqa: S603 - fixed argv, binary resolved via PATH
+            [binary, "--format=json", "--accept-license", "--accept-gdpr", "--progress=no"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return 0.0, f"Speedtest-Timeout nach {timeout:.0f}s"
+    except OSError as exc:
+        return 0.0, f"Speedtest nicht ausführbar: {exc}"
+    if proc.returncode != 0:
+        return 0.0, f"Speedtest-Fehler: {_speedtest_error(proc)}"
+    try:
+        data = json.loads(proc.stdout)
+        # Ookla reports ``bandwidth`` in bytes per second; we track KiB/s.
+        bps = float(data["upload"]["bandwidth"])
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        return 0.0, f"Speedtest-Ausgabe unlesbar: {exc}"
+    if bps <= 0:
+        return 0.0, "Speedtest lieferte keinen Upload-Wert"
+    return bps / 1024.0, None
+
+
+def _http_measure(
     url: str, fetcher: Callable[[str], int] = _http_download_size
 ) -> tuple[float, str | None]:
-    """Measure throughput by downloading ``url``.
-
-    Returns ``(kbps, error)``: on success ``error`` is ``None``; on failure
-    ``kbps`` is 0 and ``error`` carries the reason so callers can surface it
-    instead of a blanket "unreachable" message.
-    """
+    """Measure throughput by downloading ``url``. Returns ``(KiB/s, error)``."""
     if not url:
         return 0.0, "Kein Testziel konfiguriert"
     start = _time.monotonic()
@@ -191,7 +248,34 @@ def measure_probe(
     return size / 1024.0 / elapsed, None
 
 
+def measure_probe(
+    url: str, fetcher: Callable[[str], int] = _http_download_size
+) -> tuple[float, str | None]:
+    """Measure throughput for the admin-triggered "measure now".
+
+    Prefers the Ookla Speedtest CLI when installed (robust against CDN
+    bot-blocking); otherwise, or if it fails, falls back to the HTTP probe.
+    Returns ``(kbps, error)`` — ``error`` carries the reason on failure so the
+    caller can surface it instead of a blanket "unreachable" message.
+    """
+    if speedtest_cli_path() is not None:
+        kbps, error = speedtest_probe()
+        if kbps > 0:
+            return kbps, None
+        # Speedtest is installed but failed — try HTTP before giving up, and
+        # keep the speedtest reason if that fails too.
+        http_kbps, http_error = _http_measure(url, fetcher)
+        if http_kbps > 0:
+            return http_kbps, None
+        return 0.0, error or http_error
+    return _http_measure(url, fetcher)
+
+
 def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:
-    """Actively measure throughput by downloading ``url``. Returns KiB/s (0 on error)."""
-    kbps, _ = measure_probe(url, fetcher)
+    """Lightweight throughput probe for the worker's gate self-heal.
+
+    Stays on the quick, time-boxed HTTP probe (no minute-long Ookla run in the
+    scheduling loop). Returns KiB/s (0 on error).
+    """
+    kbps, _ = _http_measure(url, fetcher)
     return kbps

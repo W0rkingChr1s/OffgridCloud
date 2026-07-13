@@ -120,10 +120,18 @@ Im Admin-Bereich unter **Bandbreite**:
 - **Prioritäten** je Ordner↔Provider setzen (Eilmaterial zuerst).
 
 **Messung ohne Konfiguration:** Der Knopf **„Jetzt messen"** funktioniert sofort
-— es muss nichts eingetragen werden. Er lädt eine öffentliche Test-Datei
-(Standard: Cloudflare) und misst den Durchsatz. Nur wer ein eigenes Testziel
-braucht, trägt unter **System** eine Probe-URL ein (oder setzt
-`OGC_DEFAULT_PROBE_URL`).
+— es muss nichts eingetragen werden.
+
+- Ist die **Ookla Speedtest CLI** (`speedtest`) installiert, wird sie bevorzugt:
+  Sie misst den Upload gegen einen nahen Speedtest-Server und ist unabhängig von
+  Bot-Sperren fremder CDNs. `deploy/install.sh` installiert sie automatisch
+  (abschaltbar mit `--no-speedtest`); manuell: <https://www.speedtest.net/apps/cli>.
+- Ohne die CLI lädt die Messung als Fallback eine öffentliche Test-Datei
+  (Standard: Cloudflare) und misst den Durchsatz. Manche Netze/Regionen
+  beantworten diese Anfrage mit **HTTP 403** — dann hilft die Speedtest CLI oder
+  ein eigenes Testziel unter **System** (Probe-URL bzw. `OGC_DEFAULT_PROBE_URL`).
+- Schlägt eine Messung fehl, zeigt die Oberfläche den konkreten Grund an
+  (z. B. `403 Forbidden`, `NoServers`, Timeout).
 
 ## 5. Speicher-Management
 

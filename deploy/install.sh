@@ -17,6 +17,8 @@
 #   --prefix DIR           Install location (default: /opt/offgridcloud).
 #   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
 #   --self-update          Enable one-click updates from the web UI (sudoers).
+#   --no-speedtest         Skip installing the Ookla Speedtest CLI (used for the
+#                          bandwidth "measure now"; the HTTP probe still works).
 #   --no-service           Skip installing the systemd unit.
 #   -h, --help             Show this help and exit.
 set -euo pipefail
@@ -29,9 +31,11 @@ DO_START=0
 INSTALL_SERVICE=1
 WITH_FFMPEG=0
 SELF_UPDATE=0
+WITH_SPEEDTEST=1
+SPEEDTEST_VER="1.2.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-usage() { sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
     --self-update) SELF_UPDATE=1; shift ;;
+    --no-speedtest) WITH_SPEEDTEST=0; shift ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
@@ -82,6 +87,39 @@ else
     elif command -v dnf >/dev/null 2>&1; then dnf install -y rclone
     elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm rclone
     else echo "   Could not install rclone — install it manually before first use." >&2
+    fi
+  fi
+fi
+
+# Ookla Speedtest CLI — powers the bandwidth "measure now" against a nearby
+# server, avoiding the CDN bot-blocking that can 403 the HTTP probe. Best-effort:
+# a failure here is non-fatal (the app falls back to the HTTP probe).
+if [[ $WITH_SPEEDTEST -eq 1 ]]; then
+  if command -v speedtest >/dev/null 2>&1; then
+    echo "   speedtest already present: $(speedtest --version 2>/dev/null | head -1)"
+  else
+    step "Installing Ookla Speedtest CLI..."
+    case "$(uname -m)" in
+      x86_64|amd64)          ST_ARCH="x86_64" ;;
+      aarch64|arm64)         ST_ARCH="aarch64" ;;
+      armv7l|armv7)          ST_ARCH="armhf" ;;
+      armv6l)                ST_ARCH="armel" ;;
+      i386|i686)             ST_ARCH="i386" ;;
+      *)                     ST_ARCH="" ;;
+    esac
+    if [[ -z "$ST_ARCH" ]]; then
+      echo "   Unknown CPU architecture ($(uname -m)) — skipping speedtest; the HTTP probe still works." >&2
+    else
+      ST_URL="https://install.speedtest.net/app/cli/ookla-speedtest-${SPEEDTEST_VER}-linux-${ST_ARCH}.tgz"
+      ST_TMP="$(mktemp -d)"
+      if curl -fsSL "$ST_URL" -o "$ST_TMP/speedtest.tgz" \
+         && tar -xzf "$ST_TMP/speedtest.tgz" -C "$ST_TMP" speedtest; then
+        install -m 755 "$ST_TMP/speedtest" /usr/local/bin/speedtest
+        echo "   speedtest installed: $(/usr/local/bin/speedtest --version 2>/dev/null | head -1)"
+      else
+        echo "   Could not download speedtest — skipping; the HTTP probe still works." >&2
+      fi
+      rm -rf "$ST_TMP"
     fi
   fi
 fi

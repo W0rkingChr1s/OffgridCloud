@@ -114,6 +114,75 @@ def test_measure_probe_sends_browser_user_agent():
     assert "python-urllib" not in captured["headers"]["User-agent"].lower()
 
 
+# --- Ookla Speedtest CLI probe -------------------------------------------
+
+
+def test_speedtest_probe_absent_binary_reports_reason(monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth.shutil, "which", lambda _name: None)
+    kbps, error = bandwidth.speedtest_probe()
+    assert kbps == 0.0
+    assert "nicht installiert" in error
+
+
+def test_speedtest_probe_parses_upload_bandwidth(monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth.shutil, "which", lambda _name: "/usr/bin/speedtest")
+
+    class _Proc:
+        returncode = 0
+        # Ookla reports bandwidth in bytes/s. 2 MiB/s upload -> 2048 KiB/s.
+        stdout = f'{{"upload": {{"bandwidth": {2 * 1024 * 1024}}}}}'
+        stderr = ""
+
+    monkeypatch.setattr(bandwidth.subprocess, "run", lambda *a, **k: _Proc())
+    kbps, error = bandwidth.speedtest_probe()
+    assert error is None
+    assert round(kbps) == 2048
+
+
+def test_speedtest_probe_nonzero_exit_reports_reason(monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth.shutil, "which", lambda _name: "/usr/bin/speedtest")
+
+    class _Proc:
+        returncode = 1
+        stdout = ""
+        stderr = "no servers reachable"
+
+    monkeypatch.setattr(bandwidth.subprocess, "run", lambda *a, **k: _Proc())
+    kbps, error = bandwidth.speedtest_probe()
+    assert kbps == 0.0
+    assert "no servers reachable" in error
+
+
+def test_measure_probe_prefers_speedtest_when_available(monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth, "speedtest_cli_path", lambda: "/usr/bin/speedtest")
+    monkeypatch.setattr(bandwidth, "speedtest_probe", lambda: (5000.0, None))
+    # HTTP fetcher must NOT be consulted when speedtest succeeds.
+    def _should_not_run(_url):
+        raise AssertionError("HTTP probe should not be used when speedtest works")
+
+    kbps, error = bandwidth.measure_probe("http://x", fetcher=_should_not_run)
+    assert error is None
+    assert kbps == 5000.0
+
+
+def test_measure_probe_falls_back_to_http_when_speedtest_fails(monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth, "speedtest_cli_path", lambda: "/usr/bin/speedtest")
+    monkeypatch.setattr(bandwidth, "speedtest_probe", lambda: (0.0, "Speedtest-Timeout"))
+    kbps, error = bandwidth.measure_probe("http://x", fetcher=lambda url: 100 * 1024)
+    assert error is None
+    assert kbps > 0
+
+
 # --- Webhook notification -------------------------------------------------
 
 
