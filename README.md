@@ -22,26 +22,23 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 ## Kernfunktionen
 
 - 📥 **Lokal annehmen, später senden** — Annahme und Cloud-Upload sind entkoppelt
-- 📶 **Bandbreiten-bewusst** — Upload startet/drosselt je nach gemessener Leitung
+- 📶 **Bandbreiten-bewusst** — Upload startet/drosselt je nach gemessener Leitung (parallele Messung, Ookla-Speedtest-Fallback auf restriktiven Netzen)
 - 🔁 **Resilient** — resumable Transfers, automatische Wiederholung, kein Datenverlust
 - 🔋 **Akku-fest** — geht die Box (z. B. an der Powerbank) mitten im Upload aus, werden angebrochene Uploads und lokale Kopien beim nächsten Start auf Konsistenz geprüft und torn/korrupte Reste bereinigt
 - 🗃️ **Komfortabler Datei-Browser** — Mehrfachauswahl, Löschen mehrerer Dateien auf einmal und Bulk-Download als ZIP
-- 👥 **User-Management** — Admin (Einstellungen, Provider, Ordner) & Benutzer (Upload in freigegebene Ordner)
+- 👥 **User & Teams** — Admin verwaltet Provider/Ordner; Benutzer laden in freigegebene Ordner (auch per Team-Freigabe)
 - ☁️ **Viele Cloud-Ziele** — Amazon S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
 - 🗂️ **Ordner ↔ Provider** — ein Ordner kann an mehrere Cloud-Ziele gespiegelt werden
+- 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner)
 - 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
-- 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen) plus Push-Benachrichtigungen per Webhook, **Telegram** oder **E-Mail** (inkl. Speicher-knapp-Warnung)
+- 🔐 **VPN-Client** — wählt sich per WireGuard/OpenVPN ins Heimnetz ein, damit intern-only Ziele (z. B. ein NAS) erreichbar sind
+- 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)
+- 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail** (inkl. Speicher-knapp-Warnung)
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
 ---
 
 ## Installation
-- ☁️ **Viele Cloud-Ziele** — S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
-- 👥 **User & Teams** — Admin verwaltet Provider/Ordner; Benutzer laden in freigegebene Ordner (auch per Team-Freigabe)
-- 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter
-- 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene
-- 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht
-- 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode, PWA fürs Feld
 
 ## Schnellstart
 
@@ -105,10 +102,11 @@ Tests & Lint: `cd backend && pytest -q && ruff check .`. Beiträge:
 - **Phase 3–4** — Cloud-Provider (11 Typen via rclone, Verbindungstest, verschlüsselte Credentials) & automatische **Transfer-Engine** (Retry/Backoff, Resume, Integritäts-Check).
 - **Phase 5–6** — **Bandbreiten-Steuerung** (`--bwlimit`, Zeitfenster, Mindest-Bandbreite-Gate, Prioritäten) & **Live-Dashboard** per SSE.
 - **Phase 7** — Härtung: Audit-Log, Speicher-Management, Disk-Monitoring, Backup, Reverse-Proxy-Configs, [Betriebshandbuch](docs/BETRIEB.md).
-- **Phase 8** — Teams/Gruppen, Thumbnails (Pillow/ffmpeg), PWA fürs Feld, Info-Service (Toasts + Webhook/Telegram/E-Mail), aktive Bandbreiten-Probe.
+- **Phase 8** — Teams/Gruppen, Thumbnails (Pillow/ffmpeg), PWA fürs Feld, Netzwerk-Redundanz (WLAN-Rückfallebene), VPN-Client (WireGuard/OpenVPN), Multi-Server-Pool, Tags & Suche, Info-Service (Toasts, OS-Push, Webhook/Telegram/E-Mail), Härtung gegen Stromausfall (Integritäts-Checks beim Start, fsync-gesicherte Chunk-Uploads), Datei-Browser mit Bulk-Löschen/-Download, aktive Bandbreiten-Probe (parallele Streams, Speedtest-Fallback).
 
-Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche — siehe
-[Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
+Der ursprünglich geplante Backlog ist damit vollständig abgearbeitet — siehe
+[Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) für die Historie und die optionale
+Phase 9 (Desktop-Client, in Arbeit).
 Beiträge willkommen — siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Dokumentation
