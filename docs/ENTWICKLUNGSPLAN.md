@@ -103,6 +103,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Webhook/Benachrichtigung ans Social-Media-Team bei „fertig"
 - ☑ Aktive Bandbreiten-Probe (nachgezogen aus Phase 5)
 - ☑ Ein gut verstecktes Easter Egg 🥚 (irgendwo wartet ein Stück der 80er …)
+- ☑ **Netzwerk-Redundanz**: Rückfall-WLAN (Access Point), wenn kein hinterlegtes Netz erreichbar ist — automatischer Watchdog + Client-Autoconnect, Verwaltung im Web-UI (`docs/NETZWERK-REDUNDANZ.md`)
 - ☐ Multi-Server / mehrere Mini-Server poolen
 - ☐ Metadaten/Tagging, Such-/Filterfunktionen
 

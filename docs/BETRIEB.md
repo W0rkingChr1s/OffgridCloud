@@ -201,6 +201,25 @@ einen Versions-Tag (`git tag v0.2.0 && git push origin v0.2.0` → Workflow
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
 (Resume-Recovery); laufende Uploads gehen nicht verloren.
 
+## 9a. Netzwerk-Redundanz (Rückfall-WLAN)
+
+Damit das Feld-Team auch bei Router-Ausfall weiter hochladen kann, hostet die
+Box optional ihr **eigenes WLAN** als Rückfallebene und verbindet sich wieder
+als Client, sobald ein hinterlegtes Netz erreichbar ist.
+
+```bash
+# bei der Installation:
+sudo ./deploy/install.sh --with-ap-fallback
+# oder nachträglich:
+sudo /opt/offgridcloud/deploy/netfallback/install.sh
+```
+
+Danach im Web-UI unter **Netzwerk**: Fallback-AP (Name/Passwort) setzen, die
+bevorzugten WLAN-Uplinks hinterlegen, **„Anwenden“**. Der Watchdog schaltet
+automatisch um; beobachten mit `journalctl -u offgridcloud-netwatch -f`.
+Vollständige Beschreibung (Architektur, Sicherheit, Grenzen):
+**[docs/NETZWERK-REDUNDANZ.md](NETZWERK-REDUNDANZ.md)**.
+
 ## 10. Troubleshooting
 
 | Symptom | Ursache / Lösung |

@@ -152,6 +152,52 @@ export interface SystemStatus {
   rclone_available: boolean;
 }
 
+export interface NetworkStatus {
+  supported: boolean;
+  apply_wired: boolean;
+  mode: "ethernet" | "client" | "ap" | "offline" | "unknown";
+  online: boolean;
+  connectivity: string;
+  ethernet: boolean;
+  wifi_ssid: string | null;
+  wifi_ip: string | null;
+  ap_active: boolean;
+  ap_ssid: string | null;
+  detail: string;
+}
+
+export interface KnownNetwork {
+  id: number;
+  ssid: string;
+  priority: number;
+  autoconnect: boolean;
+  has_password: boolean;
+  created_at: string;
+}
+
+export interface NetworkSettings {
+  fallback_enabled: boolean;
+  ap_ssid: string;
+  ap_hidden: boolean;
+  ap_address: string;
+  country_code: string;
+  check_interval: number;
+  fail_threshold: number;
+  ap_has_password: boolean;
+}
+
+export interface NetworkOverview {
+  status: NetworkStatus;
+  settings: NetworkSettings;
+  known_networks: KnownNetwork[];
+}
+
+export interface NetworkApplyResult {
+  ok: boolean;
+  message: string;
+  output: string;
+}
+
 export interface UpdateInfo {
   current: string;
   latest: string | null;

@@ -35,6 +35,7 @@ den Status für alle transparent.
 - 👥 **User-Management** — Admin (Einstellungen, Provider, Ordner) & Benutzer (Upload in freigegebene Ordner)
 - ☁️ **Viele Cloud-Ziele** — Amazon S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
 - 🗂️ **Ordner ↔ Provider** — ein Ordner kann an mehrere Cloud-Ziele gespiegelt werden
+- 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
 ---
@@ -129,6 +130,12 @@ Nach der Installation für den echten Einsatz:
    `sudo /opt/offgridcloud/src/deploy/update.sh` — Daten, `.env` und Port bleiben
    erhalten. Für einen **One-Click-Knopf im Web-UI** bei der Installation
    `--self-update` mitgeben.
+8. **Netzwerk-Redundanz (optional).** Damit die Box bei Router-Ausfall ihr
+   eigenes WLAN als Rückfallebene öffnet, bei der Installation
+   `--with-ap-fallback` mitgeben (oder nachträglich
+   `sudo /opt/offgridcloud/deploy/netfallback/install.sh`). Danach im Web-UI
+   unter **Netzwerk** AP + Uplinks einrichten. Details:
+   [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md).
 
 Alles im Detail im **[Betriebshandbuch](docs/BETRIEB.md)** — Reverse-Proxy,
 Bandbreiten-Steuerung, Speicher-Management, Audit-Log, Backup/Restore,
@@ -189,6 +196,7 @@ Optionaler Backlog: Multi-Server-Pooling, Metadaten/Tagging & Suche — siehe
 ## Dokumentation
 
 - 📗 [Betriebshandbuch](docs/BETRIEB.md) — Installation, Absicherung, Betrieb
+- 📡 [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md) — WLAN-Rückfallebene bei Router-Ausfall
 - 📘 [Konzept](docs/KONZEPT.md) — Vision, Architektur, Datenmodell, Tech-Stack
 - 🗺️ [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) — Roadmap in Phasen & Meilensteinen
 
