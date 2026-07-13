@@ -108,16 +108,18 @@ rm -rf "$PREFIX/backend/.venv" "$PREFIX/backend/app/static" \
        "$PREFIX/backend/tests" "$PREFIX/backend/.pytest_cache"
 cp -r "$REPO_ROOT/frontend/dist" "$PREFIX/backend/app/static"
 
-# Stamp the deployed version so the UI reports the real release. Prefer the git
-# tag of the source checkout; fall back to a VERSION file shipped in a release
-# tarball. Without either, the app uses its built-in fallback constant.
-VERSION_STR=""
-if git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null &&
+# Stamp the deployed version so the UI reports the real release. An explicit
+# OGC_STAMP_VERSION (set by update.sh to the exact target tag) wins — this is
+# unambiguous even when several tags point at the same commit. Otherwise derive
+# it from the git tag of the source checkout, then a VERSION file shipped in a
+# release tarball. Without any, the app uses its built-in fallback constant.
+VERSION_STR="${OGC_STAMP_VERSION:-}"
+if [[ -z "$VERSION_STR" ]] && git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null &&
    git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   # No --always: if no tag is reachable, prefer the app's fallback constant over
   # a bare commit hash (which reads oddly as a "version" in the UI).
   VERSION_STR="$(git -C "$REPO_ROOT" describe --tags 2>/dev/null | sed -E 's/^v\.?//')"
-elif [[ -f "$REPO_ROOT/VERSION" ]]; then
+elif [[ -z "$VERSION_STR" && -f "$REPO_ROOT/VERSION" ]]; then
   VERSION_STR="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
 fi
 if [[ -n "$VERSION_STR" ]]; then
