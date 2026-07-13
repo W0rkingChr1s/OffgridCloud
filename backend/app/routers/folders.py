@@ -37,6 +37,7 @@ from ..schemas import (
     MediaItemOut,
 )
 from ..storage import accessible_folder_ids, folder_dir, user_can_access_folder
+from ..tagging import tags_for
 from ..transfers import delete_media, enqueue_for_link
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
@@ -334,17 +335,33 @@ def list_media(
     folder_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[MediaItem]:
+) -> list[MediaItemOut]:
     _get_folder(db, folder_id)
     if not user_can_access_folder(db, user, folder_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
-    return list(
+    items = list(
         db.scalars(
             select(MediaItem)
             .where(MediaItem.folder_id == folder_id)
             .order_by(MediaItem.created_at.desc())
         )
     )
+    tag_map = tags_for(db, [m.id for m in items])
+    return [
+        MediaItemOut(
+            id=m.id,
+            folder_id=m.folder_id,
+            filename=m.filename,
+            size=m.size,
+            sha256=m.sha256,
+            status=m.status,
+            local_deleted=m.local_deleted,
+            uploaded_by=m.uploaded_by,
+            created_at=m.created_at,
+            tags=tag_map.get(m.id, []),
+        )
+        for m in items
+    ]
 
 
 @router.delete("/{folder_id}/media/{media_id}", response_model=MediaDeleteResult)

@@ -9,6 +9,7 @@ import {
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
+import { TagEditor } from "../components/Tags";
 import { formatBytes, uploadFile } from "../upload";
 
 function downloadUrl(id: number): string {
@@ -94,6 +95,10 @@ export default function FolderDetail() {
 
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const patchTags = useCallback((mediaId: number, tags: string[]) => {
+    setMedia((prev) => prev.map((m) => (m.id === mediaId ? { ...m, tags } : m)));
+  }, []);
 
   const remove = useCallback(
     async (m: MediaItem) => {
@@ -228,6 +233,9 @@ export default function FolderDetail() {
                       {busyId === m.id ? "…" : "Löschen"}
                     </button>
                   </div>
+                  <div className="mt-1.5">
+                    <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -242,6 +250,7 @@ export default function FolderDetail() {
                   <th className="px-4 py-3">Datei</th>
                   <th className="px-4 py-3">Größe</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Tags</th>
                   <th className="px-4 py-3">Hochgeladen</th>
                   <th className="px-4 py-3 text-right">Aktion</th>
                 </tr>
@@ -256,6 +265,9 @@ export default function FolderDetail() {
                       <span className="rounded bg-ogc-teal/15 px-2 py-0.5 text-xs text-ogc-teal">
                         {m.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
                     </td>
                     <td className="px-4 py-3 text-slate-400">
                       {new Date(m.created_at).toLocaleString()}

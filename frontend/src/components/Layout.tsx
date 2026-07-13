@@ -62,18 +62,34 @@ const icons = {
       <path d="M9.5 12l1.8 1.8 3.2-3.6" />
     </svg>
   ),
+  search: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.3-4.3" />
+    </svg>
+  ),
+  pool: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="3" y="4" width="8" height="6" rx="1.5" />
+      <rect x="13" y="4" width="8" height="6" rx="1.5" />
+      <rect x="8" y="14" width="8" height="6" rx="1.5" />
+      <path d="M7 10v2h10v-2M12 12v2" />
+    </svg>
+  ),
 };
 
 type NavItem = { to: string; label: string; icon: (p: IconProps) => JSX.Element; admin?: boolean };
 
 const NAV: NavItem[] = [
   { to: "/", label: "Ordner", icon: icons.folders },
+  { to: "/search", label: "Suche", icon: icons.search },
   { to: "/admin/folders", label: "Verwalten", icon: icons.manage, admin: true },
   { to: "/admin/providers", label: "Provider", icon: icons.provider, admin: true },
   { to: "/admin/vpn", label: "VPN", icon: icons.vpn, admin: true },
   { to: "/admin/transfers", label: "Transfers", icon: icons.transfers, admin: true },
   { to: "/admin/bandwidth", label: "Bandbreite", icon: icons.bandwidth, admin: true },
   { to: "/admin/network", label: "Netzwerk", icon: icons.network, admin: true },
+  { to: "/admin/pool", label: "Pool", icon: icons.pool, admin: true },
   { to: "/users", label: "Benutzer", icon: icons.users, admin: true },
   { to: "/admin/groups", label: "Teams", icon: icons.teams, admin: true },
   { to: "/admin/system", label: "System", icon: icons.system, admin: true },

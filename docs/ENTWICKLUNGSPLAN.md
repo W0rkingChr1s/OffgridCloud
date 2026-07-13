@@ -104,8 +104,11 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Aktive Bandbreiten-Probe (nachgezogen aus Phase 5)
 - ☑ Ein gut verstecktes Easter Egg 🥚 (irgendwo wartet ein Stück der 80er …)
 - ☑ **Netzwerk-Redundanz**: Rückfall-WLAN (Access Point), wenn kein hinterlegtes Netz erreichbar ist — automatischer Watchdog + Client-Autoconnect, Verwaltung im Web-UI (`docs/NETZWERK-REDUNDANZ.md`)
-- ☐ Multi-Server / mehrere Mini-Server poolen
-- ☐ Metadaten/Tagging, Such-/Filterfunktionen
+- ☑ **Multi-Server / Pooling**: mehrere Mini-Server als Flotte im Blick — ein Hub fragt die hinterlegten Peers (`/api/pool/status`, Shared-Token) periodisch ab und zeigt eine gemeinsame Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher). Read-only-Aggregation, keine verteilte Koordination — Pi-tauglich. Verwaltung im Web-UI unter **Pool** ([docs/MULTI-SERVER-POOL.md](MULTI-SERVER-POOL.md)).
+- ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
+
+**Damit ist der ursprünglich geplante Backlog vollständig abgearbeitet.** Weitere
+Ideen entstehen künftig als GitHub-Issues.
 
 ---
 
