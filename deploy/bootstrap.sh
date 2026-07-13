@@ -67,12 +67,15 @@ if [[ -d "$OGC_SRC/.git" ]]; then
   step "Updating existing checkout in $OGC_SRC..."
   # The tree may be owned by the service user; allow root's git to use it.
   git config --global --add safe.directory "$OGC_SRC" 2>/dev/null || true
-  git -C "$OGC_SRC" fetch --depth 1 origin "$OGC_BRANCH"
+  # Fetch full history + tags so the installer can derive the version from the
+  # git tag (git describe needs tags and real history, not a --depth 1 clone).
+  git -C "$OGC_SRC" fetch --tags --prune --unshallow origin 2>/dev/null \
+    || git -C "$OGC_SRC" fetch --tags --prune origin
   git -C "$OGC_SRC" checkout -B "$OGC_BRANCH" "origin/$OGC_BRANCH"
 else
   step "Cloning $OGC_REPO ($OGC_BRANCH) into $OGC_SRC..."
   mkdir -p "$(dirname "$OGC_SRC")"
-  git clone --depth 1 --branch "$OGC_BRANCH" "$OGC_REPO" "$OGC_SRC"
+  git clone --branch "$OGC_BRANCH" "$OGC_REPO" "$OGC_SRC"
 fi
 
 # --- Run the installer (and start it) ---------------------------------------

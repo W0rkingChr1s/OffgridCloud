@@ -58,7 +58,10 @@ latest_tag() {
 git config --global --add safe.directory "$SRC" 2>/dev/null || true
 
 step "Fetching updates from origin..."
-git -C "$SRC" fetch --tags --prune origin
+# Unshallow if the source was originally cloned with --depth 1, so `git describe`
+# can find tags for the version stamp; fall back to a plain fetch otherwise.
+git -C "$SRC" fetch --tags --prune --unshallow origin 2>/dev/null \
+  || git -C "$SRC" fetch --tags --prune origin
 
 CURRENT="$(current_version)"
 if [[ "$CHANNEL" == "main" ]]; then

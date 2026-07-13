@@ -114,7 +114,9 @@ cp -r "$REPO_ROOT/frontend/dist" "$PREFIX/backend/app/static"
 VERSION_STR=""
 if git config --global --add safe.directory "$REPO_ROOT" 2>/dev/null &&
    git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  VERSION_STR="$(git -C "$REPO_ROOT" describe --tags --always 2>/dev/null | sed -E 's/^v\.?//')"
+  # No --always: if no tag is reachable, prefer the app's fallback constant over
+  # a bare commit hash (which reads oddly as a "version" in the UI).
+  VERSION_STR="$(git -C "$REPO_ROOT" describe --tags 2>/dev/null | sed -E 's/^v\.?//')"
 elif [[ -f "$REPO_ROOT/VERSION" ]]; then
   VERSION_STR="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
 fi
