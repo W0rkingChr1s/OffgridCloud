@@ -120,18 +120,23 @@ Im Admin-Bereich unter **Bandbreite**:
 - **Prioritäten** je Ordner↔Provider setzen (Eilmaterial zuerst).
 
 **Messung ohne Konfiguration:** Der Knopf **„Jetzt messen"** funktioniert sofort
-— es muss nichts eingetragen werden.
+— es muss nichts eingetragen werden. Die Messung probiert der Reihe nach mehrere
+Wege und nimmt das erste Ergebnis:
 
-- Ist die **Ookla Speedtest CLI** (`speedtest`) installiert, wird sie bevorzugt:
-  Sie misst den Upload gegen einen nahen Speedtest-Server und ist unabhängig von
-  Bot-Sperren fremder CDNs. `deploy/install.sh` installiert sie automatisch
-  (abschaltbar mit `--no-speedtest`); manuell: <https://www.speedtest.net/apps/cli>.
-- Ohne die CLI lädt die Messung als Fallback eine öffentliche Test-Datei
-  (Standard: Cloudflare) und misst den Durchsatz. Manche Netze/Regionen
-  beantworten diese Anfrage mit **HTTP 403** — dann hilft die Speedtest CLI oder
-  ein eigenes Testziel unter **System** (Probe-URL bzw. `OGC_DEFAULT_PROBE_URL`).
-- Schlägt eine Messung fehl, zeigt die Oberfläche den konkreten Grund an
-  (z. B. `403 Forbidden`, `NoServers`, Timeout).
+1. **HTTP-Probe** (schnell): lädt eine öffentliche Test-Datei (Standard:
+   Cloudflare) und misst den Durchsatz. Schlägt das primäre Ziel fehl, wird
+   automatisch ein zweites Ziel versucht. Ein eigenes Ziel lässt sich unter
+   **System** eintragen (Probe-URL bzw. `OGC_DEFAULT_PROBE_URL`).
+2. **Ookla Speedtest CLI** (`speedtest`, letzter Ausweg): greift, wenn die
+   HTTP-Ziele z. B. mit **HTTP 403** (Bot-Sperre eines CDN) blocken. Misst den
+   Upload gegen einen nahen Speedtest-Server. `deploy/install.sh` installiert sie
+   automatisch (abschaltbar mit `--no-speedtest`); manuell:
+   <https://www.speedtest.net/apps/cli>.
+   Hinweis: Speedtest-Server nutzen oft Port 8080 — auf stark eingeschränkten
+   Uplinks (nur 80/443 erlaubt) kann das mit `Cannot open socket` scheitern; dann
+   trägt die HTTP-Probe die Messung.
+- Schlägt jeder Weg fehl, zeigt die Oberfläche die gesammelten Gründe an
+  (z. B. `403 Forbidden`, `NoServers`, `Cannot open socket`, Timeout).
 
 ## 5. Speicher-Management
 

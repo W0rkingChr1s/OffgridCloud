@@ -248,27 +248,50 @@ def _http_measure(
     return size / 1024.0 / elapsed, None
 
 
+# Extra public test files tried if the primary HTTP target fails, before the
+# heavier Speedtest CLI. A second CDN guards against one target's bot-blocking or
+# outage without depending on any single provider's goodwill.
+HTTP_FALLBACK_URLS = [
+    "https://proof.ovh.net/files/100Mb.dat",
+]
+
+
 def measure_probe(
     url: str, fetcher: Callable[[str], int] = _http_download_size
 ) -> tuple[float, str | None]:
     """Measure throughput for the admin-triggered "measure now".
 
-    Prefers the Ookla Speedtest CLI when installed (robust against CDN
-    bot-blocking); otherwise, or if it fails, falls back to the HTTP probe.
-    Returns ``(kbps, error)`` — ``error`` carries the reason on failure so the
-    caller can surface it instead of a blanket "unreachable" message.
+    Tries strategies in order and returns the first that works:
+      1. The fast, time-boxed HTTP probe against the configured target, then a
+         built-in fallback target — quick, and unaffected by the Ookla test
+         servers' ports being blocked on restricted / off-grid uplinks.
+      2. The Ookla Speedtest CLI, if installed — the last resort for networks
+         that answer CDN downloads with 403 bot-blocking.
+
+    Returns ``(kbps, error)``. ``error`` is ``None`` on success; on total
+    failure it aggregates every attempt's reason so the caller can surface a
+    real diagnosis instead of a blanket "unreachable" message.
     """
+    errors: list[str] = []
+    tried: set[str] = set()
+    for candidate in [url, *HTTP_FALLBACK_URLS]:
+        if not candidate or candidate in tried:
+            continue
+        tried.add(candidate)
+        kbps, error = _http_measure(candidate, fetcher)
+        if kbps > 0:
+            return kbps, None
+        if error:
+            errors.append(f"HTTP: {error}")
+
     if speedtest_cli_path() is not None:
         kbps, error = speedtest_probe()
         if kbps > 0:
             return kbps, None
-        # Speedtest is installed but failed — try HTTP before giving up, and
-        # keep the speedtest reason if that fails too.
-        http_kbps, http_error = _http_measure(url, fetcher)
-        if http_kbps > 0:
-            return http_kbps, None
-        return 0.0, error or http_error
-    return _http_measure(url, fetcher)
+        if error:
+            errors.append(error)
+
+    return 0.0, "; ".join(errors) if errors else "Messung fehlgeschlagen"
 
 
 def active_probe(url: str, fetcher: Callable[[str], int] = _http_download_size) -> float:

@@ -159,28 +159,51 @@ def test_speedtest_probe_nonzero_exit_reports_reason(monkeypatch):
     assert "no servers reachable" in error
 
 
-def test_measure_probe_prefers_speedtest_when_available(monkeypatch):
+def test_measure_probe_uses_http_first(monkeypatch):
+    from app import bandwidth
+
+    # HTTP works -> speedtest must not be invoked (it's the slow last resort).
+    monkeypatch.setattr(bandwidth, "speedtest_cli_path", lambda: "/usr/bin/speedtest")
+    monkeypatch.setattr(
+        bandwidth,
+        "speedtest_probe",
+        lambda: (_ for _ in ()).throw(AssertionError("speedtest must not run when HTTP works")),
+    )
+    kbps, error = bandwidth.measure_probe("http://x", fetcher=lambda url: 100 * 1024)
+    assert error is None
+    assert kbps > 0
+
+
+def test_measure_probe_falls_back_to_speedtest_when_http_fails(monkeypatch):
     from app import bandwidth
 
     monkeypatch.setattr(bandwidth, "speedtest_cli_path", lambda: "/usr/bin/speedtest")
     monkeypatch.setattr(bandwidth, "speedtest_probe", lambda: (5000.0, None))
-    # HTTP fetcher must NOT be consulted when speedtest succeeds.
-    def _should_not_run(_url):
-        raise AssertionError("HTTP probe should not be used when speedtest works")
 
-    kbps, error = bandwidth.measure_probe("http://x", fetcher=_should_not_run)
+    def _boom(_url):
+        raise OSError("HTTP Error 403: Forbidden")
+
+    kbps, error = bandwidth.measure_probe("http://x", fetcher=_boom)
     assert error is None
     assert kbps == 5000.0
 
 
-def test_measure_probe_falls_back_to_http_when_speedtest_fails(monkeypatch):
+def test_measure_probe_aggregates_reasons_when_all_fail(monkeypatch):
     from app import bandwidth
 
     monkeypatch.setattr(bandwidth, "speedtest_cli_path", lambda: "/usr/bin/speedtest")
-    monkeypatch.setattr(bandwidth, "speedtest_probe", lambda: (0.0, "Speedtest-Timeout"))
-    kbps, error = bandwidth.measure_probe("http://x", fetcher=lambda url: 100 * 1024)
-    assert error is None
-    assert kbps > 0
+    monkeypatch.setattr(
+        bandwidth, "speedtest_probe", lambda: (0.0, "Speedtest-Fehler: Cannot open socket")
+    )
+
+    def _boom(_url):
+        raise OSError("403 Forbidden")
+
+    kbps, error = bandwidth.measure_probe("http://x", fetcher=_boom)
+    assert kbps == 0.0
+    # Both the HTTP failure and the speedtest failure are reported.
+    assert "403 Forbidden" in error
+    assert "Cannot open socket" in error
 
 
 # --- Webhook notification -------------------------------------------------
