@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type AuditEvent, type SystemStatus, type UpdateInfo } from "../api";
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
+import { SortTh, type SortOption, useSort } from "../components/Sort";
 import { formatBytes } from "../upload";
+
+const AUDIT_SORT: SortOption<AuditEvent>[] = [
+  { key: "time", label: "Zeit", get: (e) => e.created_at },
+  { key: "user", label: "Benutzer", get: (e) => e.user_email },
+  { key: "action", label: "Aktion", get: (e) => e.action },
+  { key: "detail", label: "Detail", get: (e) => e.detail },
+];
 
 export default function System() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -45,6 +53,7 @@ export default function System() {
   const disk = status?.disk;
   const pct = disk ? Math.round(disk.percent_used) : 0;
   const resyncMinutes = status ? Math.round(status.reconcile_interval / 60) : 0;
+  const auditSort = useSort(audit, AUDIT_SORT, { key: "time", dir: "desc" });
 
   return (
     <Layout>
@@ -187,14 +196,14 @@ export default function System() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
-                <th className="px-4 py-3">Zeit</th>
-                <th className="px-4 py-3">Benutzer</th>
-                <th className="px-4 py-3">Aktion</th>
-                <th className="px-4 py-3">Detail</th>
+                <SortTh sort={auditSort} field="time">Zeit</SortTh>
+                <SortTh sort={auditSort} field="user">Benutzer</SortTh>
+                <SortTh sort={auditSort} field="action">Aktion</SortTh>
+                <SortTh sort={auditSort} field="detail">Detail</SortTh>
               </tr>
             </thead>
             <tbody>
-              {audit.map((e) => (
+              {auditSort.sorted.map((e) => (
                 <tr key={e.id} className="border-t border-white/5 bg-slate-900/40">
                   <td className="px-4 py-3 text-slate-400">{new Date(e.created_at + "Z").toLocaleString()}</td>
                   <td className="px-4 py-3 text-slate-300">{e.user_email || "—"}</td>

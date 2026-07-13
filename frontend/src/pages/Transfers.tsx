@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type TransferJob } from "../api";
 import Layout from "../components/Layout";
+import { SortTh, type SortOption, useSort } from "../components/Sort";
 import { useEvents } from "../events";
 import { formatBytes } from "../upload";
+
+const TRANSFER_SORT: SortOption<TransferJob>[] = [
+  { key: "file", label: "Datei", get: (j) => j.media_filename },
+  { key: "provider", label: "Ziel", get: (j) => j.provider_name },
+  { key: "status", label: "Status", get: (j) => j.status },
+  { key: "attempts", label: "Versuche", get: (j) => j.attempts },
+  { key: "created", label: "Erstellt", get: (j) => j.created_at },
+];
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   queued: { label: "wartet", cls: "bg-slate-500/20 text-slate-300" },
@@ -40,6 +49,8 @@ export default function Transfers() {
     }
   }
 
+  const sort = useSort(jobs, TRANSFER_SORT, { key: "created", dir: "desc" });
+
   const active = Object.fromEntries((snapshot?.transfers?.active ?? []).map((a) => [a.id, a]));
   const counts = snapshot?.transfers?.counts ??
     jobs.reduce<Record<string, number>>((acc, j) => {
@@ -70,15 +81,15 @@ export default function Transfers() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
-                <th className="px-4 py-3">Datei</th>
-                <th className="px-4 py-3">Ziel</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Versuche</th>
+                <SortTh sort={sort} field="file">Datei</SortTh>
+                <SortTh sort={sort} field="provider">Ziel</SortTh>
+                <SortTh sort={sort} field="status">Status</SortTh>
+                <SortTh sort={sort} field="attempts">Versuche</SortTh>
                 <th className="px-4 py-3 text-right">Aktion</th>
               </tr>
             </thead>
             <tbody>
-              {jobs.map((j) => {
+              {sort.sorted.map((j) => {
                 const s = STATUS[j.status] ?? STATUS.queued;
                 return (
                   <tr key={j.id} className="border-t border-white/5 bg-slate-900/40">

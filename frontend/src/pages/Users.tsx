@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type Role, type User } from "../api";
 import { useAuth } from "../auth";
 import Layout from "../components/Layout";
+import { SortTh, type SortOption, useSort } from "../components/Sort";
+
+const USER_SORT: SortOption<User>[] = [
+  { key: "email", label: "E-Mail", get: (u) => u.email },
+  { key: "name", label: "Name", get: (u) => u.name },
+  { key: "role", label: "Rolle", get: (u) => u.role },
+  { key: "status", label: "Status", get: (u) => (u.active ? 0 : 1) },
+];
 
 export default function Users() {
   const { user: me } = useAuth();
@@ -44,6 +52,8 @@ export default function Users() {
     await patch(id, { password: pw });
   }
 
+  const sort = useSort(users, USER_SORT, { key: "email" });
+
   return (
     <Layout>
       <div className="mb-6 flex items-center justify-between">
@@ -77,15 +87,15 @@ export default function Users() {
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-800/80 text-slate-400">
             <tr>
-              <th className="px-4 py-3">E-Mail</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Rolle</th>
-              <th className="px-4 py-3">Status</th>
+              <SortTh sort={sort} field="email">E-Mail</SortTh>
+              <SortTh sort={sort} field="name">Name</SortTh>
+              <SortTh sort={sort} field="role">Rolle</SortTh>
+              <SortTh sort={sort} field="status">Status</SortTh>
               <th className="px-4 py-3 text-right">Aktionen</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => {
+            {sort.sorted.map((u) => {
               const self = u.id === me?.id;
               return (
                 <tr key={u.id} className="border-t border-white/5 bg-slate-900/40">

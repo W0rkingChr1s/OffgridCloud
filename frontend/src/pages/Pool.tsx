@@ -8,7 +8,22 @@ import {
   type PoolSelf,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
 import { formatBytes } from "../upload";
+
+const NODE_SORT: SortOption<PoolNodeStatus>[] = [
+  { key: "name", label: "Name", get: (n) => n.name },
+  { key: "media", label: "Medien", get: (n) => n.media_total },
+  { key: "transfers", label: "Aktive Transfers", get: (n) => n.active_transfers },
+  { key: "throughput", label: "Durchsatz", get: (n) => n.throughput_kbps },
+  { key: "disk", label: "Speicher frei", get: (n) => n.disk_free },
+];
+
+const PEER_SORT: SortOption<PoolPeer>[] = [
+  { key: "name", label: "Name", get: (p) => p.name },
+  { key: "status", label: "Status", get: (p) => (p.enabled ? 0 : 1) },
+  { key: "created", label: "Hinzugefügt", get: (p) => p.created_at },
+];
 
 function NodeCard({ node, isSelf }: { node: PoolNodeStatus; isSelf?: boolean }) {
   const diskPct = node.disk_total ? (1 - node.disk_free / node.disk_total) * 100 : 0;
@@ -149,6 +164,9 @@ export default function Pool() {
     "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-none focus:border-ogc-teal/50";
   const totals = overview?.totals;
 
+  const nodeSort = useSort(overview?.peers ?? [], NODE_SORT, { key: "name" });
+  const peerSort = useSort(peers, PEER_SORT, { key: "name" });
+
   return (
     <Layout>
       <div className="mb-6">
@@ -188,16 +206,24 @@ export default function Pool() {
         </div>
       )}
 
+      {overview && overview.peers.length > 0 && (
+        <div className="mb-3 flex justify-end">
+          <SortMenu sort={nodeSort} />
+        </div>
+      )}
       <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {overview && <NodeCard node={overview.self} isSelf />}
-        {overview?.peers.map((p) => (
+        {nodeSort.sorted.map((p) => (
           <NodeCard key={p.peer_id ?? p.name} node={p} />
         ))}
       </div>
 
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-        Peers verwalten
-      </h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Peers verwalten
+        </h3>
+        {peers.length > 0 && <SortMenu sort={peerSort} />}
+      </div>
       <form onSubmit={addPeer} className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
         <input
           className={field}
@@ -229,7 +255,7 @@ export default function Pool() {
 
       {peers.length > 0 && (
         <div className="mb-8 space-y-2">
-          {peers.map((p) => (
+          {peerSort.sorted.map((p) => (
             <div
               key={p.id}
               className="flex items-center justify-between rounded-xl bg-slate-800/60 p-3 text-sm ring-1 ring-white/5"

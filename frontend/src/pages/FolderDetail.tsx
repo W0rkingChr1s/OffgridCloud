@@ -10,9 +10,17 @@ import {
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, SortTh, type SortOption, useSort } from "../components/Sort";
 import { useToast } from "../toast";
 import { TagEditor } from "../components/Tags";
 import { formatBytes, uploadFile } from "../upload";
+
+const MEDIA_SORT: SortOption<MediaItem>[] = [
+  { key: "name", label: "Datei", get: (m) => m.filename },
+  { key: "size", label: "Größe", get: (m) => m.size },
+  { key: "status", label: "Status", get: (m) => m.status },
+  { key: "created", label: "Hochgeladen", get: (m) => m.created_at },
+];
 
 function downloadUrl(id: number): string {
   return `/api/media/${id}/download?token=${encodeURIComponent(getToken() ?? "")}`;
@@ -251,6 +259,8 @@ export default function FolderDetail() {
     triggerDownload(bulkDownloadUrl(folderId));
   }, [folderId, availableIds]);
 
+  const sort = useSort(media, MEDIA_SORT, { key: "created", dir: "desc" });
+
   return (
     <Layout>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -325,18 +335,21 @@ export default function FolderDetail() {
         </div>
       )}
 
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
           Medien ({media.length})
         </h3>
-        {available.length > 0 && (
-          <button
-            onClick={toggleAll}
-            className="text-xs text-slate-400 hover:text-white"
-          >
-            {allSelected ? "Auswahl aufheben" : "Alle auswählen"}
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          {media.length > 0 && <SortMenu sort={sort} />}
+          {available.length > 0 && (
+            <button
+              onClick={toggleAll}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              {allSelected ? "Auswahl aufheben" : "Alle auswählen"}
+            </button>
+          )}
+        </div>
       </div>
 
       {media.length === 0 ? (
@@ -347,7 +360,7 @@ export default function FolderDetail() {
         <>
           {/* Mobile: card list */}
           <div className="space-y-2 md:hidden">
-            {media.map((m) => {
+            {sort.sorted.map((m) => {
               const isSel = selected.has(m.id);
               return (
                 <div
@@ -424,16 +437,16 @@ export default function FolderDetail() {
                     />
                   </th>
                   <th className="px-4 py-3">Vorschau</th>
-                  <th className="px-4 py-3">Datei</th>
-                  <th className="px-4 py-3">Größe</th>
-                  <th className="px-4 py-3">Status</th>
+                  <SortTh sort={sort} field="name">Datei</SortTh>
+                  <SortTh sort={sort} field="size">Größe</SortTh>
+                  <SortTh sort={sort} field="status">Status</SortTh>
                   <th className="px-4 py-3">Tags</th>
-                  <th className="px-4 py-3">Hochgeladen</th>
+                  <SortTh sort={sort} field="created">Hochgeladen</SortTh>
                   <th className="px-4 py-3 text-right">Aktion</th>
                 </tr>
               </thead>
               <tbody>
-                {media.map((m) => {
+                {sort.sorted.map((m) => {
                   const isSel = selected.has(m.id);
                   return (
                     <tr

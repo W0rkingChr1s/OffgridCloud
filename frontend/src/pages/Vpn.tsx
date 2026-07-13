@@ -8,11 +8,19 @@ import {
   type VpnType,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
 
 const TYPE_LABEL: Record<VpnType, string> = {
   wireguard: "WireGuard",
   openvpn: "OpenVPN",
 };
+
+const VPN_SORT: SortOption<VpnTunnel>[] = [
+  { key: "name", label: "Name", get: (t) => t.name },
+  { key: "type", label: "Typ", get: (t) => TYPE_LABEL[t.type] },
+  { key: "status", label: "Status", get: (t) => (t.active ? 0 : 1) },
+  { key: "created", label: "Erstellt", get: (t) => t.created_at },
+];
 
 export default function Vpn() {
   const [caps, setCaps] = useState<VpnCapabilities | null>(null);
@@ -74,6 +82,8 @@ export default function Vpn() {
     setEditing(null);
     load();
   }
+
+  const sort = useSort(tunnels, VPN_SORT, { key: "name" });
 
   return (
     <Layout>
@@ -146,7 +156,10 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
         <p className="text-sm text-slate-500">Noch kein VPN eingerichtet.</p>
       ) : (
         <div className="space-y-3">
-          {tunnels.map((t) => {
+          <div className="flex justify-end">
+            <SortMenu sort={sort} />
+          </div>
+          {sort.sorted.map((t) => {
             const active = t.active;
             const st = active ? statusMap : null;
             return (

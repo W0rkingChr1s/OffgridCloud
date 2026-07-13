@@ -8,6 +8,7 @@ import {
   type ProviderTypeDef,
 } from "../api";
 import Layout from "../components/Layout";
+import { SortMenu, type SortOption, useSort } from "../components/Sort";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   ok: { label: "verbunden", cls: "bg-emerald-500/20 text-emerald-300" },
@@ -69,6 +70,17 @@ export default function Providers() {
     load();
   }
 
+  const sortOptions = useMemo<SortOption<Provider>[]>(
+    () => [
+      { key: "name", label: "Name", get: (p) => p.name },
+      { key: "type", label: "Typ", get: (p) => types.find((t) => t.key === p.type)?.label ?? p.type },
+      { key: "status", label: "Status", get: (p) => STATUS[p.status]?.label ?? p.status },
+      { key: "created", label: "Erstellt", get: (p) => p.created_at },
+    ],
+    [types],
+  );
+  const sort = useSort(providers, sortOptions, { key: "name" });
+
   return (
     <Layout>
       <div className="mb-6 flex items-center justify-between">
@@ -107,7 +119,10 @@ export default function Providers() {
         <p className="text-sm text-slate-500">Noch keine Provider verknüpft.</p>
       ) : (
         <div className="space-y-3">
-          {providers.map((p) => {
+          <div className="flex justify-end">
+            <SortMenu sort={sort} />
+          </div>
+          {sort.sorted.map((p) => {
             const s = STATUS[p.status] ?? STATUS.unknown;
             const typeLabel = types.find((t) => t.key === p.type)?.label ?? p.type;
             return (
