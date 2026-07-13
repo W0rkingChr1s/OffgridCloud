@@ -26,6 +26,34 @@ def test_active_probe_handles_errors():
     assert active_probe("http://x", fetcher=boom) == 0.0
 
 
+def test_http_measure_sums_parallel_streams():
+    # N concurrent streams must aggregate: a single stream reporting X bytes over
+    # 4 streams should measure ~4x the throughput of one, approximating a real
+    # multi-connection speed test instead of a single bandwidth-delay-limited TCP.
+    from app import bandwidth
+
+    one, _ = bandwidth._http_measure("http://x", fetcher=lambda url: 500 * 1024, streams=1)
+    four, _ = bandwidth._http_measure("http://x", fetcher=lambda url: 500 * 1024, streams=4)
+    assert four > one * 3  # ~4x, allowing for scheduling overhead
+
+
+def test_http_measure_partial_stream_failure_still_measures():
+    # If some streams fail but others deliver data, we still return a value.
+    from app import bandwidth
+
+    calls = {"n": 0}
+
+    def _flaky(url):
+        calls["n"] += 1
+        if calls["n"] % 2 == 0:
+            raise OSError("reset")
+        return 200 * 1024
+
+    kbps, error = bandwidth._http_measure("http://x", fetcher=_flaky, streams=4)
+    assert error is None
+    assert kbps > 0
+
+
 def test_http_download_size_is_time_boxed_on_slow_link():
     # A slow link that never finishes the file must still yield a real sample:
     # the probe stops at the time budget instead of blocking / timing out.
