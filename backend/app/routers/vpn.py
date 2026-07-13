@@ -71,14 +71,23 @@ def _get(db: Session, tunnel_id: int) -> VpnTunnel:
 @router.get("/capabilities", response_model=VpnCapabilitiesOut)
 def get_capabilities() -> VpnCapabilitiesOut:
     caps = vpnsvc.capabilities()
+    docker = vpnsvc.in_docker()
     ready = caps.net_admin and caps.tun_device
     message = ""
     if not ready:
         parts = []
         if not caps.tun_device:
-            parts.append("kein /dev/net/tun (Container mit --device=/dev/net/tun starten)")
+            parts.append(
+                "kein /dev/net/tun (Container mit --device=/dev/net/tun starten)"
+                if docker
+                else "kein /dev/net/tun (TUN-Modul nicht geladen)"
+            )
         if not caps.net_admin:
-            parts.append("keine NET_ADMIN-Berechtigung (--cap-add=NET_ADMIN)")
+            parts.append(
+                "keine NET_ADMIN-Berechtigung (--cap-add=NET_ADMIN)"
+                if docker
+                else "der Dienst hat keine NET_ADMIN-Berechtigung"
+            )
         message = "VPN benötigt erhöhte Rechte: " + " und ".join(parts) + "."
     return VpnCapabilitiesOut(
         net_admin=caps.net_admin,
@@ -87,6 +96,8 @@ def get_capabilities() -> VpnCapabilitiesOut:
         openvpn=caps.openvpn,
         ready=ready,
         message=message,
+        docker=docker,
+        enable_command="" if docker else vpnsvc._NATIVE_ENABLE_CMD,
     )
 
 

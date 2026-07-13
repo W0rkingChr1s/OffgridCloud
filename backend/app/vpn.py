@@ -7,9 +7,12 @@ works.
 
 Bringing up a tunnel is a *system-level* operation: it creates a TUN interface
 and manipulates the routing table, which requires the ``NET_ADMIN`` capability
-and access to ``/dev/net/tun`` inside the container. Those are not granted by
-default, so :func:`capabilities` reports exactly what's missing and the API
-surfaces a clear message instead of failing opaquely.
+and access to ``/dev/net/tun``. Those are not granted by default, so
+:func:`capabilities` reports exactly what's missing and the API surfaces a clear
+message instead of failing opaquely. How you grant them differs by deployment —
+Docker needs ``--cap-add`` / ``--device`` flags, a native systemd install needs
+``AmbientCapabilities`` on the unit — so the guidance is tailored to the detected
+environment (see :func:`in_docker` and :meth:`Capabilities.blocker`).
 
 Only one tunnel is active at a time (a single default path into the remote LAN).
 Connecting a profile tears down any other active tunnel first.
@@ -34,6 +37,33 @@ logger = logging.getLogger("offgridcloud.vpn")
 _WG_IFACE = "ogc-wg"
 _CAP_NET_ADMIN = 12  # capability bit index for CAP_NET_ADMIN
 
+# Path the native install helper uses to grant the systemd service NET_ADMIN.
+_NATIVE_ENABLE_CMD = "sudo /opt/offgridcloud/deploy/vpn/install.sh"
+
+
+# --- Environment detection ------------------------------------------------
+
+
+def in_docker() -> bool:
+    """Best-effort: are we running inside a container rather than natively?
+
+    Governs which remediation to show — Docker flags vs. a systemd capability
+    drop-in. ``OGC_IN_DOCKER`` (set in the image) is authoritative; otherwise we
+    look for the classic markers.
+    """
+    override = os.environ.get("OGC_IN_DOCKER")
+    if override is not None:
+        return override.strip().lower() in {"1", "true", "yes"}
+    if Path("/.dockerenv").exists():
+        return True
+    try:
+        cgroup = Path("/proc/1/cgroup").read_text()
+        if "docker" in cgroup or "containerd" in cgroup or "kubepods" in cgroup:
+            return True
+    except OSError:  # pragma: no cover - non-Linux / unreadable
+        pass
+    return False
+
 
 # --- Capability detection -------------------------------------------------
 
@@ -53,12 +83,29 @@ class Capabilities:
             return base and self.openvpn
         return False
 
-    def blocker(self, vpn_type: str) -> str:
-        """Human-readable reason a tunnel of ``vpn_type`` can't start (or "")."""
+    def blocker(self, vpn_type: str, *, docker: bool | None = None) -> str:
+        """Human-readable reason a tunnel of ``vpn_type`` can't start (or "").
+
+        The remediation is tailored to the deployment: inside Docker the fix is
+        run-flags, on a native systemd install it's the enable helper. ``docker``
+        is auto-detected when not given.
+        """
+        if docker is None:
+            docker = in_docker()
         if not self.tun_device:
-            return "Kein /dev/net/tun im Container (mit --device=/dev/net/tun starten)."
+            return (
+                "Kein /dev/net/tun im Container (mit --device=/dev/net/tun starten)."
+                if docker
+                else "Kein /dev/net/tun — TUN-Modul laden: sudo modprobe tun "
+                f"(dauerhaft richtet {_NATIVE_ENABLE_CMD} es ein)."
+            )
         if not self.net_admin:
-            return "Fehlende NET_ADMIN-Berechtigung (mit --cap-add=NET_ADMIN starten)."
+            return (
+                "Fehlende NET_ADMIN-Berechtigung (Container mit --cap-add=NET_ADMIN starten)."
+                if docker
+                else "Dem Dienst fehlt die NET_ADMIN-Berechtigung — nativ aktivieren mit: "
+                f"{_NATIVE_ENABLE_CMD}"
+            )
         if vpn_type == "wireguard" and not self.wireguard:
             return "wireguard-tools (wg/wg-quick) nicht installiert."
         if vpn_type == "openvpn" and not self.openvpn:

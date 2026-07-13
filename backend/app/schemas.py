@@ -235,6 +235,8 @@ class VpnCapabilitiesOut(BaseModel):
     openvpn: bool
     ready: bool  # net_admin and tun_device (base requirements met)
     message: str = ""  # explanation when not ready
+    docker: bool = False  # running in a container → Docker-flag remediation
+    enable_command: str = ""  # native one-liner to grant the capability (if not docker)
 
 
 # --- Folder <-> Provider links & transfers --------------------------------

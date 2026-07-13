@@ -20,6 +20,9 @@
 #   --with-ap-fallback     Install the network-redundancy layer: the box hosts
 #                          its own Wi-Fi AP when it loses its uplink (needs
 #                          NetworkManager; sets up a watchdog + sudoers rule).
+#   --with-vpn             Enable the VPN client on this native install: installs
+#                          wireguard-tools/openvpn, loads the tun module and
+#                          grants the service CAP_NET_ADMIN (systemd drop-in).
 #   --no-speedtest         Skip installing the Ookla Speedtest CLI (used for the
 #                          bandwidth "measure now"; the HTTP probe still works).
 #   --no-service           Skip installing the systemd unit.
@@ -35,11 +38,12 @@ INSTALL_SERVICE=1
 WITH_FFMPEG=0
 SELF_UPDATE=0
 WITH_AP_FALLBACK=0
+WITH_VPN=0
 WITH_SPEEDTEST=1
 SPEEDTEST_VER="1.2.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-usage() { sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -50,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
     --self-update) SELF_UPDATE=1; shift ;;
     --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
+    --with-vpn) WITH_VPN=1; shift ;;
     --no-speedtest) WITH_SPEEDTEST=0; shift ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -241,6 +246,22 @@ if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
   chmod +x "$PREFIX/deploy/netfallback/"*.sh "$PREFIX/deploy/netfallback/_apply.py" 2>/dev/null || true
   bash "$PREFIX/deploy/netfallback/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
     || echo "   AP-fallback setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
+fi
+
+# --- Optional: VPN client prerequisites (native) ---------------------------
+if [[ $WITH_VPN -eq 1 ]]; then
+  step "Enabling the VPN client (native prerequisites)..."
+  # Copy the helper somewhere persistent so it can be re-run later, then apply.
+  mkdir -p "$PREFIX/deploy"
+  cp -r "$REPO_ROOT/deploy/vpn" "$PREFIX/deploy/vpn"
+  chmod +x "$PREFIX/deploy/vpn/install.sh" 2>/dev/null || true
+  if [[ $INSTALL_SERVICE -eq 1 ]]; then
+    bash "$PREFIX/deploy/vpn/install.sh" --prefix "$PREFIX" \
+      || echo "   VPN setup reported an issue — see docs/VPN.md." >&2
+  else
+    echo "   --no-service given: VPN needs the systemd unit for the CAP_NET_ADMIN"
+    echo "   drop-in. Skipped; run $PREFIX/deploy/vpn/install.sh after installing the service."
+  fi
 fi
 
 # --- Optional start + health check -----------------------------------------
