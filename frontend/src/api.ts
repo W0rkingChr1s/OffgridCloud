@@ -123,7 +123,17 @@ export interface ProviderTypeDef {
   key: string;
   label: string;
   help: string;
+  category: string;
+  description: string;
+  popular: boolean;
   fields: ProviderField[];
+}
+
+export interface ProviderCategory {
+  key: string;
+  label: string;
+  description: string;
+  icon: string;
 }
 
 export interface DiskUsage {

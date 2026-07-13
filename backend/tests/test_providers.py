@@ -8,6 +8,56 @@ def test_provider_types_registry(client, admin_auth):
     assert "secret_access_key" in secret_fields
 
 
+def test_registry_includes_major_providers(client, admin_auth):
+    types = client.get("/api/providers/types", headers=admin_auth).json()
+    keys = {t["key"] for t in types}
+    # The "biggest" storage options must all be selectable in the wizard.
+    assert {
+        "googledrive", "dropbox", "box", "pcloud", "mega",
+        "backblaze_b2", "cloudflare_r2", "wasabi", "gcs",
+        "digitalocean_spaces", "idrive_e2", "scaleway", "storj",
+    } <= keys
+    # Every type carries wizard metadata.
+    for t in types:
+        assert t["category"]
+        assert "popular" in t
+        assert "description" in t
+
+
+def test_provider_categories_endpoint(client, admin_auth):
+    cats = client.get("/api/providers/categories", headers=admin_auth).json()
+    keys = [c["key"] for c in cats]
+    assert keys == ["object", "drive", "selfhosted", "protocol"]
+    # Every provider type maps to a known category.
+    types = client.get("/api/providers/types", headers=admin_auth).json()
+    for t in types:
+        assert t["category"] in keys
+
+
+def test_oauth_provider_token_is_secret(client, admin_auth):
+    types = client.get("/api/providers/types", headers=admin_auth).json()
+    gdrive = next(t for t in types if t["key"] == "googledrive")
+    token = next(f for f in gdrive["fields"] if f["key"] == "token")
+    assert token["secret"] is True
+    assert gdrive["category"] == "drive"
+
+
+def test_create_googledrive_masks_token(client, admin_auth):
+    resp = client.post(
+        "/api/providers",
+        headers=admin_auth,
+        json={
+            "name": "My Drive",
+            "type": "googledrive",
+            "config": {"token": '{"access_token":"xyz"}'},
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["config"]["token"] != '{"access_token":"xyz"}'
+    assert set(body["config"]["token"]) == {"•"}
+
+
 def _create_s3(client, admin_auth, name="Backup S3"):
     return client.post(
         "/api/providers",
