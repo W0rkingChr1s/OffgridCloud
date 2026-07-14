@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .. import notices
 from ..bandwidth import effective_bwlimit, get_policy, parse_schedule, should_start
 from ..db import SessionLocal
 from ..models import (
@@ -133,6 +134,9 @@ def build_snapshot(user_id: int) -> dict | None:
                 policy.last_measured_at,
                 datetime.utcnow(),
             )
+            # Operational status blips (startup / reconnect / bandwidth) — these
+            # can carry the external IP, so keep them to admins like the rest.
+            snapshot["notices"] = notices.recent()
             snapshot["transfers"] = {"counts": counts, "active": active}
             snapshot["bandwidth"] = {
                 "enabled": policy.enabled,

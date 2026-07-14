@@ -649,6 +649,22 @@ def recover_running_jobs() -> None:
             logger.info("Requeued %d interrupted transfer job(s)", len(stuck))
 
 
+def _note_bandwidth_gate(db: Session, ok: bool, reason: str) -> None:
+    """Best-effort: emit a pause/resume announcement on gate transitions."""
+    from . import announce
+
+    try:
+        announce.note_bandwidth_gate(
+            db,
+            gated=not ok,
+            reason=reason,
+            has_queued=_has_queued(db),
+            last_kbps=bandwidth.get_policy(db).last_kbps,
+        )
+    except Exception:  # pragma: no cover - announcing must never break the worker
+        logger.debug("Bandwidth-gate announcement skipped", exc_info=True)
+
+
 def process_one() -> bool:
     """Process a single eligible job, respecting the bandwidth policy.
 
@@ -681,9 +697,13 @@ def process_one() -> bool:
                         policy.last_measured_at,
                         _utcnow_naive(),
                     )
-            if not ok:
-                logger.debug("Upload gated: %s", reason)
-                return False
+
+        # Announce a one-shot "paused"/"resumed" on bandwidth-gate transitions.
+        _note_bandwidth_gate(db, ok, reason)
+
+        if not ok:
+            logger.debug("Upload gated: %s", reason)
+            return False
 
         job = _pick_eligible(db)
         if job is None:

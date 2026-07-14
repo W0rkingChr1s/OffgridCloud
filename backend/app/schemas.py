@@ -383,6 +383,9 @@ class SystemStatusOut(BaseModel):
     notify_on_done: bool
     notify_on_failed: bool
     notify_on_low_space: bool
+    notify_on_startup: bool
+    notify_on_reconnect: bool
+    notify_on_bandwidth: bool
     telegram_chat_id: str
     telegram_configured: bool
     smtp_host: str
@@ -405,6 +408,9 @@ class SystemSettingsUpdate(BaseModel):
     notify_on_done: bool | None = None
     notify_on_failed: bool | None = None
     notify_on_low_space: bool | None = None
+    notify_on_startup: bool | None = None
+    notify_on_reconnect: bool | None = None
+    notify_on_bandwidth: bool | None = None
     # Telegram channel (token is write-only; "" clears it).
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None

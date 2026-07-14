@@ -38,6 +38,9 @@ def _status(db: Session) -> SystemStatusOut:
         notify_on_done=settings_row.notify_on_done,
         notify_on_failed=settings_row.notify_on_failed,
         notify_on_low_space=settings_row.notify_on_low_space,
+        notify_on_startup=settings_row.notify_on_startup,
+        notify_on_reconnect=settings_row.notify_on_reconnect,
+        notify_on_bandwidth=settings_row.notify_on_bandwidth,
         telegram_chat_id=settings_row.telegram_chat_id,
         telegram_configured=bool(settings_row.telegram_bot_token_encrypted),
         smtp_host=settings_row.smtp_host,
@@ -90,7 +93,15 @@ def _apply_notify_settings(
 ) -> None:
     """Apply notification fields onto the settings row. Secrets are write-only:
     a non-null value replaces (or, if empty, clears) the stored credential."""
-    for flag in ("notify_on_received", "notify_on_done", "notify_on_failed", "notify_on_low_space"):
+    for flag in (
+        "notify_on_received",
+        "notify_on_done",
+        "notify_on_failed",
+        "notify_on_low_space",
+        "notify_on_startup",
+        "notify_on_reconnect",
+        "notify_on_bandwidth",
+    ):
         value = getattr(payload, flag)
         if value is not None:
             setattr(row, flag, value)

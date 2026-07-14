@@ -32,6 +32,12 @@ EVENT_TOGGLE: dict[str, str] = {
     "media.done": "notify_on_done",
     "media.failed": "notify_on_failed",
     "disk.low": "notify_on_low_space",
+    # Operational status announcements (see app.announce).
+    "server.startup": "notify_on_startup",
+    "server.online": "notify_on_reconnect",
+    # Bandwidth-gate pause and resume share one toggle.
+    "transfer.paused": "notify_on_bandwidth",
+    "transfer.resumed": "notify_on_bandwidth",
 }
 
 

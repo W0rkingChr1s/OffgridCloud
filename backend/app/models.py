@@ -352,6 +352,12 @@ class SystemSettings(Base):
     notify_on_done: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_failed: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_low_space: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Operational status announcements (see app.announce): a comprehensive
+    # summary on startup, a short ping when the uplink recovers, and a message
+    # when the minimum-bandwidth gate pauses/resumes sending. All default on.
+    notify_on_startup: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_on_reconnect: Mapped[bool] = mapped_column(Boolean, default=True)
+    notify_on_bandwidth: Mapped[bool] = mapped_column(Boolean, default=True)
     # Telegram bot channel. Token encrypted at rest with the same key as
     # provider credentials; empty token = channel disabled.
     telegram_bot_token_encrypted: Mapped[str] = mapped_column(Text, default="")

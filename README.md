@@ -38,7 +38,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
 - 🔐 **VPN-Client** — wählt sich per WireGuard/OpenVPN ins Heimnetz ein, damit intern-only Ziele (z. B. ein NAS) erreichbar sind
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)
-- 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail** (inkl. Speicher-knapp-Warnung)
+- 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail**: Speicher-knapp-Warnung, ausführliche **Start-Meldung** (Zeit, Speicher, verbundene Cloud-Ziele, VPN, externe/interne IP, Warteschlange, Bandbreite, Pool-Geräte), **Wieder-online-Ping** nach Verbindungsabbruch und **Senden pausiert/fortgesetzt** bei Bandbreiten-Drosselung
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
 ---
