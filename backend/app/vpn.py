@@ -33,8 +33,20 @@ from .config import get_settings
 
 logger = logging.getLogger("offgridcloud.vpn")
 
-# Fixed WireGuard interface name → wg-quick derives it from the config filename.
+# Fixed WireGuard interface name. We bring the tunnel up with ``ip`` + ``wg``
+# directly (never ``wg-quick``): wg-quick's ``auto_su`` re-execs itself through
+# ``sudo`` whenever ``$UID != 0``, so under the service's ambient CAP_NET_ADMIN
+# (non-root) it fails with "sudo: a password is required". ``ip``/``wg`` honour
+# CAP_NET_ADMIN without any UID check, so the shipped capability model works.
 _WG_IFACE = "ogc-wg"
+_IP_BIN = "ip"
+
+# wg-quick config directives that the kernel/``wg`` don't understand — they are
+# wg-quick's own interface/routing sugar, applied here with ``ip`` instead and
+# stripped before the config is handed to ``wg setconf``.
+_WG_QUICK_ONLY_KEYS = frozenset(
+    {"address", "dns", "mtu", "table", "preup", "postup", "predown", "postdown", "saveconfig"}
+)
 _CAP_NET_ADMIN = 12  # capability bit index for CAP_NET_ADMIN
 
 # Path the native install helper uses to grant the systemd service NET_ADMIN.
@@ -129,7 +141,9 @@ def capabilities() -> Capabilities:
     return Capabilities(
         net_admin=_has_net_admin(),
         tun_device=Path("/dev/net/tun").exists(),
-        wireguard=bool(shutil.which("wg") and shutil.which("wg-quick")),
+        # We drive WireGuard with ``wg`` + ``ip`` (not ``wg-quick``), so those
+        # two — not wg-quick — are what a WireGuard tunnel actually needs.
+        wireguard=bool(shutil.which("wg") and shutil.which(_IP_BIN)),
         openvpn=bool(shutil.which("openvpn")),
     )
 
@@ -207,26 +221,127 @@ def _stderr_tail(result: subprocess.CompletedProcess) -> str:
 # --- WireGuard ------------------------------------------------------------
 
 
-def _wg_up(config: str) -> Result:
-    conf = _wg_conf()
-    _write_private(conf, config)
+def parse_wg_config(config: str) -> tuple[str, list[str], str | None, list[str]]:
+    """Split a wg-quick config into the parts ``wg`` and ``ip`` each need.
+
+    A wg-quick config mixes two things: keys the kernel understands (PrivateKey,
+    ListenPort, FwMark and the ``[Peer]`` blocks) and wg-quick's own directives
+    (Address, MTU, DNS, Table, Pre/Post hooks). ``wg setconf`` only accepts the
+    former, so we strip the latter and apply the interface address / MTU / routes
+    ourselves with ``ip``.
+
+    Returns ``(wg_conf, addresses, mtu, routes)``:
+
+    * ``wg_conf`` — the config with wg-quick-only keys removed, ready for
+      ``wg setconf``;
+    * ``addresses`` — the ``Address =`` CIDRs to assign to the interface;
+    * ``mtu`` — the ``MTU`` value if given, else ``None``;
+    * ``routes`` — the peers' ``AllowedIPs`` CIDRs to route into the tunnel.
+
+    Pure (no I/O) so it can be unit-tested without a real interface.
+    """
+    addresses: list[str] = []
+    mtu: str | None = None
+    routes: list[str] = []
+    kept: list[str] = []
+    section = ""
+    for raw in config.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            kept.append(raw)
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip().lower()
+            kept.append(raw)
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            kept.append(raw)
+            continue
+        name = key.strip().lower()
+        val = value.strip()
+        if section == "interface" and name == "address":
+            addresses += [a.strip() for a in val.split(",") if a.strip()]
+            continue
+        if section == "interface" and name == "mtu":
+            mtu = val or None
+            continue
+        if section == "peer" and name == "allowedips":
+            routes += [a.strip() for a in val.split(",") if a.strip()]
+            kept.append(raw)  # wg setconf needs AllowedIPs too
+            continue
+        if name in _WG_QUICK_ONLY_KEYS:
+            continue  # drop DNS/Table/hooks — not our job (or needs full root)
+        kept.append(raw)
+    return "\n".join(kept) + "\n", addresses, mtu, routes
+
+
+def _wg_teardown_iface() -> None:
+    """Remove the WireGuard link (idempotent; device routes go with it)."""
     try:
-        result = _run(["wg-quick", "up", str(conf)])
+        _run([_IP_BIN, "link", "del", "dev", _WG_IFACE], timeout=10)
+    except (subprocess.SubprocessError, OSError):  # pragma: no cover
+        pass
+
+
+def _wg_up(config: str) -> Result:
+    wg_conf, addresses, mtu, routes = parse_wg_config(config)
+    conf = _wg_conf()
+    _write_private(conf, wg_conf)
+    _wg_teardown_iface()  # clear any stale interface from a previous run
+    try:
+        res = _run([_IP_BIN, "link", "add", "dev", _WG_IFACE, "type", "wireguard"])
+        if res.returncode != 0:
+            return Result(False, _stderr_tail(res) or "WireGuard-Interface anlegen fehlgeschlagen")
+        res = _run(["wg", "setconf", _WG_IFACE, str(conf)])
+        if res.returncode != 0:
+            _wg_teardown_iface()
+            return Result(False, _stderr_tail(res) or "wg setconf fehlgeschlagen")
+        for addr in addresses:
+            family = "-6" if ":" in addr else "-4"
+            res = _run([_IP_BIN, family, "address", "add", addr, "dev", _WG_IFACE])
+            if res.returncode != 0:
+                _wg_teardown_iface()
+                return Result(False, _stderr_tail(res) or f"Adresse {addr} setzen fehlgeschlagen")
+        if mtu:
+            _run([_IP_BIN, "link", "set", "mtu", mtu, "dev", _WG_IFACE])
+        res = _run([_IP_BIN, "link", "set", "up", "dev", _WG_IFACE])
+        if res.returncode != 0:
+            _wg_teardown_iface()
+            return Result(False, _stderr_tail(res) or "Interface aktivieren fehlgeschlagen")
+        _wg_add_routes(routes)
     except (subprocess.SubprocessError, OSError) as exc:  # pragma: no cover
+        _wg_teardown_iface()
         return Result(False, str(exc))
-    if result.returncode == 0:
-        return Result(True, "WireGuard-Tunnel aktiv")
-    return Result(False, _stderr_tail(result) or "wg-quick up fehlgeschlagen")
+    return Result(True, "WireGuard-Tunnel aktiv")
+
+
+def _wg_add_routes(routes: list[str]) -> None:
+    """Route each AllowedIPs subnet through the tunnel device.
+
+    Catch-all defaults (``0.0.0.0/0`` / ``::/0``) are skipped: full-tunnel needs
+    the fwmark policy-routing wg-quick sets up as real root, which isn't available
+    under CAP_NET_ADMIN alone. The documented use case is reaching an internal
+    subnet by IP (split tunnel), which a plain device route covers — see
+    docs/VPN.md.
+    """
+    for cidr in routes:
+        if cidr in ("0.0.0.0/0", "::/0"):
+            logger.warning(
+                "Ignoriere Standard-Route AllowedIPs %s — nur Split-Tunnel wird "
+                "unterstützt (siehe docs/VPN.md).",
+                cidr,
+            )
+            continue
+        family = "-6" if ":" in cidr else "-4"
+        res = _run([_IP_BIN, family, "route", "add", cidr, "dev", _WG_IFACE])
+        if res.returncode != 0:  # non-fatal: log and keep the tunnel up
+            logger.warning("Route %s konnte nicht gesetzt werden: %s", cidr, _stderr_tail(res))
 
 
 def _wg_down() -> Result:
-    conf = _wg_conf()
-    if not conf.exists():
-        return Result(True, "")
-    try:
-        _run(["wg-quick", "down", str(conf)])
-    except (subprocess.SubprocessError, OSError) as exc:  # pragma: no cover
-        return Result(False, str(exc))
+    _wg_teardown_iface()
+    _wg_conf().unlink(missing_ok=True)
     return Result(True, "")
 
 
