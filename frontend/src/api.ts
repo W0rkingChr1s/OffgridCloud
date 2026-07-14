@@ -54,6 +54,27 @@ export interface MediaSearchResult extends MediaItem {
   folder_name: string;
 }
 
+export interface MediaDescription {
+  id: number;
+  folder_id: number;
+  title: string;
+  body: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+  media_ids: number[];
+  txt_media_id: number | null;
+  txt_filename: string;
+  txt_status: MediaStatus | null;
+}
+
+export interface DescriptionDeleteResult {
+  deleted: boolean;
+  remote_attempted: number;
+  remote_deleted: number;
+  remote_errors: string[];
+}
+
 export interface FolderProviderLink {
   id: number;
   folder_id: number;

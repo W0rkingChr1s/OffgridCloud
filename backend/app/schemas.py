@@ -149,6 +149,62 @@ class TagsUpdate(BaseModel):
     tags: list[str] = []
 
 
+# --- Thematic descriptions ------------------------------------------------
+
+
+def _require_nonblank(value: str) -> str:
+    if not value.strip():
+        raise ValueError("must not be blank")
+    return value
+
+
+class DescriptionCreate(BaseModel):
+    """Describe a group of media items; generates a ``.txt`` cloud sidecar."""
+
+    title: str = Field(default="", max_length=200)
+    body: str = Field(min_length=1, max_length=20_000)
+    media_ids: list[int] = []
+
+    _body_nonblank = field_validator("body")(_require_nonblank)
+
+
+class DescriptionUpdate(BaseModel):
+    """Patch a description — all fields optional."""
+
+    title: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, min_length=1, max_length=20_000)
+    media_ids: list[int] | None = None
+
+    @field_validator("body")
+    @classmethod
+    def _body_nonblank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+
+class DescriptionOut(BaseModel):
+    id: int
+    folder_id: int
+    title: str
+    body: str
+    created_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    media_ids: list[int] = []
+    # The generated .txt sidecar (a MediaItem) uploaded alongside the media.
+    txt_media_id: int | None = None
+    txt_filename: str = ""
+    txt_status: MediaStatus | None = None
+
+
+class DescriptionDeleteResult(BaseModel):
+    deleted: bool
+    remote_attempted: int = 0
+    remote_deleted: int = 0
+    remote_errors: list[str] = []
+
+
 class UploadCreate(BaseModel):
     filename: str = Field(min_length=1, max_length=500)
     size: int = Field(default=0, ge=0)

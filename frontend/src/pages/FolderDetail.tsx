@@ -7,13 +7,19 @@ import {
   getToken,
   type MediaBulkDeleteResult,
   type MediaDeleteResult,
+  type MediaDescription,
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
 import { SortMenu, SortTh, type SortOption, useSort } from "../components/Sort";
 import { useToast } from "../toast";
 import { TagEditor } from "../components/Tags";
+import { DescriptionModal, DescriptionsList } from "../components/Descriptions";
 import { formatBytes, uploadFile } from "../upload";
+
+type DescModalState =
+  | { mode: "create"; mediaIds: number[] }
+  | { mode: "edit"; existing: MediaDescription };
 
 const MEDIA_SORT: SortOption<MediaItem>[] = [
   { key: "name", label: "Datei", get: (m) => m.filename },
@@ -100,6 +106,7 @@ export default function FolderDetail() {
   const folderId = Number(id);
   const [folder, setFolder] = useState<Folder | null>(null);
   const [media, setMedia] = useState<MediaItem[]>([]);
+  const [descriptions, setDescriptions] = useState<MediaDescription[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
@@ -107,6 +114,15 @@ export default function FolderDetail() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busyId, setBusyId] = useState<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [descModal, setDescModal] = useState<DescModalState | null>(null);
+  // Optional description typed before an upload — applied to that whole batch.
+  const [descTitle, setDescTitle] = useState("");
+  const [descBody, setDescBody] = useState("");
+  // Read the latest composer text from inside the async upload loop.
+  const descTitleRef = useRef("");
+  const descBodyRef = useRef("");
+  descTitleRef.current = descTitle;
+  descBodyRef.current = descBody;
   const inputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -116,12 +132,26 @@ export default function FolderDetail() {
       .catch((e) => setError(e instanceof ApiError ? e.message : "Fehler"));
   }, [folderId]);
 
+  const loadDescriptions = useCallback(() => {
+    api<MediaDescription[]>(`/api/folders/${folderId}/descriptions`)
+      .then(setDescriptions)
+      .catch(() => setDescriptions([]));
+  }, [folderId]);
+
   useEffect(() => {
     api<Folder[]>("/api/folders")
       .then((fs) => setFolder(fs.find((f) => f.id === folderId) ?? null))
       .catch(() => setFolder(null));
     loadMedia();
-  }, [folderId, loadMedia]);
+    loadDescriptions();
+  }, [folderId, loadMedia, loadDescriptions]);
+
+  // filename lookup for description cards / modals.
+  const filenames = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const m of media) map[m.id] = m.filename;
+    return map;
+  }, [media]);
 
   const patchTags = useCallback((mediaId: number, tags: string[]) => {
     setMedia((prev) => prev.map((m) => (m.id === mediaId ? { ...m, tags } : m)));
@@ -160,13 +190,15 @@ export default function FolderDetail() {
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const list = Array.from(files);
+      const uploadedIds: number[] = [];
       for (const file of list) {
         const row: UploadRow = { name: file.name, size: file.size, progress: 0 };
         setUploads((prev) => [row, ...prev]);
         const update = (patch: Partial<UploadRow>) =>
           setUploads((prev) => prev.map((r) => (r === row ? Object.assign(row, patch) : r)));
         try {
-          await uploadFile(folderId, file, (frac) => update({ progress: frac }));
+          const item = await uploadFile(folderId, file, (frac) => update({ progress: frac }));
+          uploadedIds.push(item.id);
           update({ progress: 1, done: true });
           toast.push({
             variant: "success",
@@ -185,9 +217,38 @@ export default function FolderDetail() {
           });
         }
       }
+
+      // If a description was entered for this batch, generate its cloud sidecar.
+      const body = descBodyRef.current.trim();
+      if (body && uploadedIds.length) {
+        try {
+          await api<MediaDescription>(`/api/folders/${folderId}/descriptions`, {
+            method: "POST",
+            body: JSON.stringify({
+              title: descTitleRef.current.trim(),
+              body,
+              media_ids: uploadedIds,
+            }),
+          });
+          setDescTitle("");
+          setDescBody("");
+          toast.push({
+            variant: "success",
+            title: "Beschreibung gespeichert",
+            message: "Eine Textdatei wird mit in die Cloud geladen.",
+          });
+          loadDescriptions();
+        } catch (e) {
+          toast.push({
+            variant: "error",
+            title: "Beschreibung fehlgeschlagen",
+            message: e instanceof ApiError ? e.message : "Konnte nicht gespeichert werden.",
+          });
+        }
+      }
       loadMedia();
     },
-    [folderId, loadMedia, toast],
+    [folderId, loadMedia, loadDescriptions, toast],
   );
 
   function onDrop(e: React.DragEvent) {
@@ -288,6 +349,25 @@ export default function FolderDetail() {
         <div className="mb-4 rounded-lg bg-emerald-500/15 px-3 py-2 text-sm text-emerald-300">{notice}</div>
       )}
 
+      {/* Optional description composer — applies to the next uploaded batch. */}
+      <div className="mb-3 rounded-2xl bg-slate-800/40 p-3 ring-1 ring-white/5">
+        <input
+          value={descTitle}
+          onChange={(e) => setDescTitle(e.target.value)}
+          maxLength={200}
+          placeholder="Thema (optional) – z. B. Bootsfahrt am Morgen"
+          className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-ogc-teal/50"
+        />
+        <textarea
+          value={descBody}
+          onChange={(e) => setDescBody(e.target.value)}
+          rows={2}
+          maxLength={20000}
+          placeholder="Beschreibung für die nächsten hochgeladenen Fotos/Videos (optional). Wird als Textdatei mit in die Cloud geladen."
+          className="mt-2 w-full resize-y rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-ogc-teal/50"
+        />
+      </div>
+
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -334,6 +414,13 @@ export default function FolderDetail() {
           ))}
         </div>
       )}
+
+      <DescriptionsList
+        descriptions={descriptions}
+        filenames={filenames}
+        onEdit={(d) => setDescModal({ mode: "edit", existing: d })}
+        onDeleted={() => loadDescriptions()}
+      />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -521,6 +608,13 @@ export default function FolderDetail() {
               {selectedIds.length} ausgewählt
             </span>
             <button
+              onClick={() => setDescModal({ mode: "create", mediaIds: selectedIds })}
+              disabled={bulkBusy}
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-50"
+            >
+              Beschreiben
+            </button>
+            <button
               onClick={downloadSelected}
               disabled={bulkBusy}
               className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
@@ -543,6 +637,22 @@ export default function FolderDetail() {
             </button>
           </div>
         </div>
+      )}
+
+      {descModal && (
+        <DescriptionModal
+          folderId={folderId}
+          existing={descModal.mode === "edit" ? descModal.existing : null}
+          mediaIds={descModal.mode === "create" ? descModal.mediaIds : []}
+          filenames={filenames}
+          onClose={() => setDescModal(null)}
+          onSaved={() => {
+            setDescModal(null);
+            if (descModal.mode === "create") setSelected(new Set());
+            loadDescriptions();
+            loadMedia();
+          }}
+        />
       )}
     </Layout>
   );

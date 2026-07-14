@@ -28,6 +28,7 @@ from .rclone import check_rclone
 from .routers import (
     auth,
     bandwidth,
+    descriptions,
     events,
     folders,
     groups,
@@ -86,6 +87,7 @@ app.include_router(bandwidth.router)
 app.include_router(events.router)
 app.include_router(system.router)
 app.include_router(media.router)
+app.include_router(descriptions.router)
 app.include_router(pool.router)
 app.include_router(updates.router)
 app.include_router(network.router)

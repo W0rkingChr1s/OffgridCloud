@@ -172,6 +172,54 @@ class MediaTag(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class MediaDescription(Base):
+    """A thematic note that summarises and describes a group of media items.
+
+    Field teams often upload a batch of photos/videos that belong together and
+    want to explain *what is shown* in one place. A description groups those
+    items and carries a free-text explanation. Crucially, the note is also
+    materialised as a plain-text sidecar — its own :class:`MediaItem` — so the
+    explanation travels to every linked cloud target alongside the media (the
+    sidecar flows through the normal transfer pipeline). ``txt_media_id`` points
+    at that generated file; it goes ``NULL`` if the sidecar is deleted directly.
+    """
+
+    __tablename__ = "media_descriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    folder_id: Mapped[int] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    # The generated .txt sidecar (a MediaItem). Kept in sync on create/update and
+    # removed with the description on delete.
+    txt_media_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_items.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class MediaDescriptionItem(Base):
+    """Links a description to each media item it covers (m:n).
+
+    The FK cascades (enforced on SQLite via the ``PRAGMA foreign_keys`` hook in
+    ``db.py``) drop the link rows with either side, so a covered photo that is
+    deleted simply falls out of the group without orphaning anything.
+    """
+
+    __tablename__ = "media_description_items"
+    __table_args__ = (UniqueConstraint("description_id", "media_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    description_id: Mapped[int] = mapped_column(
+        ForeignKey("media_descriptions.id", ondelete="CASCADE"), index=True
+    )
+    media_id: Mapped[int] = mapped_column(
+        ForeignKey("media_items.id", ondelete="CASCADE"), index=True
+    )
+
+
 class PoolPeer(Base):
     """Another OffgridCloud node in the fleet, polled for an aggregated view.
 
