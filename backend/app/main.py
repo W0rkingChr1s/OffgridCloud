@@ -44,6 +44,7 @@ from .routers import (
     vpn,
 )
 from .transfers import reconcile_loop, worker_loop
+from .updater import resolve_pending
 
 settings = get_settings()
 
@@ -59,6 +60,9 @@ async def lifespan(app: FastAPI):
     # Battery-bank hardening: repair any upload/media state left inconsistent by
     # a power cut before serving traffic (see integrity.py).
     run_startup_checks()
+    # If we were restarted by a one-click update, settle its final status so the
+    # portal shows success/failure instead of a perpetual "running" spinner.
+    resolve_pending(settings.data_dir, __version__)
     autostart_vpn()
 
     stop = asyncio.Event()

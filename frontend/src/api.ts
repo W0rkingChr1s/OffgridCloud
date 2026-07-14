@@ -302,6 +302,18 @@ export interface UpdateInfo {
   self_update_enabled: boolean;
 }
 
+export interface UpdateProgress {
+  phase: "idle" | "running" | "success" | "failed" | "unknown";
+  running: boolean;
+  from_version: string;
+  to_version: string;
+  message: string;
+  returncode: number | null;
+  started_at: number;
+  finished_at: number;
+  log: string;
+}
+
 export interface AuditEvent {
   id: number;
   created_at: string;
