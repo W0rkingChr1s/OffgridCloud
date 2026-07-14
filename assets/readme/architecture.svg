@@ -82,7 +82,7 @@
     <path d="M6 10 l3 3 6 -7" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="126" y="356" class="flowlbl">Lokal &amp; schnell</text>
-  <text x="126" y="376" class="flowsub">chunked / resumable &#183; volle LAN-Geschwindigkeit</text>
+  <text x="126" y="376" class="flowsub">resumable &#183; volle LAN-Rate</text>
   <text x="126" y="398" class="flowsub">kein Warten auf die Cloud</text>
 
   <!-- flow arrow 1: field -> box (fat, fast) -->
@@ -105,7 +105,7 @@
     <path d="M31 20 l11 13 h-22 z" fill="#0EA5A4"/>
   </g>
   <text x="528" y="192" class="h" font-size="17">Puffer &amp; Worker</text>
-  <text x="528" y="214" class="sub">SQLite-Queue &#183; ein Prozess &#183; ~150&#8211;250 MB RAM</text>
+  <text x="528" y="214" class="sub">SQLite &#183; ein Prozess &#183; ~150&#8211;250 MB RAM</text>
 
   <!-- local buffer bar -->
   <text x="456" y="256" class="chip" font-size="12" fill="#94a3b8">LOKALER PUFFER (USB-SSD)</text>
@@ -141,11 +141,11 @@
     <path d="M796 290 h58" stroke="url(#aFlowCloud)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
     <path d="M850 290 l-14 -9 v18 z" fill="#6366F1"/>
   </g>
-  <g transform="translate(792,236)">
+  <g transform="translate(808,210)">
     <path d="M6 12 a7 7 0 0 1 13 0" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round"/>
     <path d="M12 6 v9 M8 12 l4 4 4 -4" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <text x="820" y="248" text-anchor="middle" class="flowsub" fill="#a5b4fc">resumable &#183; Retry</text>
+  <text x="820" y="250" text-anchor="middle" class="flowsub" fill="#a5b4fc">resumable &#183; Retry</text>
 
   <!-- ===================== ZONE 3: CLOUD ===================== -->
   <text x="1080" y="126" class="zone" text-anchor="middle">CLOUD-ZIELE</text>
@@ -210,7 +210,7 @@
     <g transform="translate(940,20)">
       <path d="M8 4 v14 M2 11 l6 7 6 -7" stroke="#0EA5A4" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="30" y="12" fill="#e2e8f0" font-size="13" font-weight="700">Akku-fest</text>
-      <text x="30" y="30" fill="#94a3b8" font-size="11.5">Konsistenz-Check nach Stromausfall</text>
+      <text x="30" y="30" fill="#94a3b8" font-size="11.5">Konsistenz-Check nach Ausfall</text>
     </g>
   </g>
 </svg>
