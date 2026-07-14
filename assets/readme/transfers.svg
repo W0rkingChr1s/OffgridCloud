@@ -116,7 +116,7 @@
   <rect x="820" y="322" width="344" height="80" rx="14" fill="#1e293b" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.05"/>
   <g transform="translate(842,344)"><rect x="0" y="14" width="8" height="10" rx="2" fill="#0EA5A4"/><rect x="13" y="6" width="8" height="18" rx="2" fill="#0EA5A4"/><rect x="26" y="-2" width="8" height="26" rx="2" fill="#0EA5A4" fill-opacity="0.5"/></g>
   <text x="892" y="356" fill="#e2e8f0" font-size="14" font-weight="700">Mindest-Bandbreite-Gate</text>
-  <text x="892" y="378" fill="#94a3b8" font-size="12">Uploads pausieren, wenn die Leitung zu d&#252;nn wird</text>
+  <text x="892" y="378" fill="#94a3b8" font-size="12">Pausiert Uploads bei zu d&#252;nner Leitung</text>
 
   <rect x="820" y="418" width="344" height="80" rx="14" fill="#1e293b" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.05"/>
   <g transform="translate(842,440)"><circle cx="10" cy="12" r="9" fill="none" stroke="#34d399" stroke-width="2"/><path d="M6 12 l3 3 5 -6" stroke="#34d399" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
