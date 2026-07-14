@@ -141,11 +141,6 @@
     <path d="M796 290 h58" stroke="url(#aFlowCloud)" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
     <path d="M850 290 l-14 -9 v18 z" fill="#6366F1"/>
   </g>
-  <g transform="translate(808,210)">
-    <path d="M6 12 a7 7 0 0 1 13 0" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round"/>
-    <path d="M12 6 v9 M8 12 l4 4 4 -4" stroke="#818cf8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  <text x="820" y="250" text-anchor="middle" class="flowsub" fill="#a5b4fc">resumable &#183; Retry</text>
 
   <!-- ===================== ZONE 3: CLOUD ===================== -->
   <text x="1080" y="126" class="zone" text-anchor="middle">CLOUD-ZIELE</text>
