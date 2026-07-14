@@ -20,6 +20,7 @@ Connecting a profile tears down any other active tunnel first.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -316,21 +317,100 @@ def _wg_up(config: str) -> Result:
     return Result(True, "WireGuard-Tunnel aktiv")
 
 
+def parse_connected_subnets(route_output: str) -> list[str]:
+    """Extract the box's directly-connected subnets from ``ip route show``.
+
+    Connected (on-link) routes are the box's own LANs — the ones that keep it
+    reachable from local devices. They print as ``<cidr> dev <iface> …`` with no
+    ``via`` gateway. We skip default/blackhole/etc. rows, gateway routes (``via``),
+    host entries without a prefix, the loopback device, and our own tunnel. Pure
+    so it can be unit-tested without a real routing table.
+    """
+    subnets: list[str] = []
+    for line in route_output.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        cidr = parts[0]
+        if "/" not in cidr:  # default route or a /32 host entry — not a subnet
+            continue
+        if "via" in parts:  # reachable through a gateway, not directly connected
+            continue
+        if "dev" in parts:
+            dev = parts[parts.index("dev") + 1]
+            if dev in (_WG_IFACE, "lo"):
+                continue
+        subnets.append(cidr)
+    return subnets
+
+
+def _local_subnets() -> list[str]:
+    """The box's directly-connected IPv4+IPv6 subnets (best-effort, empty on error)."""
+    subnets: list[str] = []
+    for family in ("-4", "-6"):
+        try:
+            res = _run([_IP_BIN, family, "route", "show"], timeout=10)
+        except (subprocess.SubprocessError, OSError):  # pragma: no cover
+            continue
+        if res.returncode == 0:
+            subnets += parse_connected_subnets(res.stdout)
+    return subnets
+
+
+def route_clashes_local(cidr: str, local_subnets: list[str]) -> str | None:
+    """Return the local subnet ``cidr`` overlaps, or ``None`` if it's safe to route.
+
+    Routing an AllowedIPs range that overlaps one of the box's own LANs into the
+    tunnel would make the box send local replies down the tunnel — locking out
+    local access (the box becomes unreachable at its LAN IP). We refuse such
+    routes so local connectivity always survives.
+    """
+    try:
+        net = ipaddress.ip_network(cidr, strict=False)
+    except ValueError:
+        return None
+    for local in local_subnets:
+        try:
+            lnet = ipaddress.ip_network(local, strict=False)
+        except ValueError:
+            continue
+        if net.version == lnet.version and net.overlaps(lnet):
+            return local
+    return None
+
+
 def _wg_add_routes(routes: list[str]) -> None:
     """Route each AllowedIPs subnet through the tunnel device.
 
-    Catch-all defaults (``0.0.0.0/0`` / ``::/0``) are skipped: full-tunnel needs
-    the fwmark policy-routing wg-quick sets up as real root, which isn't available
-    under CAP_NET_ADMIN alone. The documented use case is reaching an internal
-    subnet by IP (split tunnel), which a plain device route covers — see
-    docs/VPN.md.
+    Two classes of route are deliberately skipped:
+
+    * Catch-all defaults (``0.0.0.0/0`` / ``::/0``): full-tunnel needs the fwmark
+      policy-routing wg-quick sets up as real root, unavailable under CAP_NET_ADMIN
+      alone. The documented use case is split-tunnel to an internal subnet.
+    * Ranges overlapping the box's own local network: routing them would hijack
+      local traffic and lock the box out of its own LAN (see
+      :func:`route_clashes_local`). Local reachability always wins — the tunnel
+      must never make the appliance unreachable on site.
+
+    See docs/VPN.md for both limitations and how to avoid the subnet clash.
     """
+    local = _local_subnets()
     for cidr in routes:
         if cidr in ("0.0.0.0/0", "::/0"):
             logger.warning(
                 "Ignoriere Standard-Route AllowedIPs %s — nur Split-Tunnel wird "
                 "unterstützt (siehe docs/VPN.md).",
                 cidr,
+            )
+            continue
+        clash = route_clashes_local(cidr, local)
+        if clash:
+            logger.warning(
+                "Überspringe Tunnel-Route %s — sie überschneidet das lokale Netz %s "
+                "des Servers; der lokale Zugriff bliebe sonst aus. Nutze auf beiden "
+                "Seiten unterschiedliche Subnetze (siehe docs/VPN.md).",
+                cidr,
+                clash,
             )
             continue
         family = "-6" if ":" in cidr else "-4"
