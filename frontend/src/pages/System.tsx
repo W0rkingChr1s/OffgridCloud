@@ -10,6 +10,7 @@ import {
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
+import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
 const AUDIT_SORT: SortOption<AuditEvent>[] = [
@@ -195,6 +196,8 @@ export default function System() {
 
       {status && <NotificationsCard status={status} save={save} />}
 
+      {status && <PowerCard status={status} />}
+
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Aktivität</h3>
       {audit.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Einträge.</p>
@@ -225,6 +228,108 @@ export default function System() {
         </div>
       )}
     </Layout>
+  );
+}
+
+// The three system-control actions. `action` is the POST /api/system/power slug;
+// `enabled` picks the flag that says whether the command is wired up on the box.
+const POWER_ACTIONS: {
+  action: string;
+  label: string;
+  confirm: string;
+  help: string;
+  danger: boolean;
+  enabled: keyof SystemStatus;
+}[] = [
+  {
+    action: "restart-service",
+    label: "OffgridCloud neustarten",
+    confirm: "OffgridCloud-Dienst wirklich neu starten? Das Portal ist kurz nicht erreichbar.",
+    help: "Startet nur den OffgridCloud-Dienst neu (systemctl restart) – das Betriebssystem läuft weiter. Laufende Uploads werden nach dem Neustart automatisch wieder aufgenommen. Das Portal ist dabei einige Sekunden nicht erreichbar.",
+    danger: false,
+    enabled: "power_restart_service_enabled",
+  },
+  {
+    action: "reboot",
+    label: "System neustarten",
+    confirm: "Das ganze System wirklich neu starten? Die Box ist einige Zeit offline.",
+    help: "Startet die gesamte Box neu (reboot). Sinnvoll nach Systemaktualisierungen oder bei hängender Hardware. Die Box ist bis zum Hochfahren komplett offline.",
+    danger: true,
+    enabled: "power_reboot_enabled",
+  },
+  {
+    action: "shutdown",
+    label: "System herunterfahren",
+    confirm: "Das ganze System wirklich herunterfahren? Es muss danach von Hand wieder eingeschaltet werden.",
+    help: "Fährt die Box komplett herunter (poweroff). Danach ist sie aus und muss vor Ort wieder eingeschaltet werden – aus der Ferne lässt sie sich nicht mehr starten.",
+    danger: true,
+    enabled: "power_shutdown_enabled",
+  },
+];
+
+function PowerCard({ status }: { status: SystemStatus }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const anyEnabled = POWER_ACTIONS.some((a) => status[a.enabled]);
+
+  async function run(a: (typeof POWER_ACTIONS)[number]) {
+    if (!window.confirm(a.confirm)) return;
+    setBusy(a.action);
+    try {
+      const res = await api<{ started: boolean; message: string }>(
+        `/api/system/power/${a.action}`,
+        { method: "POST" },
+      );
+      toast.info(a.label, res.message);
+    } catch (e) {
+      toast.error(a.label, e instanceof ApiError ? e.message : "Aktion fehlgeschlagen");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+        System steuern
+        <InfoTip text="Steuert Dienst und Box direkt aus dem Portal: den OffgridCloud-Dienst neu starten, die ganze Box neu starten oder herunterfahren. Erfordert erhöhte Rechte und muss am Server bewusst freigeschaltet werden (Installer mit --power-control)." />
+      </div>
+      <p className="mb-4 text-xs text-slate-500">
+        Neustart und Herunterfahren wirken sofort – laufende Übertragungen werden unterbrochen und
+        nach einem Neustart automatisch fortgesetzt.
+      </p>
+
+      {!anyEnabled && (
+        <div className="mb-4 rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+          Nicht aktiviert. Am Server freischalten:
+          <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">
+            sudo /opt/offgridcloud/src/deploy/install.sh --power-control
+          </code>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        {POWER_ACTIONS.map((a) => {
+          const enabled = Boolean(status[a.enabled]);
+          const cls = a.danger
+            ? "border border-red-500/40 text-red-300 hover:bg-red-500/10"
+            : "border border-white/10 text-slate-200 hover:bg-white/5";
+          return (
+            <span key={a.action} className="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => run(a)}
+                disabled={!enabled || busy !== null}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${cls}`}
+              >
+                {busy === a.action ? "…" : a.label}
+              </button>
+              <InfoTip text={a.help} />
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

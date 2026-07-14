@@ -229,6 +229,11 @@ export interface SystemStatus {
   smtp_to: string;
   smtp_tls: boolean;
   smtp_configured: boolean;
+  // System power control ("System steuern"). Each flag says whether the
+  // corresponding privileged command is wired up on this instance.
+  power_restart_service_enabled: boolean;
+  power_reboot_enabled: boolean;
+  power_shutdown_enabled: boolean;
 }
 
 /** A server-side status blip carried in the live SSE snapshot (see

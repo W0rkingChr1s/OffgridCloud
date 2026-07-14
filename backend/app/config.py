@@ -64,6 +64,17 @@ class Settings(BaseSettings):
     self_update: bool = False
     update_command: str = ""
 
+    # --- System power control ----------------------------------------------
+    # Opt-in privileged commands for the "System steuern" panel: restart the
+    # OffgridCloud service, reboot the box, or shut it down from the web UI.
+    # Empty by default — each needs elevated rights (systemctl/reboot/poweroff),
+    # so they must be wired up deliberately (install.sh --power-control adds the
+    # NOPASSWD sudoers rules). When a command is empty the matching button is
+    # disabled in the portal and the endpoint returns 409.
+    restart_service_command: str = ""
+    reboot_command: str = ""
+    shutdown_command: str = ""
+
     # --- Network redundancy / AP fallback ----------------------------------
     # Where the desired network config is exported for the privileged apply
     # helper + root watchdog to consume. Contains Wi-Fi passphrases in the
