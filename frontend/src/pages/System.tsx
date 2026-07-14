@@ -1,5 +1,12 @@
-import { useEffect, useState } from "react";
-import { api, ApiError, type AuditEvent, type SystemStatus, type UpdateInfo } from "../api";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import {
+  api,
+  ApiError,
+  type AuditEvent,
+  type SystemStatus,
+  type UpdateInfo,
+  type UpdateProgress,
+} from "../api";
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
@@ -450,10 +457,16 @@ function NotificationsCard({
   );
 }
 
+const TERMINAL_PHASES = ["success", "failed", "unknown"];
+
 function UpdateCard() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  const [applying, setApplying] = useState(false);
+  const pollTimer = useRef<number | null>(null);
+  const logRef = useRef<HTMLPreElement>(null);
 
   function check(force = false) {
     setBusy(true);
@@ -463,16 +476,69 @@ function UpdateCard() {
       .catch((e) => setMsg(e instanceof ApiError ? e.message : "Fehler"))
       .finally(() => setBusy(false));
   }
-  useEffect(() => check(), []);
+
+  // Poll live update progress. Keeps polling through the service restart the
+  // update triggers — requests fail while the box reboots, which we treat as
+  // "restarting" rather than an error, until a terminal phase settles it.
+  function poll() {
+    api<UpdateProgress>("/api/updates/progress")
+      .then((p) => {
+        setProgress(p);
+        if (p.phase === "running") return schedule();
+        // Terminal: stop polling. On success, refresh the version badge.
+        setApplying(false);
+        if (p.phase === "success") check(true);
+      })
+      .catch(() => schedule()); // box likely restarting — keep trying
+  }
+  function schedule() {
+    if (pollTimer.current) window.clearTimeout(pollTimer.current);
+    pollTimer.current = window.setTimeout(poll, 2000);
+  }
+
+  useEffect(() => {
+    check();
+    // Pick up an update already in flight (e.g. after a page reload mid-update).
+    api<UpdateProgress>("/api/updates/progress")
+      .then((p) => {
+        setProgress(p);
+        if (p.phase === "running") {
+          setApplying(true);
+          schedule();
+        }
+      })
+      .catch(() => {});
+    return () => {
+      if (pollTimer.current) window.clearTimeout(pollTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the streamed log scrolled to the newest line.
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [progress?.log]);
 
   async function apply() {
     setBusy(true);
     setMsg(null);
     try {
-      const r = await api<{ started: boolean; message: string }>("/api/updates/apply", {
+      await api<{ started: boolean; message: string }>("/api/updates/apply", {
         method: "POST",
       });
-      setMsg(r.message);
+      setApplying(true);
+      setProgress({
+        phase: "running",
+        running: true,
+        from_version: info?.current ?? "",
+        to_version: "",
+        message: "Update läuft …",
+        returncode: null,
+        started_at: 0,
+        finished_at: 0,
+        log: "",
+      });
+      schedule();
     } catch (e) {
       setMsg(e instanceof ApiError ? e.message : "Update fehlgeschlagen");
     } finally {
@@ -481,36 +547,39 @@ function UpdateCard() {
   }
 
   const available = info?.update_available;
+  const phase = progress?.phase;
+  const running = applying || phase === "running";
+  const busyOrRunning = busy || running;
   return (
     <div
       className={`mb-6 rounded-2xl p-5 ring-1 ${
-        available ? "bg-ogc-teal/10 ring-ogc-teal/30" : "bg-slate-800/60 ring-white/10"
+        available && !running ? "bg-ogc-teal/10 ring-ogc-teal/30" : "bg-slate-800/60 ring-white/10"
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-sm font-medium text-slate-400">Version</span>
         <span className="text-lg font-bold text-white">{info?.current ?? "…"}</span>
-        {available && info?.latest && (
+        {available && !running && info?.latest && (
           <span className="rounded-full bg-ogc-teal/20 px-2 py-0.5 text-xs font-semibold text-ogc-teal">
             Update verfügbar: {info.latest}
           </span>
         )}
-        {info && !available && !info.error && (
+        {info && !available && !info.error && !running && (
           <span className="text-xs text-emerald-300">aktuell</span>
         )}
         <button
           type="button"
           onClick={() => check(true)}
-          disabled={busy}
+          disabled={busyOrRunning}
           className="ml-auto rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5 disabled:opacity-50"
         >
           {busy ? "…" : "Nach Updates suchen"}
         </button>
       </div>
 
-      {info?.error && <div className="mt-2 text-xs text-slate-500">{info.error}</div>}
+      {info?.error && !running && <div className="mt-2 text-xs text-slate-500">{info.error}</div>}
 
-      {available && (
+      {available && !running && !TERMINAL_PHASES.includes(phase ?? "") && (
         <div className="mt-3 space-y-3">
           {info?.release_url && (
             <a
@@ -527,7 +596,7 @@ function UpdateCard() {
               <button
                 type="button"
                 onClick={apply}
-                disabled={busy}
+                disabled={busyOrRunning}
                 className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 Jetzt aktualisieren
@@ -544,7 +613,80 @@ function UpdateCard() {
         </div>
       )}
 
+      {progress && (running || TERMINAL_PHASES.includes(progress.phase)) && (
+        <UpdateProgressView progress={progress} logRef={logRef} onReload={() => window.location.reload()} />
+      )}
+
       {msg && <div className="mt-3 text-sm text-slate-300">{msg}</div>}
+    </div>
+  );
+}
+
+function UpdateProgressView({
+  progress,
+  logRef,
+  onReload,
+}: {
+  progress: UpdateProgress;
+  logRef: RefObject<HTMLPreElement>;
+  onReload: () => void;
+}) {
+  const { phase, message, log, to_version } = progress;
+  const tone =
+    phase === "success"
+      ? { ring: "ring-emerald-500/30", text: "text-emerald-300", icon: "✓" }
+      : phase === "failed"
+        ? { ring: "ring-red-500/30", text: "text-red-300", icon: "✗" }
+        : phase === "unknown"
+          ? { ring: "ring-amber-500/30", text: "text-amber-300", icon: "?" }
+          : { ring: "ring-ogc-teal/30", text: "text-ogc-teal", icon: "" };
+
+  return (
+    <div className={`mt-3 rounded-xl bg-slate-900/60 p-4 ring-1 ${tone.ring}`}>
+      <div className={`flex items-center gap-2 text-sm font-medium ${tone.text}`}>
+        {phase === "running" ? (
+          <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        ) : (
+          <span aria-hidden>{tone.icon}</span>
+        )}
+        <span>
+          {phase === "running"
+            ? message || "Update läuft …"
+            : phase === "success"
+              ? message || "Update abgeschlossen."
+              : phase === "failed"
+                ? message || "Update fehlgeschlagen."
+                : message || "Ergebnis unklar."}
+        </span>
+        {to_version && phase === "success" && (
+          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs">{to_version}</span>
+        )}
+      </div>
+
+      {phase === "running" && (
+        <p className="mt-1 text-xs text-slate-500">
+          Der Dienst baut neu und startet dann neu — die Seite bleibt kurz nicht erreichbar. Bitte nicht schließen.
+        </p>
+      )}
+
+      {log && (
+        <pre
+          ref={logRef}
+          className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-slate-300"
+        >
+          {log}
+        </pre>
+      )}
+
+      {phase === "success" && (
+        <button
+          type="button"
+          onClick={onReload}
+          className="mt-3 rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+        >
+          Portal neu laden
+        </button>
+      )}
     </div>
   );
 }

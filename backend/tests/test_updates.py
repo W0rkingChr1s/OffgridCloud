@@ -2,11 +2,27 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import app as app_pkg
 from app import __version__, _read_version
-from app.updater import check_for_update, clear_cache, is_newer, parse_version
+from app.updater import (
+    PHASE_FAILED,
+    PHASE_RUNNING,
+    PHASE_SUCCESS,
+    PHASE_UNKNOWN,
+    UpdateState,
+    check_for_update,
+    clear_cache,
+    is_newer,
+    parse_version,
+    read_log_tail,
+    read_state,
+    resolve_pending,
+    start_update,
+    write_state,
+)
 
 
 def test_read_version_prefers_stamped_file_then_falls_back():
@@ -119,4 +135,132 @@ def test_updates_requires_admin(client, admin_auth):
         "/api/auth/login", json={"email": "plain@test.local", "password": "userpass123"}
     ).json()["access_token"]
     r = client.get("/api/updates", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+
+
+# --- Observable self-update runner ----------------------------------------
+
+
+def test_state_roundtrip_and_log_tail(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0"))
+    state = read_state(tmp_path)
+    assert state.phase == PHASE_RUNNING
+    assert state.from_version == "1.0.0"
+    (tmp_path / "update.log").write_text("line1\nline2\n")
+    assert "line2" in read_log_tail(tmp_path)
+
+
+def test_read_state_defaults_to_idle_when_missing(tmp_path):
+    assert read_state(tmp_path).phase == "idle"
+
+
+def test_start_update_records_success_via_monitor(tmp_path):
+    state = start_update(
+        tmp_path,
+        "sh -c 'echo rebuilding; exit 0'",
+        "1.0.0",
+        current_version=lambda: "2.0.0",
+    )
+    assert state.phase == PHASE_RUNNING
+    # The monitor thread settles the outcome once the command exits.
+    for _ in range(50):
+        s = read_state(tmp_path)
+        if s.phase != PHASE_RUNNING:
+            break
+        time.sleep(0.05)
+    s = read_state(tmp_path)
+    assert s.phase == PHASE_SUCCESS
+    assert s.returncode == 0
+    assert s.to_version == "2.0.0"
+    assert "rebuilding" in read_log_tail(tmp_path)
+
+
+def test_start_update_records_failure_via_monitor(tmp_path):
+    start_update(
+        tmp_path, "sh -c 'echo boom >&2; exit 3'", "1.0.0", current_version=lambda: "1.0.0"
+    )
+    for _ in range(50):
+        if read_state(tmp_path).phase != PHASE_RUNNING:
+            break
+        time.sleep(0.05)
+    s = read_state(tmp_path)
+    assert s.phase == PHASE_FAILED
+    assert s.returncode == 3
+
+
+def test_start_update_rejects_concurrent_run(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0"))
+    try:
+        start_update(tmp_path, "sh -c 'true'", "1.0.0")
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "läuft bereits" in str(exc)
+
+
+def test_start_update_bad_command_marks_failed(tmp_path):
+    try:
+        start_update(tmp_path, "/no/such/binary-xyz", "1.0.0")
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError:
+        pass
+    assert read_state(tmp_path).phase == PHASE_FAILED
+
+
+def test_resolve_pending_success_on_version_bump(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    s = resolve_pending(tmp_path, "1.1.0", now=lambda: 110.0)
+    assert s.phase == PHASE_SUCCESS
+    assert s.to_version == "1.1.0"
+
+
+def test_resolve_pending_uses_log_sentinels(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    (tmp_path / "update.log").write_text("...\nUpdated to 1.0.0 and healthy.\n")
+    assert resolve_pending(tmp_path, "1.0.0", now=lambda: 110.0).phase == PHASE_SUCCESS
+
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    (tmp_path / "update.log").write_text("Service did not answer — check journal\n")
+    assert resolve_pending(tmp_path, "1.0.0", now=lambda: 110.0).phase == PHASE_FAILED
+
+
+def test_resolve_pending_same_version_is_unknown(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    s = resolve_pending(tmp_path, "1.0.0", now=lambda: 110.0)
+    assert s.phase == PHASE_UNKNOWN
+
+
+def test_resolve_pending_leaves_settled_state(tmp_path):
+    write_state(
+        tmp_path, UpdateState(phase=PHASE_SUCCESS, from_version="1.0.0", to_version="1.1.0")
+    )
+    assert resolve_pending(tmp_path, "2.0.0", now=lambda: 1.0).phase == PHASE_SUCCESS
+
+
+def test_progress_endpoint_reports_state(client, admin_auth):
+    from app.config import get_settings
+
+    data_dir = get_settings().data_dir
+    write_state(data_dir, UpdateState(phase=PHASE_RUNNING, from_version="9.0.0", message="läuft"))
+    (Path(data_dir) / "update.log").write_text("hello from update\n")
+    r = client.get("/api/updates/progress", headers=admin_auth)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["phase"] == "running"
+    assert body["running"] is True
+    assert body["from_version"] == "9.0.0"
+    assert "hello from update" in body["log"]
+    # Reset so it doesn't leak into other tests sharing the data dir.
+    write_state(data_dir, UpdateState())
+
+
+def test_progress_endpoint_requires_admin(client, admin_auth):
+    client.post(
+        "/api/users",
+        headers=admin_auth,
+        json={"email": "plain2@test.local", "password": "userpass123"},
+    )
+    token = client.post(
+        "/api/auth/login", json={"email": "plain2@test.local", "password": "userpass123"}
+    ).json()["access_token"]
+    r = client.get("/api/updates/progress", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403

@@ -537,6 +537,20 @@ class UpdateApplyResult(BaseModel):
     message: str
 
 
+class UpdateProgressOut(BaseModel):
+    """Live state of a one-click self-update, streamed to the portal."""
+
+    phase: str  # idle | running | success | failed | unknown
+    running: bool
+    from_version: str = ""
+    to_version: str = ""
+    message: str = ""
+    returncode: int | None = None
+    started_at: float = 0.0
+    finished_at: float = 0.0
+    log: str = ""
+
+
 class AuditEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
