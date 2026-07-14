@@ -17,6 +17,9 @@
 #   --prefix DIR           Install location (default: /opt/offgridcloud).
 #   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
 #   --self-update          Enable one-click updates from the web UI (sudoers).
+#   --power-control        Enable the "System steuern" buttons (restart service,
+#                          reboot, shut down) from the web UI (sudoers rules for
+#                          systemctl restart / reboot / poweroff).
 #   --with-ap-fallback     Install the network-redundancy layer: the box hosts
 #                          its own Wi-Fi AP when it loses its uplink (needs
 #                          NetworkManager; sets up a watchdog + sudoers rule).
@@ -37,13 +40,14 @@ DO_START=0
 INSTALL_SERVICE=1
 WITH_FFMPEG=0
 SELF_UPDATE=0
+POWER_CONTROL=0
 WITH_AP_FALLBACK=0
 WITH_VPN=0
 WITH_SPEEDTEST=1
 SPEEDTEST_VER="1.2.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-usage() { sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -53,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
     --self-update) SELF_UPDATE=1; shift ;;
+    --power-control) POWER_CONTROL=1; shift ;;
     --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
     --with-vpn) WITH_VPN=1; shift ;;
     --no-speedtest) WITH_SPEEDTEST=0; shift ;;
@@ -233,6 +238,35 @@ if [[ $SELF_UPDATE -eq 1 ]]; then
   else
     rm -f "$SUDOERS.tmp"
     echo "   Could not validate sudoers rule — skipped. Use 'sudo update.sh' instead." >&2
+  fi
+fi
+
+# --- Optional: system power control (sudoers + .env flags) ------------------
+if [[ $POWER_CONTROL -eq 1 ]]; then
+  step "Enabling system control buttons (restart service / reboot / shutdown)..."
+  RESTART_CMD="/usr/bin/systemctl restart offgridcloud"
+  REBOOT_CMD="/usr/bin/systemctl reboot"
+  SHUTDOWN_CMD="/usr/bin/systemctl poweroff"
+  SUDOERS_PWR=/etc/sudoers.d/offgridcloud-power
+  {
+    echo "$SERVICE_USER ALL=(root) NOPASSWD: $RESTART_CMD"
+    echo "$SERVICE_USER ALL=(root) NOPASSWD: $REBOOT_CMD"
+    echo "$SERVICE_USER ALL=(root) NOPASSWD: $SHUTDOWN_CMD"
+  } > "$SUDOERS_PWR.tmp"
+  if visudo -cf "$SUDOERS_PWR.tmp" >/dev/null 2>&1; then
+    install -m 440 "$SUDOERS_PWR.tmp" "$SUDOERS_PWR"; rm -f "$SUDOERS_PWR.tmp"
+    # Wire the app to those commands (append once, without touching secrets).
+    grep -q '^OGC_RESTART_SERVICE_COMMAND=' "$PREFIX/.env" || \
+      echo "OGC_RESTART_SERVICE_COMMAND=sudo $RESTART_CMD" >> "$PREFIX/.env"
+    grep -q '^OGC_REBOOT_COMMAND=' "$PREFIX/.env" || \
+      echo "OGC_REBOOT_COMMAND=sudo $REBOOT_CMD" >> "$PREFIX/.env"
+    grep -q '^OGC_SHUTDOWN_COMMAND=' "$PREFIX/.env" || \
+      echo "OGC_SHUTDOWN_COMMAND=sudo $SHUTDOWN_CMD" >> "$PREFIX/.env"
+    chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
+    echo "   System control enabled (buttons appear under System → System steuern)."
+  else
+    rm -f "$SUDOERS_PWR.tmp"
+    echo "   Could not validate sudoers rule — skipped system control." >&2
   fi
 fi
 

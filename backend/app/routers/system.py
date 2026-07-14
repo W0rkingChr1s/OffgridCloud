@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,10 +12,12 @@ from ..crypto import encrypt
 from ..db import get_db
 from ..deps import require_admin
 from ..models import AuditEvent, SystemSettings, User
+from ..power import run_power_command
 from ..rclone import check_rclone
 from ..schemas import (
     AuditEventOut,
     DiskUsageOut,
+    PowerActionResult,
     SystemSettingsUpdate,
     SystemStatusOut,
 )
@@ -25,11 +27,12 @@ router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(
 
 def _status(db: Session) -> SystemStatusOut:
     settings_row = get_system_settings(db)
+    settings = get_settings()
     return SystemStatusOut(
         delete_local_after_upload=settings_row.delete_local_after_upload,
         delete_remote_on_local_delete=settings_row.delete_remote_on_local_delete,
         auto_resync=settings_row.auto_resync,
-        reconcile_interval=get_settings().reconcile_interval,
+        reconcile_interval=settings.reconcile_interval,
         probe_url=settings_row.probe_url,
         webhook_url=settings_row.webhook_url,
         disk=DiskUsageOut(**disk_usage()),
@@ -50,7 +53,67 @@ def _status(db: Session) -> SystemStatusOut:
         smtp_to=settings_row.smtp_to,
         smtp_tls=settings_row.smtp_tls,
         smtp_configured=bool(settings_row.smtp_password_encrypted),
+        power_restart_service_enabled=bool(settings.restart_service_command.strip()),
+        power_reboot_enabled=bool(settings.reboot_command.strip()),
+        power_shutdown_enabled=bool(settings.shutdown_command.strip()),
     )
+
+
+# Power-control actions exposed under POST /api/system/power/{action}. Each maps
+# to an operator-configured privileged command; an empty command means the action
+# is disabled (button greyed out in the portal, endpoint returns 409).
+_POWER_ACTIONS: dict[str, tuple[str, str, str]] = {
+    # action slug: (settings attribute, audit action, success message)
+    "restart-service": (
+        "restart_service_command",
+        "system.power.restart_service",
+        "OffgridCloud wird neu gestartet …",
+    ),
+    "reboot": (
+        "reboot_command",
+        "system.power.reboot",
+        "System wird neu gestartet …",
+    ),
+    "shutdown": (
+        "shutdown_command",
+        "system.power.shutdown",
+        "System wird heruntergefahren …",
+    ),
+}
+
+
+@router.post("/power/{action}", response_model=PowerActionResult)
+def power_action(
+    action: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PowerActionResult:
+    """Run a configured power command (restart service / reboot / shutdown).
+
+    Opt-in: each command must be wired up by the operator (needs root), so an
+    unconfigured action returns 409 with a hint to re-run the installer. The
+    command is launched detached after a short delay so this response reaches the
+    portal before the service (or the whole box) goes down.
+    """
+    entry = _POWER_ACTIONS.get(action)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Unbekannte Aktion.")
+    attr, audit_action, message = entry
+    command = getattr(get_settings(), attr).strip()
+    if not command:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Systemsteuerung ist nicht aktiviert. Installer mit --power-control "
+                "erneut ausführen (richtet die nötigen sudoers-Regeln ein)."
+            ),
+        )
+    audit(db, admin, audit_action, command)
+    try:
+        run_power_command(command)
+    except Exception as exc:  # noqa: BLE001 - surface the launch failure to the UI
+        raise HTTPException(status_code=500, detail=f"Start fehlgeschlagen: {exc}") from exc
+    return PowerActionResult(started=True, message=message)
 
 
 @router.get("", response_model=SystemStatusOut)

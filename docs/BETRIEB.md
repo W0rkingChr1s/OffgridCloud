@@ -205,6 +205,26 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
 (Resume-Recovery); laufende Uploads gehen nicht verloren.
 
+### System steuern (Neustart & Herunterfahren)
+
+Unter **System → „System steuern"** lassen sich drei Aktionen direkt aus dem
+Web-UI auslösen:
+
+- **OffgridCloud neustarten** — startet nur den Dienst neu
+  (`systemctl restart offgridcloud`); das Betriebssystem läuft weiter.
+- **System neustarten** — startet die ganze Box neu (`systemctl reboot`).
+- **System herunterfahren** — fährt die Box komplett herunter
+  (`systemctl poweroff`); sie muss danach vor Ort wieder eingeschaltet werden.
+
+Jede Aktion braucht Root-Rechte und ist daher **standardmäßig aus**. Beim
+Installieren mit `--power-control` freischalten
+(`sudo ./deploy/install.sh --power-control`) — das richtet die passenden
+NOPASSWD-`sudoers`-Regeln ein und trägt die Befehle in die `.env` ein
+(`OGC_RESTART_SERVICE_COMMAND`, `OGC_REBOOT_COMMAND`, `OGC_SHUTDOWN_COMMAND`).
+Ohne diese Option sind die Knöpfe deaktiviert und die UI zeigt den nötigen
+Befehl an. Neustart und Herunterfahren wirken sofort; unterbrochene Transfers
+werden nach einem Neustart automatisch fortgesetzt.
+
 ## 9a. Netzwerk-Redundanz (Rückfall-WLAN)
 
 Damit das Feld-Team auch bei Router-Ausfall weiter hochladen kann, hostet die

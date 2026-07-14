@@ -395,6 +395,16 @@ class SystemStatusOut(BaseModel):
     smtp_to: str
     smtp_tls: bool
     smtp_configured: bool
+    # System power control ("System steuern"). Each flag says whether the
+    # corresponding privileged command is wired up on this instance.
+    power_restart_service_enabled: bool = False
+    power_reboot_enabled: bool = False
+    power_shutdown_enabled: bool = False
+
+
+class PowerActionResult(BaseModel):
+    started: bool
+    message: str
 
 
 class SystemSettingsUpdate(BaseModel):
