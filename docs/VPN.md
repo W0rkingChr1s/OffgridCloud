@@ -65,6 +65,15 @@ docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`.
   Ein Voll-Tunnel (`AllowedIPs = 0.0.0.0/0`) bräuchte die fwmark-Policy-Routen,
   die `wg-quick` nur als echter Root anlegt; solche Einträge werden übersprungen.
   Trage das Ziel-Subnetz ein (z. B. `192.168.178.0/24`), nicht `0.0.0.0/0`.
+- **Lokaler Zugriff hat Vorrang (Subnetz-Kollision).** Überschneidet sich ein
+  `AllowedIPs`-Subnetz mit dem **eigenen lokalen Netz der Box**, wird diese
+  Tunnel-Route bewusst **nicht** gesetzt — sonst würde die Box lokale Antworten
+  in den Tunnel schicken und wäre unter ihrer lokalen IP nicht mehr erreichbar
+  (sie würde sich praktisch selbst aussperren). Das passiert typischerweise, wenn
+  beide Seiten den FRITZ!Box-Standard `192.168.178.0/24` nutzen. **Lösung:** einem
+  der beiden Netze einen anderen Bereich geben (z. B. die lokale FRITZ!Box auf
+  `192.168.179.0/24`) — dann ist das Ziel-Subnetz eindeutig und beides
+  funktioniert gleichzeitig.
 - **Ein Tunnel gleichzeitig.** Es gibt genau einen Default-Pfad ins Remote-LAN;
   ein neuer Connect trennt einen bereits aktiven Tunnel.
 - **FRITZ!Box-Tipp.** Die WireGuard-Config aus der FRITZ!Box (WireGuard-Verbindung
@@ -79,3 +88,4 @@ docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`.
 | „kein /dev/net/tun" | `sudo modprobe tun`; ggf. Reboot. Auf manchen Kerneln ist `tun` fest eingebaut und das Gerät erscheint erst nach Neustart. |
 | „sudo: a password is required" beim Verbinden | Trat auf, weil `wg-quick` sich bei fehlenden Root-Rechten selbst per `sudo` neu startet. OffgridCloud baut WireGuard-Tunnel jetzt direkt über `ip`/`wg` auf (mit `CAP_NET_ADMIN`, ohne `sudo`) — auf die aktuelle Version aktualisieren. |
 | Verbindung steht, NAS aber nicht erreichbar | Prüfen, ob in der Config `AllowedIPs` das Ziel-Subnetz enthält, und ob per IP (nicht Hostname) zugegriffen wird. |
+| Bei aktivem VPN ist die Box lokal nicht mehr erreichbar | Subnetz-Kollision: lokales Netz und Heimnetz nutzen denselben Bereich (oft beide `192.168.178.0/24`). Die kollidierende Tunnel-Route wird zwar übersprungen, damit der lokale Zugriff bleibt — für gleichzeitigen NAS-Zugriff aber einem der Netze einen anderen Bereich geben (z. B. lokale FRITZ!Box auf `192.168.179.0/24`). |

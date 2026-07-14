@@ -77,6 +77,40 @@ def test_parse_wg_config_splits_wgquick_directives():
     assert "AllowedIPs = 192.168.178.0/24, 10.0.0.0/24" in wg_conf
 
 
+def test_parse_connected_subnets_only_returns_local_lans():
+    # A realistic `ip route show` dump: a default route, a Wi-Fi LAN, a wired
+    # LAN, a gateway (via) route, the loopback and our own tunnel interface.
+    route_output = (
+        "default via 192.168.178.1 dev wlan0 proto dhcp metric 600\n"
+        "192.168.178.0/24 dev wlan0 proto kernel scope link src 192.168.178.50 metric 600\n"
+        "10.42.0.0/24 dev eth0 proto kernel scope link src 10.42.0.1\n"
+        "172.16.0.0/12 via 192.168.178.1 dev wlan0\n"
+        "127.0.0.0/8 dev lo scope host\n"
+        "192.168.178.0/24 dev ogc-wg scope link\n"
+    )
+    subnets = vpnsvc.parse_connected_subnets(route_output)
+    # Only the directly-connected LANs on real devices — not default, gateway
+    # routes, loopback, or the tunnel itself.
+    assert subnets == ["192.168.178.0/24", "10.42.0.0/24"]
+
+
+def test_route_clashes_local_protects_local_access():
+    local = ["192.168.178.0/24", "10.42.0.0/24"]
+
+    # Exact same subnet on both ends (the classic FRITZ!Box collision) → blocked.
+    assert vpnsvc.route_clashes_local("192.168.178.0/24", local) == "192.168.178.0/24"
+    # A single host inside a local subnet also overlaps → blocked.
+    assert vpnsvc.route_clashes_local("192.168.178.20/32", local) == "192.168.178.0/24"
+    # A supernet covering a local subnet overlaps → blocked.
+    assert vpnsvc.route_clashes_local("192.168.0.0/16", local) == "192.168.178.0/24"
+    # A genuinely different remote subnet is safe to route.
+    assert vpnsvc.route_clashes_local("192.168.99.0/24", local) is None
+    # No local subnets known (detection failed) → never block.
+    assert vpnsvc.route_clashes_local("192.168.178.0/24", []) is None
+    # Malformed input is ignored rather than raising.
+    assert vpnsvc.route_clashes_local("not-a-cidr", local) is None
+
+
 def test_in_docker_respects_override(monkeypatch):
     monkeypatch.setenv("OGC_IN_DOCKER", "true")
     assert vpnsvc.in_docker() is True
