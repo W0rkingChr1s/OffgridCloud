@@ -1,0 +1,130 @@
+<svg width="1200" height="620" viewBox="0 0 1200 620" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OffgridCloud Transfers und Bandbreite: Live-Warteschlange der Cloud-Uploads mit Status, Fortschritt und Durchsatz-Verlauf">
+  <defs>
+    <linearGradient id="tBg" x1="0" y1="0" x2="1200" y2="620" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#141a3a"/></linearGradient>
+    <linearGradient id="tTeal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0EA5A4"/><stop offset="1" stop-color="#1D4ED8"/></linearGradient>
+    <linearGradient id="tArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0EA5A4" stop-opacity="0.5"/><stop offset="1" stop-color="#0EA5A4" stop-opacity="0"/></linearGradient>
+    <style>
+      text { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .h2  { fill:#f8fafc; font-size:26px; font-weight:800; }
+      .lead{ fill:#94a3b8; font-size:14px; }
+      .th  { fill:#94a3b8; font-size:12.5px; font-weight:700; letter-spacing:.4px; }
+      .file{ fill:#ffffff; font-size:14.5px; font-weight:600; }
+      .cell{ fill:#cbd5e1; font-size:13.5px; }
+      .dim { fill:#64748b; font-size:12px; }
+      .pill{ font-size:12px; font-weight:700; }
+      .card{ fill:#f8fafc; font-size:14px; font-weight:700; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="620" rx="20" fill="url(#tBg)"/>
+  <rect x="0.5" y="0.5" width="1199" height="619" rx="20" fill="none" stroke="#ffffff" stroke-opacity="0.06"/>
+
+  <!-- Heading -->
+  <text x="36" y="60" class="h2">Transfers</text>
+  <text x="36" y="86" class="lead">Uploads in die Cloud &#183; 361 Jobs &#183; l&#228;uft: 3 &#183; wartet: 12 &#183; fertig: 344 &#183; fehlgeschlagen: 2</text>
+
+  <!-- ===== Bandwidth panel (right) ===== -->
+  <rect x="820" y="110" width="344" height="196" rx="16" fill="#1e293b" fill-opacity="0.6" stroke="#ffffff" stroke-opacity="0.06"/>
+  <text x="842" y="140" class="card">Bandbreite</text>
+  <g transform="translate(508,0)">
+    <rect x="560" y="126" width="76" height="24" rx="8" fill="#10b981" fill-opacity="0.16"/>
+    <circle cx="576" cy="138" r="4" fill="#34d399"/>
+    <text x="586" y="142" fill="#a7f3d0" class="pill">bereit</text>
+  </g>
+  <!-- throughput area chart -->
+  <g transform="translate(842,158)">
+    <line x1="0" y1="0" x2="0" y2="96" stroke="#334155" stroke-width="1"/>
+    <line x1="0" y1="96" x2="300" y2="96" stroke="#334155" stroke-width="1"/>
+    <path d="M0 78 L25 70 L50 74 L75 52 L100 58 L125 36 L150 44 L175 22 L200 30 L225 40 L250 26 L275 34 L300 20 L300 96 L0 96 Z" fill="url(#tArea)"/>
+    <path d="M0 78 L25 70 L50 74 L75 52 L100 58 L125 36 L150 44 L175 22 L200 30 L225 40 L250 26 L275 34 L300 20" fill="none" stroke="#0EA5A4" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="300" cy="20" r="4" fill="#5eead4"/>
+  </g>
+  <text x="842" y="290" class="dim">Gemessen: 3820 KB/s</text>
+  <text x="1142" y="290" text-anchor="end" class="dim">Limit: 4096 KB/s</text>
+
+  <!-- ===== Transfer table (left) ===== -->
+  <rect x="36" y="110" width="756" height="474" rx="16" fill="#0f172a" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.08"/>
+  <!-- header row -->
+  <rect x="36" y="110" width="756" height="42" rx="16" fill="#1e293b" fill-opacity="0.8"/>
+  <rect x="36" y="140" width="756" height="12" fill="#1e293b" fill-opacity="0.0"/>
+  <text x="58" y="136" class="th">DATEI</text>
+  <text x="360" y="136" class="th">ZIEL</text>
+  <text x="540" y="136" class="th">STATUS</text>
+  <text x="726" y="136" class="th">VERSUCHE</text>
+
+  <!-- Row 1: running -->
+  <line x1="36" y1="152" x2="792" y2="152" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="182" class="file">DJI_0421.MOV</text>
+  <text x="360" y="180" class="cell">Amazon S3</text>
+  <rect x="524" y="166" width="52" height="22" rx="6" fill="#0EA5A4" fill-opacity="0.2"/>
+  <text x="550" y="181" text-anchor="middle" fill="#5eead4" class="pill">l&#228;uft</text>
+  <rect x="58" y="196" width="220" height="6" rx="3" fill="#334155"/>
+  <rect x="58" y="196" width="150" height="6" rx="3" fill="url(#tTeal)"/>
+  <text x="58" y="220" class="dim">612 MB / 900 MB &#183; 3720 KB/s</text>
+  <text x="740" y="188" text-anchor="middle" class="cell">1</text>
+
+  <!-- Row 2: running -->
+  <line x1="36" y1="234" x2="792" y2="234" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="264" class="file">interview_nord_04.wav</text>
+  <text x="360" y="262" class="cell">Azure Blob</text>
+  <rect x="524" y="248" width="52" height="22" rx="6" fill="#0EA5A4" fill-opacity="0.2"/>
+  <text x="550" y="263" text-anchor="middle" fill="#5eead4" class="pill">l&#228;uft</text>
+  <rect x="58" y="278" width="220" height="6" rx="3" fill="#334155"/>
+  <rect x="58" y="278" width="86" height="6" rx="3" fill="url(#tTeal)"/>
+  <text x="58" y="302" class="dim">48 MB / 124 MB &#183; 640 KB/s</text>
+  <text x="740" y="270" text-anchor="middle" class="cell">1</text>
+
+  <!-- Row 3: queued -->
+  <line x1="36" y1="316" x2="792" y2="316" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="346" class="file">tile_z14_1042.png</text>
+  <text x="360" y="344" class="cell">MinIO</text>
+  <rect x="524" y="330" width="58" height="22" rx="6" fill="#64748b" fill-opacity="0.25"/>
+  <text x="553" y="345" text-anchor="middle" fill="#cbd5e1" class="pill">wartet</text>
+  <text x="58" y="366" class="dim">wartet auf freie Bandbreite</text>
+  <text x="740" y="352" text-anchor="middle" class="cell">0</text>
+
+  <!-- Row 4: done -->
+  <line x1="36" y1="386" x2="792" y2="386" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="416" class="file">DJI_0420.MOV</text>
+  <text x="360" y="414" class="cell">Amazon S3</text>
+  <rect x="524" y="400" width="54" height="22" rx="6" fill="#10b981" fill-opacity="0.2"/>
+  <text x="551" y="415" text-anchor="middle" fill="#6ee7b7" class="pill">fertig</text>
+  <text x="588" y="415" class="dim">874 MB</text>
+  <text x="740" y="422" text-anchor="middle" class="cell">1</text>
+
+  <!-- Row 5: failed with retry -->
+  <line x1="36" y1="456" x2="792" y2="456" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="486" class="file">sensor_log_1730.csv</text>
+  <text x="360" y="484" class="cell">SFTP</text>
+  <rect x="524" y="470" width="118" height="22" rx="6" fill="#ef4444" fill-opacity="0.2"/>
+  <text x="583" y="485" text-anchor="middle" fill="#fca5a5" class="pill">fehlgeschlagen</text>
+  <text x="58" y="506" fill="#fca5a5" font-size="12">connection reset &#8212; automatischer Retry mit Backoff</text>
+  <text x="740" y="480" text-anchor="middle" class="cell">3</text>
+  <rect x="700" y="492" width="72" height="24" rx="7" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
+  <text x="736" y="508" text-anchor="middle" fill="#cbd5e1" font-size="12" font-weight="600">Erneut</text>
+
+  <!-- Row 6: done -->
+  <line x1="36" y1="526" x2="792" y2="526" stroke="#ffffff" stroke-opacity="0.05"/>
+  <text x="58" y="556" class="file">foto_reportage_88.jpg</text>
+  <text x="360" y="554" class="cell">Nextcloud</text>
+  <rect x="524" y="540" width="54" height="22" rx="6" fill="#10b981" fill-opacity="0.2"/>
+  <text x="551" y="555" text-anchor="middle" fill="#6ee7b7" class="pill">fertig</text>
+  <text x="588" y="555" class="dim">18 MB</text>
+  <text x="740" y="562" text-anchor="middle" class="cell">1</text>
+
+  <!-- ===== Feature callouts under bandwidth ===== -->
+  <rect x="820" y="322" width="344" height="80" rx="14" fill="#1e293b" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.05"/>
+  <g transform="translate(842,344)"><rect x="0" y="14" width="8" height="10" rx="2" fill="#0EA5A4"/><rect x="13" y="6" width="8" height="18" rx="2" fill="#0EA5A4"/><rect x="26" y="-2" width="8" height="26" rx="2" fill="#0EA5A4" fill-opacity="0.5"/></g>
+  <text x="892" y="356" fill="#e2e8f0" font-size="14" font-weight="700">Mindest-Bandbreite-Gate</text>
+  <text x="892" y="378" fill="#94a3b8" font-size="12">Uploads pausieren, wenn die Leitung zu d&#252;nn wird</text>
+
+  <rect x="820" y="418" width="344" height="80" rx="14" fill="#1e293b" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.05"/>
+  <g transform="translate(842,440)"><circle cx="10" cy="12" r="9" fill="none" stroke="#34d399" stroke-width="2"/><path d="M6 12 l3 3 5 -6" stroke="#34d399" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <text x="880" y="450" fill="#e2e8f0" font-size="14" font-weight="700">Resume nach Abbruch</text>
+  <text x="880" y="472" fill="#94a3b8" font-size="12">setzt Transfers fort statt neu zu starten</text>
+
+  <rect x="820" y="514" width="344" height="70" rx="14" fill="#1e293b" fill-opacity="0.5" stroke="#ffffff" stroke-opacity="0.05"/>
+  <g transform="translate(842,534)"><path d="M4 4 h18 M4 12 h18 M4 20 h12" stroke="#818cf8" stroke-width="2" stroke-linecap="round"/></g>
+  <text x="880" y="542" fill="#e2e8f0" font-size="14" font-weight="700">Zeitfenster &amp; Prioritäten</text>
+  <text x="880" y="564" fill="#94a3b8" font-size="12">z.&#8201;B. gro&#223;e Uploads nur nachts</text>
+</svg>

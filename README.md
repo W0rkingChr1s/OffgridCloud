@@ -19,6 +19,10 @@ lädt alle Medien **lokal und schnell** auf die Box; diese übernimmt den Cloud-
 **autonom, bandbreiten-bewusst und resilient** (resumable, mit Retry) und hält den
 Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 
+<p align="center">
+  <img src="assets/readme/architecture.svg" alt="Datenfluss: Feld-Team lädt lokal und schnell auf die Box; die Box überträgt bandbreiten-bewusst und resilient in die Cloud" width="100%">
+</p>
+
 ## Kernfunktionen
 
 - 📥 **Lokal annehmen, später senden** — Annahme und Cloud-Upload sind entkoppelt
@@ -35,6 +39,30 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)
 - 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail** (inkl. Speicher-knapp-Warnung)
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
+
+---
+
+## Oberfläche
+
+Ein aufgeräumtes Kachel-Dashboard im Dark-Mode — für die Bedienung am Handy im Feld
+genauso wie am Laptop. Live-Status über Server-Sent Events, überall Fortschritt und
+Ziel auf einen Blick.
+
+<p align="center">
+  <img src="assets/readme/dashboard.svg" alt="Dashboard: Kachel-Übersicht der Ordner mit Upload-Fortschritt, Status und Bandbreiten-Leiste" width="100%">
+  <br>
+  <em>Ordner-Dashboard — Fortschritt, Status und Cloud-Ziel je Ordner (Beispieldaten).</em>
+</p>
+
+Die Transfer-Ansicht zeigt jeden Cloud-Upload live: Status, Durchsatz, Wiederholungen —
+inklusive Bandbreiten-Verlauf und dem Mindest-Bandbreite-Gate, das Uploads pausiert,
+wenn die Leitung zu dünn wird.
+
+<p align="center">
+  <img src="assets/readme/transfers.svg" alt="Transfer-Ansicht: Live-Warteschlange der Cloud-Uploads mit Status, Fortschritt und Durchsatz-Verlauf" width="100%">
+  <br>
+  <em>Transfers &amp; Bandbreite — resumable Uploads, Retry/Backoff und live gemessener Durchsatz (Beispieldaten).</em>
+</p>
 
 ---
 

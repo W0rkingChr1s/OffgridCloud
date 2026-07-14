@@ -265,7 +265,7 @@ export default function FolderDetail() {
     <Layout>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link to="/" className="text-sm text-slate-400 hover:text-white">
+          <Link to="/folders" className="text-sm text-slate-400 hover:text-white">
             ← Ordner
           </Link>
           <h2 className="mt-1 text-2xl font-bold">{folder?.name ?? "Ordner"}</h2>

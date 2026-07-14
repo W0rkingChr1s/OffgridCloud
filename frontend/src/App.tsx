@@ -11,6 +11,7 @@ import Folders from "./pages/Folders";
 import Groups from "./pages/Groups";
 import Login from "./pages/Login";
 import Network from "./pages/Network";
+import Overview from "./pages/Overview";
 import Pool from "./pages/Pool";
 import Providers from "./pages/Providers";
 import Search from "./pages/Search";
@@ -30,6 +31,14 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <Overview />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/folders"
             element={
               <ProtectedRoute>
                 <Dashboard />
