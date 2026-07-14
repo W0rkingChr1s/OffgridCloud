@@ -217,6 +217,9 @@ export interface SystemStatus {
   notify_on_done: boolean;
   notify_on_failed: boolean;
   notify_on_low_space: boolean;
+  notify_on_startup: boolean;
+  notify_on_reconnect: boolean;
+  notify_on_bandwidth: boolean;
   telegram_chat_id: string;
   telegram_configured: boolean;
   smtp_host: string;
@@ -226,6 +229,15 @@ export interface SystemStatus {
   smtp_to: string;
   smtp_tls: boolean;
   smtp_configured: boolean;
+}
+
+/** A server-side status blip carried in the live SSE snapshot (see
+ * app/notices.py): startup summary, reconnect ping, bandwidth pause/resume. */
+export interface ServerNotice {
+  id: number;
+  level: "success" | "error" | "info" | "warning";
+  title: string;
+  message: string;
 }
 
 export interface MediaDeleteResult {

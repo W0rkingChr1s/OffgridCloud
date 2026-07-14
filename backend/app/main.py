@@ -8,6 +8,7 @@ runtime (key for the 1 GB Raspberry Pi target).
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__
+from . import __version__, announce
 from .admin_ops import ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
@@ -70,6 +71,11 @@ async def lifespan(app: FastAPI):
     if settings.worker_enabled:
         tasks.append(asyncio.create_task(worker_loop(stop)))
         tasks.append(asyncio.create_task(reconcile_loop(stop)))
+        # Watch the uplink so a dropped-then-restored connection pings the field.
+        tasks.append(asyncio.create_task(announce.connectivity_loop(stop)))
+        # Comprehensive "server up" summary. Off the event loop (it probes the
+        # external IP and pools peers), so serving traffic is never delayed.
+        threading.Thread(target=announce.announce_startup, daemon=True).start()
     try:
         yield
     finally:

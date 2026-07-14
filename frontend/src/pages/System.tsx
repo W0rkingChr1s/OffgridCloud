@@ -249,6 +249,21 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
     label: "Speicher wird knapp",
     help: "Meldet einmalig, wenn der Puffer-Speicher zur Neige geht (weitere Uploads würden sonst stoppen). Wird erneut scharfgeschaltet, sobald wieder Platz frei ist.",
   },
+  {
+    key: "notify_on_startup",
+    label: "Start des Servers",
+    help: "Sendet beim Hochfahren eine ausführliche Zusammenfassung: Startzeit, belegter/freier Speicher, verbundene Cloud-Ziele, VPN-Status, externe und interne IP, wartende Übertragungen, gemessene Bandbreite und verbundene Pool-Geräte.",
+  },
+  {
+    key: "notify_on_reconnect",
+    label: "Wieder online",
+    help: "Meldet sich kurz, sobald die Internetverbindung nach einem Ausfall wiederhergestellt ist – mit aktueller Bandbreite sowie neuer externer und interner IP.",
+  },
+  {
+    key: "notify_on_bandwidth",
+    label: "Senden pausiert/fortgesetzt",
+    help: "Meldet, wenn das Senden wegen zu geringer Bandbreite gestoppt und später wieder aufgenommen wird.",
+  },
 ];
 
 function NotificationsCard({

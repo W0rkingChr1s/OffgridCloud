@@ -71,6 +71,10 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
+    # Operational status announcements (startup / reconnect / bandwidth gate).
+    ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "notify_on_bandwidth", "BOOLEAN NOT NULL DEFAULT 1"),
 ]
 
 
