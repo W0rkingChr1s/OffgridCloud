@@ -55,11 +55,16 @@ docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`.
 
 ## Grenzen
 
-- **Kein DNS über den Tunnel.** Mit nur `CAP_NET_ADMIN` (ohne vollen Root) kann
-  `wg-quick` den System-Resolver nicht umschreiben. Lass in der
-  WireGuard-Config die Zeile `DNS = …` weg und adressiere interne Ziele **per
-  IP** (z. B. `192.168.178.20`). OpenVPN-Profile, die `resolv.conf` verändern
-  wollen, sind entsprechend eingeschränkt.
+- **Kein DNS über den Tunnel.** WireGuard-Tunnel werden bewusst ohne `wg-quick`
+  direkt über `ip`/`wg` aufgebaut (siehe unten) — der System-Resolver wird dabei
+  nicht angefasst. Lass in der WireGuard-Config die Zeile `DNS = …` weg (sie wird
+  ohnehin ignoriert) und adressiere interne Ziele **per IP** (z. B.
+  `192.168.178.20`). OpenVPN-Profile, die `resolv.conf` verändern wollen, sind
+  mit nur `CAP_NET_ADMIN` entsprechend eingeschränkt.
+- **Nur Split-Tunnel.** Es werden Routen für die `AllowedIPs`-Subnetze gesetzt.
+  Ein Voll-Tunnel (`AllowedIPs = 0.0.0.0/0`) bräuchte die fwmark-Policy-Routen,
+  die `wg-quick` nur als echter Root anlegt; solche Einträge werden übersprungen.
+  Trage das Ziel-Subnetz ein (z. B. `192.168.178.0/24`), nicht `0.0.0.0/0`.
 - **Ein Tunnel gleichzeitig.** Es gibt genau einen Default-Pfad ins Remote-LAN;
   ein neuer Connect trennt einen bereits aktiven Tunnel.
 - **FRITZ!Box-Tipp.** Die WireGuard-Config aus der FRITZ!Box (WireGuard-Verbindung
@@ -72,4 +77,5 @@ docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`.
 |---------|------------------|
 | „VPN benötigt erhöhte Rechte" bleibt nach dem Skript | Dienst nicht neu gestartet: `sudo systemctl restart offgridcloud`. Bei manuellem Start (uvicorn) greift das Drop-in nicht — dann als root/mit Capability starten. |
 | „kein /dev/net/tun" | `sudo modprobe tun`; ggf. Reboot. Auf manchen Kerneln ist `tun` fest eingebaut und das Gerät erscheint erst nach Neustart. |
+| „sudo: a password is required" beim Verbinden | Trat auf, weil `wg-quick` sich bei fehlenden Root-Rechten selbst per `sudo` neu startet. OffgridCloud baut WireGuard-Tunnel jetzt direkt über `ip`/`wg` auf (mit `CAP_NET_ADMIN`, ohne `sudo`) — auf die aktuelle Version aktualisieren. |
 | Verbindung steht, NAS aber nicht erreichbar | Prüfen, ob in der Config `AllowedIPs` das Ziel-Subnetz enthält, und ob per IP (nicht Hostname) zugegriffen wird. |

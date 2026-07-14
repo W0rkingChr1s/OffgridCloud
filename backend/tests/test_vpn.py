@@ -42,6 +42,41 @@ def test_blocker_is_environment_aware():
     assert "install.sh" in native_msg
 
 
+def test_parse_wg_config_splits_wgquick_directives():
+    config = (
+        "[Interface]\n"
+        "PrivateKey = privkey=\n"
+        "Address = 10.0.0.2/32, fd00::2/128\n"
+        "DNS = 192.168.178.1\n"
+        "MTU = 1420\n"
+        "Table = off\n"
+        "PostUp = echo hi\n\n"
+        "[Peer]\n"
+        "PublicKey = pubkey=\n"
+        "Endpoint = home.example.net:51820\n"
+        "AllowedIPs = 192.168.178.0/24, 10.0.0.0/24\n"
+        "PersistentKeepalive = 25\n"
+    )
+    wg_conf, addresses, mtu, routes = vpnsvc.parse_wg_config(config)
+
+    # Interface addressing / MTU / routes are extracted for `ip` to apply.
+    assert addresses == ["10.0.0.2/32", "fd00::2/128"]
+    assert mtu == "1420"
+    assert routes == ["192.168.178.0/24", "10.0.0.0/24"]
+
+    # wg-quick-only directives must be gone from what `wg setconf` receives...
+    assert "DNS" not in wg_conf
+    assert "Address" not in wg_conf
+    assert "MTU" not in wg_conf
+    assert "Table" not in wg_conf
+    assert "PostUp" not in wg_conf
+    # ...while the kernel-understood keys (incl. AllowedIPs) are preserved.
+    assert "PrivateKey = privkey=" in wg_conf
+    assert "PublicKey = pubkey=" in wg_conf
+    assert "Endpoint = home.example.net:51820" in wg_conf
+    assert "AllowedIPs = 192.168.178.0/24, 10.0.0.0/24" in wg_conf
+
+
 def test_in_docker_respects_override(monkeypatch):
     monkeypatch.setenv("OGC_IN_DOCKER", "true")
     assert vpnsvc.in_docker() is True
