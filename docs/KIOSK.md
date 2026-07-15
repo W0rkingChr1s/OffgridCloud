@@ -137,6 +137,44 @@ Es gibt bewusst **zwei** Wege — einer bequem, einer als Netz:
 > der PIN-Weg **und SSH** — vorher sicherstellen, dass SSH funktioniert, sonst
 > ist die Box ohne Bildschirm-PIN nicht mehr erreichbar.
 
+## Fernzugriff (SSH / Raspberry Pi Connect)
+
+Das Menü ist eine **lokale** Konsole auf tty1. Es lässt sich aber auch aus der
+Ferne öffnen — der Installer legt dafür den Befehl **`offgrid-console`** nach
+`/usr/local/bin`:
+
+```bash
+sudo offgrid-console            # das komplette Menü in der aktuellen Sitzung
+sudo offgrid-console --set-pin  # PIN ändern
+```
+
+Weil das Programm seinen echten Pfad selbst auflöst, funktioniert der Befehl auch
+über den Symlink korrekt (findet `.env` und die PIN-Datei). Er startet eine
+**eigene** Menü-Instanz — nicht die tty1-Sitzung gespiegelt —, alle Aktionen
+(Status, Neustart, Herunterfahren, PIN→Shell) wirken aber identisch.
+
+### Raspberry Pi Connect
+
+- **Bildschirmfreigabe / Remote-Desktop:** funktioniert **nicht** mit dem Kiosk.
+  Pi Connects Screen-Sharing braucht einen **Wayland-Desktop** (nicht Pi OS Lite /
+  Konsole) und erfasst nur den Desktop, **nicht** die Text-Konsole tty1 — genau
+  die haben wir für den Kiosk abgeschaltet.
+- **Remote-Shell (Terminal im Browser):** funktioniert. Sie öffnet eine frische
+  Shell (nicht die tty1-Ansicht) — dort einfach `sudo offgrid-console` eintippen.
+- **Headless-Hinweis:** Da die Box jetzt ohne Desktop bootet, die Shell-Variante
+  **`rpi-connect-lite`** verwenden, und den Connect-User-Dienst so einrichten,
+  dass er ohne interaktiven Login startet:
+
+  ```bash
+  loginctl enable-linger "$USER"
+  systemctl --user enable rpi-connect
+  ```
+
+  Ohne „Linger" ist die Box über Connect erst erreichbar, nachdem sich der
+  Benutzer einmal (z. B. auf tty2) angemeldet hat.
+
+Über **SSH** gilt dasselbe: nach dem Login `sudo offgrid-console` öffnet das Menü.
+
 ## Deinstallation
 
 `deploy/uninstall.sh` räumt die Konsole automatisch mit ab: der Dienst wird

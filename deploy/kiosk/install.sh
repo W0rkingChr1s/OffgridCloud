@@ -50,6 +50,18 @@ chmod +x "$CONSOLE" "$HERE/chromium-kiosk.sh" "$HERE/set-pin.sh" 2>/dev/null || 
 
 command -v python3 >/dev/null 2>&1 || { echo "python3 is required." >&2; exit 1; }
 
+# --- Convenience command: `offgrid-console` ---------------------------------
+# A symlink in the PATH so the menu can be opened from *any* shell — over SSH or
+# through the Raspberry Pi Connect remote shell — with `sudo offgrid-console`.
+# The console resolves its own real path (Path(__file__).resolve()), so PREFIX
+# and the PIN file are found correctly even when launched via this symlink.
+step "Adding the 'offgrid-console' command to /usr/local/bin..."
+if ln -sfn "$CONSOLE" /usr/local/bin/offgrid-console 2>/dev/null; then
+  echo "   Open the menu from anywhere (SSH / Pi Connect): sudo offgrid-console"
+else
+  echo "   Could not create /usr/local/bin/offgrid-console (non-fatal)." >&2
+fi
+
 # --- 1. Admin PIN -----------------------------------------------------------
 step "Configuring the admin PIN (gates the drop-to-shell action)..."
 PIN_FILE="$PREFIX/data/kiosk.pin"
