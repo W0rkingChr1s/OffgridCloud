@@ -84,8 +84,16 @@ Der Installer
    die tty1 übernimmt,
 2. **maskiert `getty@tty1`**, damit Login-Prompt und Menü sich nicht um den
    Bildschirm streiten,
-3. setzt die **Admin-PIN** (vorgegeben oder zufällig, einmalig angezeigt) und
-4. installiert bei Bedarf einen minimalen **X + Chromium**-Stack.
+3. stellt die Box auf **Konsolen-Boot** um (`systemctl set-default
+   multi-user.target`) und **deaktiviert den Display-Manager** (LightDM/GDM/…) —
+   sonst würde auf einem Pi-OS-*mit-Desktop* der Desktop den Bildschirm greifen,
+   und das Menü liefe unsichtbar dahinter,
+4. setzt die **Admin-PIN** (vorgegeben oder zufällig, einmalig angezeigt) und
+5. installiert bei Bedarf einen minimalen **X + Chromium**-Stack.
+
+> **Nach der Installation einmal neu starten** (`sudo reboot`) — die Umstellung
+> weg vom Desktop greift erst beim nächsten Boot. Der vorherige Zustand (Boot-Ziel
+> + Display-Manager) wird gesichert und von `uninstall.sh` wiederhergestellt.
 
 ## Die Admin-PIN
 
@@ -132,18 +140,36 @@ Es gibt bewusst **zwei** Wege — einer bequem, einer als Netz:
 ## Deinstallation
 
 `deploy/uninstall.sh` räumt die Konsole automatisch mit ab: der Dienst wird
-gestoppt und entfernt, `getty@tty1` wieder **entmaskiert** und gestartet — die
-Box zeigt danach wieder den normalen Login. Nur die Konsole entfernen:
+gestoppt und entfernt, `getty@tty1` wieder **entmaskiert** und gestartet, und der
+vorherige Boot-Zustand (Desktop-Ziel + Display-Manager) aus
+`data/kiosk-boot.state` **wiederhergestellt** — die Box bootet danach wieder wie
+zuvor. Nur die Konsole von Hand entfernen:
 
 ```bash
 sudo systemctl disable --now offgrid-kiosk.service
 sudo rm -f /etc/systemd/system/offgrid-kiosk.service
 sudo systemctl unmask getty@tty1.service
-sudo systemctl daemon-reload && sudo systemctl start getty@tty1.service
+# Desktop wieder aktivieren (falls vorher ein Desktop lief):
+sudo systemctl set-default graphical.target
+sudo systemctl enable display-manager.service      # bzw. lightdm/gdm3
+sudo systemctl daemon-reload && sudo reboot
 ```
 
 ## Fehlersuche
 
+- **Der Pi bootet trotzdem in den Desktop:** Die Box startet noch in
+  `graphical.target`, und ein Display-Manager greift sich den Bildschirm. Prüfen
+  und umstellen:
+
+  ```bash
+  systemctl get-default                     # sollte multi-user.target sein
+  sudo systemctl set-default multi-user.target
+  sudo systemctl disable --now display-manager.service   # bzw. lightdm/gdm3
+  sudo reboot
+  ```
+
+  Der Installer macht das eigentlich selbst (Schritt 3) — nach der Erst­installation
+  ist aber **ein Neustart nötig**, damit es greift.
 - **Bildschirm bleibt schwarz / kein Menü:** Läuft der Dienst?
   `journalctl -u offgrid-kiosk -e`. Häufig fehlt `TERM=linux` (setzt die Unit) —
   oder tty1 gehört noch dem alten Getty: `systemctl is-enabled getty@tty1`

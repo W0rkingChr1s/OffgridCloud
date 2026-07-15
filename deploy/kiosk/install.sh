@@ -101,6 +101,38 @@ step "Masking getty@tty1 so the console owns the primary screen..."
 systemctl disable --now getty@tty1.service 2>/dev/null || true
 systemctl mask getty@tty1.service 2>/dev/null || true
 
+# --- 5. Boot to the console, not the desktop --------------------------------
+# On a Raspberry Pi OS *with desktop* the box boots into graphical.target and a
+# display manager (LightDM/GDM/…) grabs the screen — so the kiosk console runs
+# but stays hidden behind the desktop. Switch the default target to the console
+# and disable any display manager. We record the previous state so uninstall can
+# put the desktop back.
+step "Making the box boot to the console instead of the desktop..."
+STATE_FILE="$PREFIX/data/kiosk-boot.state"
+PREV_TARGET="$(systemctl get-default 2>/dev/null || echo unknown)"
+DISABLED_DMS=""
+# Note: plain `disable` (not `--now`) — stopping the DM immediately would kill a
+# running desktop session, possibly the very terminal the installer runs in. The
+# change takes effect on the next boot, together with the target switch below.
+for dm in display-manager lightdm gdm gdm3 sddm xdm nodm greetd ly; do
+  if systemctl is-enabled "$dm.service" >/dev/null 2>&1; then
+    systemctl disable "$dm.service" >/dev/null 2>&1 || true
+    DISABLED_DMS="$DISABLED_DMS $dm"
+  fi
+done
+if [[ "$PREV_TARGET" != "multi-user.target" ]]; then
+  systemctl set-default multi-user.target >/dev/null 2>&1 \
+    && echo "   Default boot target: multi-user.target (was: $PREV_TARGET)." \
+    || echo "   Could not change the default target — set it by hand: systemctl set-default multi-user.target" >&2
+else
+  echo "   Already booting to the console (multi-user.target)."
+fi
+[[ -n "$DISABLED_DMS" ]] && echo "   Disabled display manager(s):$DISABLED_DMS"
+# Quote the values — DISABLED_DMS holds a space-separated list, and this file is
+# sourced by uninstall.sh, so an unquoted value would run as a command.
+{ printf 'PREV_TARGET="%s"\n' "$PREV_TARGET"
+  printf 'DISABLED_DMS="%s"\n' "$DISABLED_DMS"; } > "$STATE_FILE" 2>/dev/null || true
+
 systemctl daemon-reload
 if systemctl enable --now offgrid-kiosk.service 2>/dev/null; then
   echo "   Kiosk service is up on tty1."
@@ -113,8 +145,11 @@ cat <<EOF
 
 $(printf '\033[1;32mDone.\033[0m') OffgridCloud OS console is installed on tty1.
 
-  A monitor attached to the box now shows only the OffgridCloud menu. The
-  Raspberry Pi OS shell stays reachable two ways:
+  $(printf '\033[1;33mReboot the box to see it\033[0m') — the switch away from the desktop only
+  takes effect on the next boot:  sudo reboot
+
+  Afterwards a monitor attached to the box shows only the OffgridCloud menu.
+  The Raspberry Pi OS shell stays reachable two ways:
     · from the menu → "Zur Raspberry-Pi-Shell (PIN)"  (needs the admin PIN)
     · Strg+Alt+F2 to a normal login on tty2            (safety net)
 EOF

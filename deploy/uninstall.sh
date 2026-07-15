@@ -38,6 +38,22 @@ systemctl disable --now offgrid-kiosk.service 2>/dev/null || true
 rm -f /etc/systemd/system/offgrid-kiosk.service
 # Hand tty1 back to a normal login prompt.
 systemctl unmask getty@tty1.service 2>/dev/null || true
+# Restore the boot behaviour the kiosk installer changed (desktop vs. console).
+STATE_FILE="$PREFIX/data/kiosk-boot.state"
+if [[ -f "$STATE_FILE" ]]; then
+  # shellcheck disable=SC1090
+  PREV_TARGET=""; DISABLED_DMS=""
+  . "$STATE_FILE" 2>/dev/null || true
+  if [[ -n "$PREV_TARGET" && "$PREV_TARGET" != "unknown" ]]; then
+    systemctl set-default "$PREV_TARGET" 2>/dev/null \
+      && echo "   Restored default boot target: $PREV_TARGET"
+  fi
+  for dm in $DISABLED_DMS; do
+    systemctl enable "$dm.service" 2>/dev/null \
+      && echo "   Re-enabled display manager: $dm"
+  done
+  rm -f "$STATE_FILE"
+fi
 systemctl daemon-reload 2>/dev/null || true
 systemctl start getty@tty1.service 2>/dev/null || true
 
