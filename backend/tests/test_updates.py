@@ -250,6 +250,32 @@ def test_resolve_pending_same_version_is_unknown(tmp_path):
     assert s.phase == PHASE_UNKNOWN
 
 
+def test_resolve_pending_restart_step_is_success(tmp_path):
+    # Reaching the restart step + being back up = success, even at same version
+    # (the previous bug reported this as "failed" via the SIGTERM exit code).
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="0.3.4", started_at=100.0))
+    (tmp_path / "update.log").write_text(">> Restarting the service...\n")
+    s = resolve_pending(tmp_path, "0.3.4", now=lambda: 110.0)
+    assert s.phase == PHASE_SUCCESS
+
+
+def test_resolve_pending_fail_wins_over_restart(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    (tmp_path / "update.log").write_text(">> Restarting the service...\nService did not answer\n")
+    assert resolve_pending(tmp_path, "1.0.0", now=lambda: 110.0).phase == PHASE_FAILED
+
+
+def test_start_update_signal_kill_is_not_a_failure(tmp_path):
+    # A command killed by a signal (returncode < 0) is what the restart does to
+    # update.sh on success. The monitor must NOT flip it to failed — it stays
+    # running so resolve_pending() decides after the service comes back.
+    start_update(tmp_path, "sh -c 'kill -TERM $$'", "1.0.0", current_version=lambda: "1.0.0")
+    time.sleep(0.5)  # let the monitor thread observe the signal death
+    s = read_state(tmp_path)
+    assert s.phase == PHASE_RUNNING
+    assert s.returncode is None
+
+
 def test_resolve_pending_leaves_settled_state(tmp_path):
     write_state(
         tmp_path, UpdateState(phase=PHASE_SUCCESS, from_version="1.0.0", to_version="1.1.0")

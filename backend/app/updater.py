@@ -160,6 +160,11 @@ _STALE_AFTER = 3600.0  # a "running" state older than this on boot is treated as
 # restart even when the version string didn't change (main channel / same tag).
 _SENTINEL_OK = "and healthy"
 _SENTINEL_FAIL = "did not answer"
+# The last step update.sh reaches before the restart tears everything down. If
+# the log got this far and the service is now back up, the update succeeded —
+# even when the version string is unchanged and the health line never made it
+# to the log because the restart killed the process first.
+_SENTINEL_RESTARTING = "restarting the service"
 
 _run_lock = threading.Lock()
 
@@ -244,12 +249,20 @@ def is_running(data_dir: Path) -> bool:
 def _monitor(proc: subprocess.Popen, data_dir: Path, current_version: str, now) -> None:
     """Record the outcome if the command exits before the restart kills us."""
     code = proc.wait()
-    # Re-derive the version — a successful in-place rebuild restamps VERSION.
-    to_version = current_version() if callable(current_version) else current_version
-    tail = read_log_tail(data_dir).lower()
     state = read_state(data_dir)
     if state.phase != PHASE_RUNNING:
         return  # already resolved (e.g. on a concurrent startup)
+    # A *negative* return code means the child was killed by a signal — which is
+    # exactly what a SUCCESSFUL update looks like: update.sh reaches
+    # ``systemctl restart``, and the restart sends SIGTERM to the whole service
+    # cgroup, taking update.sh (and us) down with it (code -15). That is NOT a
+    # failure. Leave the state ``running`` and let ``resolve_pending()`` settle
+    # the real outcome once the service comes back up on the new code.
+    if code < 0:
+        return
+    # Re-derive the version — a successful in-place rebuild restamps VERSION.
+    to_version = current_version() if callable(current_version) else current_version
+    tail = read_log_tail(data_dir).lower()
     state.returncode = code
     state.finished_at = now()
     state.to_version = to_version
@@ -342,18 +355,24 @@ def resolve_pending(data_dir: Path, current_version: str, *, now=None) -> Update
     if current_version and state.from_version and current_version != state.from_version:
         state.phase = PHASE_SUCCESS
         state.message = f"Aktualisiert auf {current_version}."
+    elif _SENTINEL_FAIL in tail:
+        # Health check ran and the service didn't answer — a genuine failure.
+        state.phase = PHASE_FAILED
+        state.message = "Dienst nach dem Update nicht erreichbar."
     elif _SENTINEL_OK in tail:
         state.phase = PHASE_SUCCESS
         state.message = "Update abgeschlossen."
-    elif _SENTINEL_FAIL in tail:
-        state.phase = PHASE_FAILED
-        state.message = "Dienst nach dem Update nicht erreichbar."
+    elif _SENTINEL_RESTARTING in tail:
+        # The build finished and update.sh reached the restart step; since we're
+        # now back up, the restart succeeded — a same-version rebuild counts.
+        state.phase = PHASE_SUCCESS
+        state.message = "Update abgeschlossen."
     elif stale:
         state.phase = PHASE_UNKNOWN
         state.message = "Update-Status unklar (unterbrochen?). Protokoll unten prüfen."
     else:
-        # We restarted while an update was running and nothing signalled failure —
-        # most likely a successful same-version rebuild (main channel / same tag).
+        # We restarted while an update was running but the build never reached
+        # the restart step — most likely interrupted (power cut mid-rebuild).
         state.phase = PHASE_UNKNOWN
         state.message = "Neustart erkannt — Ergebnis unklar, Protokoll unten prüfen."
     write_state(data_dir, state)

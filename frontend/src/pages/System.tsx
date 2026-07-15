@@ -639,6 +639,22 @@ function UpdateCard() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [progress?.log]);
 
+  function beginPolling() {
+    setApplying(true);
+    setProgress({
+      phase: "running",
+      running: true,
+      from_version: info?.current ?? "",
+      to_version: "",
+      message: "Update läuft …",
+      returncode: null,
+      started_at: 0,
+      finished_at: 0,
+      log: "",
+    });
+    schedule();
+  }
+
   async function apply() {
     setBusy(true);
     setMsg(null);
@@ -646,21 +662,18 @@ function UpdateCard() {
       await api<{ started: boolean; message: string }>("/api/updates/apply", {
         method: "POST",
       });
-      setApplying(true);
-      setProgress({
-        phase: "running",
-        running: true,
-        from_version: info?.current ?? "",
-        to_version: "",
-        message: "Update läuft …",
-        returncode: null,
-        started_at: 0,
-        finished_at: 0,
-        log: "",
-      });
-      schedule();
+      beginPolling();
     } catch (e) {
-      setMsg(e instanceof ApiError ? e.message : "Update fehlgeschlagen");
+      // A real ApiError means the server responded and rejected us (not enabled,
+      // already running) — show it. A network failure means no response came
+      // back: the box very likely restarted mid-request after a fast update, so
+      // don't call it a failure — switch to polling, which bridges the downtime
+      // and reports the true outcome from /progress once the box is back.
+      if (e instanceof ApiError) {
+        setMsg(e.message);
+      } else {
+        beginPolling();
+      }
     } finally {
       setBusy(false);
     }
