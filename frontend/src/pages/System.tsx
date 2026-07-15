@@ -292,7 +292,7 @@ function PowerCard({ status }: { status: SystemStatus }) {
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
       <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
         System steuern
-        <InfoTip text="Steuert Dienst und Box direkt aus dem Portal: den OffgridCloud-Dienst neu starten, die ganze Box neu starten oder herunterfahren. Erfordert erhöhte Rechte und muss am Server bewusst freigeschaltet werden (Installer mit --power-control)." />
+        <InfoTip text="Steuert Dienst und Box direkt aus dem Portal: den OffgridCloud-Dienst neu starten, die ganze Box neu starten oder herunterfahren. Standardmäßig aktiv — der Installer richtet die nötigen sudoers-Regeln automatisch ein." />
       </div>
       <p className="mb-4 text-xs text-slate-500">
         Neustart und Herunterfahren wirken sofort – laufende Übertragungen werden unterbrochen und
@@ -301,10 +301,10 @@ function PowerCard({ status }: { status: SystemStatus }) {
 
       {!anyEnabled && (
         <div className="mb-4 rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-          Nicht aktiviert. Am Server freischalten:
-          <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">
-            sudo /opt/offgridcloud/src/deploy/install.sh --power-control
-          </code>
+          Alle Aktionen sind deaktiviert (Befehle leer). In der{" "}
+          <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">.env</code> die
+          <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">OGC_*_COMMAND</code>
+          -Werte setzen oder den Installer erneut ausführen.
         </div>
       )}
 
