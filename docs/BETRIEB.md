@@ -196,10 +196,11 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
   ```bash
   sudo /opt/offgridcloud/src/deploy/update.sh          # oder --check nur prüfen
   ```
-- **One-Click im Web-UI:** beim Installieren mit `--self-update` aktivieren
-  (`sudo ./deploy/install.sh --self-update`). Dann erscheint unter **System**
-  ein „Jetzt aktualisieren"-Knopf, sobald ein neueres Release vorliegt. Ohne
-  diese Option zeigt die UI stattdessen den obigen Befehl an.
+- **One-Click im Web-UI:** standardmäßig aktiv. Der Installer richtet die
+  nötige NOPASSWD-`sudoers`-Regel automatisch ein, sodass unter **System** ein
+  „Jetzt aktualisieren"-Knopf erscheint, sobald ein neueres Release vorliegt.
+  Abschalten (z. B. bei Docker) mit `OGC_SELF_UPDATE=false` in der `.env` — dann
+  zeigt die UI stattdessen den obigen Befehl an.
 - **Docker:** Image neu bauen/ziehen, Container ersetzen (Volume `/data` bleibt erhalten).
 
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
@@ -216,14 +217,14 @@ Web-UI auslösen:
 - **System herunterfahren** — fährt die Box komplett herunter
   (`systemctl poweroff`); sie muss danach vor Ort wieder eingeschaltet werden.
 
-Jede Aktion braucht Root-Rechte und ist daher **standardmäßig aus**. Beim
-Installieren mit `--power-control` freischalten
-(`sudo ./deploy/install.sh --power-control`) — das richtet die passenden
-NOPASSWD-`sudoers`-Regeln ein und trägt die Befehle in die `.env` ein
-(`OGC_RESTART_SERVICE_COMMAND`, `OGC_REBOOT_COMMAND`, `OGC_SHUTDOWN_COMMAND`).
-Ohne diese Option sind die Knöpfe deaktiviert und die UI zeigt den nötigen
-Befehl an. Neustart und Herunterfahren wirken sofort; unterbrochene Transfers
-werden nach einem Neustart automatisch fortgesetzt.
+Diese Aktionen brauchen Root-Rechte und sind **standardmäßig aktiv**: Der
+Installer richtet die passenden NOPASSWD-`sudoers`-Regeln automatisch ein, sodass
+der Dienstnutzer `systemctl restart` / `reboot` / `poweroff` ohne Passwort
+ausführen darf. Eine einzelne Aktion lässt sich abschalten, indem der zugehörige
+Befehl in der `.env` geleert wird (`OGC_RESTART_SERVICE_COMMAND=`,
+`OGC_REBOOT_COMMAND=`, `OGC_SHUTDOWN_COMMAND=`); der Knopf ist dann deaktiviert.
+Neustart und Herunterfahren wirken sofort; unterbrochene Transfers werden nach
+einem Neustart automatisch fortgesetzt.
 
 ## 9a. Netzwerk-Redundanz (Rückfall-WLAN)
 

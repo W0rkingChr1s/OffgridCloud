@@ -31,16 +31,22 @@ def test_run_power_command_rejects_empty():
         run_power_command("   ")
 
 
-def test_power_status_flags_default_off(client, admin_auth):
+def test_power_status_flags_default_on(client, admin_auth):
+    # Power control is active out of the box now (config ships default commands).
     body = client.get("/api/system", headers=admin_auth).json()
-    assert body["power_restart_service_enabled"] is False
-    assert body["power_reboot_enabled"] is False
-    assert body["power_shutdown_enabled"] is False
+    assert body["power_restart_service_enabled"] is True
+    assert body["power_reboot_enabled"] is True
+    assert body["power_shutdown_enabled"] is True
 
 
-def test_power_action_disabled_by_default(client, admin_auth):
+def test_power_action_disabled_when_command_cleared(client, admin_auth, monkeypatch):
+    # Clearing a command opts that single action out -> 409, nothing is launched.
+    monkeypatch.setattr(get_settings(), "restart_service_command", "")
     r = client.post("/api/system/power/restart-service", headers=admin_auth)
     assert r.status_code == 409
+    assert client.get("/api/system", headers=admin_auth).json()[
+        "power_restart_service_enabled"
+    ] is False
 
 
 def test_power_action_unknown_slug_is_404(client, admin_auth):

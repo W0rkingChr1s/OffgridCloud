@@ -58,22 +58,26 @@ class Settings(BaseSettings):
     # --- Updates -----------------------------------------------------------
     # GitHub repository (owner/name) used to check for new releases.
     github_repo: str = "W0rkingChr1s/OffgridCloud"
-    # Opt-in one-click self-update. When enabled, POST /api/updates/apply runs
-    # ``update_command`` detached. Off by default — updating from the web needs
-    # elevated rights, so it must be wired up deliberately (install.sh --self-update).
-    self_update: bool = False
-    update_command: str = ""
+    # One-click self-update. When enabled, POST /api/updates/apply runs
+    # ``update_command`` detached. On by default so the "Jetzt aktualisieren"
+    # button just works — the installer always wires up the matching NOPASSWD
+    # sudoers rule so ``sudo update.sh`` can run headless. Set OGC_SELF_UPDATE=false
+    # (or an empty OGC_UPDATE_COMMAND) to hide the button, e.g. on Docker where
+    # the box updates by replacing the image.
+    self_update: bool = True
+    update_command: str = "sudo /opt/offgridcloud/src/deploy/update.sh"
 
     # --- System power control ----------------------------------------------
-    # Opt-in privileged commands for the "System steuern" panel: restart the
+    # Privileged commands for the "System steuern" panel: restart the
     # OffgridCloud service, reboot the box, or shut it down from the web UI.
-    # Empty by default — each needs elevated rights (systemctl/reboot/poweroff),
-    # so they must be wired up deliberately (install.sh --power-control adds the
-    # NOPASSWD sudoers rules). When a command is empty the matching button is
-    # disabled in the portal and the endpoint returns 409.
-    restart_service_command: str = ""
-    reboot_command: str = ""
-    shutdown_command: str = ""
+    # On by default so the buttons work out of the box — the installer always
+    # adds the matching NOPASSWD sudoers rules (systemctl restart / reboot /
+    # poweroff) so the service user may run them headless. Clear a command
+    # (empty string) to disable just that action; the button is then greyed out
+    # in the portal and the endpoint returns 409.
+    restart_service_command: str = "sudo /usr/bin/systemctl restart offgridcloud"
+    reboot_command: str = "sudo /usr/bin/systemctl reboot"
+    shutdown_command: str = "sudo /usr/bin/systemctl poweroff"
 
     # --- Network redundancy / AP fallback ----------------------------------
     # Where the desired network config is exported for the privileged apply

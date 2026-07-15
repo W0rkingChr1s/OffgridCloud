@@ -16,10 +16,11 @@
 #   --port PORT            Port to serve on (default: 8000).
 #   --prefix DIR           Install location (default: /opt/offgridcloud).
 #   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
-#   --self-update          Enable one-click updates from the web UI (sudoers).
-#   --power-control        Enable the "System steuern" buttons (restart service,
-#                          reboot, shut down) from the web UI (sudoers rules for
-#                          systemctl restart / reboot / poweroff).
+#   --self-update          Deprecated no-op — one-click updates are on by default
+#                          (the installer always wires up the sudoers rule).
+#   --power-control        Deprecated no-op — the "System steuern" buttons are on
+#                          by default (the installer always wires up the sudoers
+#                          rules for systemctl restart / reboot / poweroff).
 #   --with-ap-fallback     Install the network-redundancy layer: the box hosts
 #                          its own Wi-Fi AP when it loses its uplink (needs
 #                          NetworkManager; sets up a watchdog + sudoers rule).
@@ -39,8 +40,6 @@ PORT="8000"
 DO_START=0
 INSTALL_SERVICE=1
 WITH_FFMPEG=0
-SELF_UPDATE=0
-POWER_CONTROL=0
 WITH_AP_FALLBACK=0
 WITH_VPN=0
 WITH_SPEEDTEST=1
@@ -56,8 +55,10 @@ while [[ $# -gt 0 ]]; do
     --port) PORT="${2:?--port needs a value}"; shift 2 ;;
     --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
     --with-ffmpeg) WITH_FFMPEG=1; shift ;;
-    --self-update) SELF_UPDATE=1; shift ;;
-    --power-control) POWER_CONTROL=1; shift ;;
+    # Deprecated no-ops: both features are enabled by default now (the sudoers
+    # rules below are always installed). Accepted so existing commands don't break.
+    --self-update) echo "   Note: --self-update is now the default; flag ignored."; shift ;;
+    --power-control) echo "   Note: --power-control is now the default; flag ignored."; shift ;;
     --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
     --with-vpn) WITH_VPN=1; shift ;;
     --no-speedtest) WITH_SPEEDTEST=0; shift ;;
@@ -217,57 +218,49 @@ if [[ $INSTALL_SERVICE -eq 1 ]]; then
   systemctl daemon-reload
 fi
 
-# --- Optional: one-click self-update (sudoers + .env flags) -----------------
-if [[ $SELF_UPDATE -eq 1 ]]; then
-  step "Enabling one-click updates from the web UI..."
-  UPDATE_SCRIPT="$PREFIX/src/deploy/update.sh"
-  if [[ ! -f "$UPDATE_SCRIPT" ]]; then
-    echo "   Note: $UPDATE_SCRIPT not found. One-click update needs the one-line"
-    echo "   installer layout ($PREFIX/src). Updates via 'sudo update.sh' still work."
-  fi
-  SUDOERS=/etc/sudoers.d/offgridcloud
-  echo "$SERVICE_USER ALL=(root) NOPASSWD: $UPDATE_SCRIPT" > "$SUDOERS.tmp"
-  if visudo -cf "$SUDOERS.tmp" >/dev/null 2>&1; then
-    install -m 440 "$SUDOERS.tmp" "$SUDOERS"; rm -f "$SUDOERS.tmp"
-    # Wire the app to that command (append once, without touching secrets).
-    grep -q '^OGC_SELF_UPDATE=' "$PREFIX/.env" || echo "OGC_SELF_UPDATE=true" >> "$PREFIX/.env"
-    grep -q '^OGC_UPDATE_COMMAND=' "$PREFIX/.env" || \
-      echo "OGC_UPDATE_COMMAND=sudo $UPDATE_SCRIPT" >> "$PREFIX/.env"
-    chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
-    echo "   One-click update enabled (button appears under System when a release is newer)."
-  else
-    rm -f "$SUDOERS.tmp"
-    echo "   Could not validate sudoers rule — skipped. Use 'sudo update.sh' instead." >&2
-  fi
+# --- One-click self-update (sudoers) ----------------------------------------
+# Enabled by default (see OGC_SELF_UPDATE/OGC_UPDATE_COMMAND defaults in the app).
+# We just install the NOPASSWD rule so the service user may run update.sh headless.
+step "Wiring up one-click updates from the web UI..."
+UPDATE_SCRIPT="$PREFIX/src/deploy/update.sh"
+if [[ ! -f "$UPDATE_SCRIPT" ]]; then
+  echo "   Note: $UPDATE_SCRIPT not found. One-click update needs the one-line"
+  echo "   installer layout ($PREFIX/src). Updates via 'sudo update.sh' still work."
+fi
+SUDOERS=/etc/sudoers.d/offgridcloud
+echo "$SERVICE_USER ALL=(root) NOPASSWD: $UPDATE_SCRIPT" > "$SUDOERS.tmp"
+if visudo -cf "$SUDOERS.tmp" >/dev/null 2>&1; then
+  install -m 440 "$SUDOERS.tmp" "$SUDOERS"; rm -f "$SUDOERS.tmp"
+  # Pin the exact command to this prefix (overrides the app default; matters when
+  # --prefix is non-default). Append once, without touching secrets.
+  grep -q '^OGC_UPDATE_COMMAND=' "$PREFIX/.env" || \
+    echo "OGC_UPDATE_COMMAND=sudo $UPDATE_SCRIPT" >> "$PREFIX/.env"
+  chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
+  echo "   One-click update ready (button appears under System when a release is newer)."
+else
+  rm -f "$SUDOERS.tmp"
+  echo "   Could not validate sudoers rule — skipped. Use 'sudo update.sh' instead." >&2
 fi
 
-# --- Optional: system power control (sudoers + .env flags) ------------------
-if [[ $POWER_CONTROL -eq 1 ]]; then
-  step "Enabling system control buttons (restart service / reboot / shutdown)..."
-  RESTART_CMD="/usr/bin/systemctl restart offgridcloud"
-  REBOOT_CMD="/usr/bin/systemctl reboot"
-  SHUTDOWN_CMD="/usr/bin/systemctl poweroff"
-  SUDOERS_PWR=/etc/sudoers.d/offgridcloud-power
-  {
-    echo "$SERVICE_USER ALL=(root) NOPASSWD: $RESTART_CMD"
-    echo "$SERVICE_USER ALL=(root) NOPASSWD: $REBOOT_CMD"
-    echo "$SERVICE_USER ALL=(root) NOPASSWD: $SHUTDOWN_CMD"
-  } > "$SUDOERS_PWR.tmp"
-  if visudo -cf "$SUDOERS_PWR.tmp" >/dev/null 2>&1; then
-    install -m 440 "$SUDOERS_PWR.tmp" "$SUDOERS_PWR"; rm -f "$SUDOERS_PWR.tmp"
-    # Wire the app to those commands (append once, without touching secrets).
-    grep -q '^OGC_RESTART_SERVICE_COMMAND=' "$PREFIX/.env" || \
-      echo "OGC_RESTART_SERVICE_COMMAND=sudo $RESTART_CMD" >> "$PREFIX/.env"
-    grep -q '^OGC_REBOOT_COMMAND=' "$PREFIX/.env" || \
-      echo "OGC_REBOOT_COMMAND=sudo $REBOOT_CMD" >> "$PREFIX/.env"
-    grep -q '^OGC_SHUTDOWN_COMMAND=' "$PREFIX/.env" || \
-      echo "OGC_SHUTDOWN_COMMAND=sudo $SHUTDOWN_CMD" >> "$PREFIX/.env"
-    chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
-    echo "   System control enabled (buttons appear under System → System steuern)."
-  else
-    rm -f "$SUDOERS_PWR.tmp"
-    echo "   Could not validate sudoers rule — skipped system control." >&2
-  fi
+# --- System power control (sudoers) -----------------------------------------
+# Enabled by default (see OGC_*_COMMAND defaults in the app). We install the
+# NOPASSWD rules so the service user may restart / reboot / power off headless.
+step "Wiring up system control buttons (restart service / reboot / shutdown)..."
+RESTART_CMD="/usr/bin/systemctl restart offgridcloud"
+REBOOT_CMD="/usr/bin/systemctl reboot"
+SHUTDOWN_CMD="/usr/bin/systemctl poweroff"
+SUDOERS_PWR=/etc/sudoers.d/offgridcloud-power
+{
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $RESTART_CMD"
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $REBOOT_CMD"
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $SHUTDOWN_CMD"
+} > "$SUDOERS_PWR.tmp"
+if visudo -cf "$SUDOERS_PWR.tmp" >/dev/null 2>&1; then
+  install -m 440 "$SUDOERS_PWR.tmp" "$SUDOERS_PWR"; rm -f "$SUDOERS_PWR.tmp"
+  echo "   System control ready (buttons appear under System → System steuern)."
+else
+  rm -f "$SUDOERS_PWR.tmp"
+  echo "   Could not validate sudoers rule — skipped system control." >&2
 fi
 
 # --- Optional: network-redundancy layer (AP fallback) ----------------------

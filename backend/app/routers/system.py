@@ -104,8 +104,9 @@ def power_action(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Systemsteuerung ist nicht aktiviert. Installer mit --power-control "
-                "erneut ausführen (richtet die nötigen sudoers-Regeln ein)."
+                "Diese Aktion ist deaktiviert (Befehl leer). In der .env den passenden "
+                "OGC_*_COMMAND setzen oder den Installer erneut ausführen, um die "
+                "sudoers-Regeln einzurichten."
             ),
         )
     audit(db, admin, audit_action, command)

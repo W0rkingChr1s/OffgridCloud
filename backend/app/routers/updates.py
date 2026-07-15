@@ -50,9 +50,10 @@ def apply_update(
 ) -> UpdateApplyResult:
     """Run the configured update command detached (opt-in).
 
-    Disabled unless the operator wired it up (``OGC_SELF_UPDATE=true`` +
-    ``OGC_UPDATE_COMMAND``), because updating a systemd service from the web
-    needs elevated rights. When off, we return the manual command instead.
+    On by default; the installer wires up the matching NOPASSWD sudoers rule so
+    ``sudo update.sh`` can run headless. Only disabled when the operator opts out
+    (``OGC_SELF_UPDATE=false`` or an empty ``OGC_UPDATE_COMMAND``, e.g. on
+    Docker) — then we return the manual command instead.
 
     The command's output is captured to a log and its progress persisted so the
     portal can show live status and the final result across the service restart
@@ -63,9 +64,8 @@ def apply_update(
         raise HTTPException(
             status_code=409,
             detail=(
-                "One-Click-Update ist nicht aktiviert. Auf dem Server ausführen: "
-                "sudo /opt/offgridcloud/src/deploy/update.sh  (oder Installer mit "
-                "--self-update erneut ausführen)."
+                "One-Click-Update ist deaktiviert. Auf dem Server ausführen: "
+                "sudo /opt/offgridcloud/src/deploy/update.sh"
             ),
         )
     audit(db, admin, "system.update.apply", settings.update_command)

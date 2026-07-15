@@ -117,10 +117,31 @@ def test_updates_endpoint_returns_current_version(client, admin_auth, monkeypatc
     body = r.json()
     assert body["current"] == __version__
     assert body["update_available"] is False
-    assert body["self_update_enabled"] is False
+    # One-click self-update is enabled by default now.
+    assert body["self_update_enabled"] is True
 
 
-def test_updates_apply_disabled_by_default(client, admin_auth):
+def test_updates_apply_enabled_by_default(client, admin_auth, monkeypatch):
+    # Apply is on out of the box; stub the launcher so nothing actually spawns.
+    import app.routers.updates as up
+
+    started = {}
+    monkeypatch.setattr(
+        up,
+        "start_update",
+        lambda data_dir, command, version, current_version=None: started.update(command=command)
+        or UpdateState(phase=PHASE_RUNNING),
+    )
+    r = client.post("/api/updates/apply", headers=admin_auth)
+    assert r.status_code == 200
+    assert r.json()["started"] is True
+    assert "update.sh" in started["command"]
+
+
+def test_updates_apply_disabled_when_opted_out(client, admin_auth, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "self_update", False)
     r = client.post("/api/updates/apply", headers=admin_auth)
     assert r.status_code == 409
 
