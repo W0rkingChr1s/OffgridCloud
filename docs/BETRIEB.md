@@ -28,7 +28,12 @@ curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/depl
 
 Überschreibbar per Env: `OGC_REPO`, `OGC_BRANCH`, `OGC_SRC` sowie alle `OGC_*`
 des Installers (siehe `deploy/install.sh --help`). **Update:** den One-Liner
-erneut ausführen (Daten & `.env` bleiben erhalten).
+erneut ausführen (Daten & `.env` bleiben erhalten) — der Installer **erkennt die
+bestehende Installation** und wählt jede bereits aktive Funktion (Dienst, Kiosk,
+Rückfall-WLAN, VPN, Video-Thumbnails, Chromium) sowie Admin-E-Mail und Port als
+Vorgabe vor. Ein Re-Run ist damit ein vollwertiges Update: einfach **mit Enter
+durchbestätigen**, dann werden App und alle vorhandenen Funktionen aktualisiert —
+ohne Flags oder `OGC_*`-Variablen. Details unter [§9 Updates](#9-updates).
 
 ### Variante 0 — lokal ausprobieren (ohne Installation)
 
@@ -211,11 +216,20 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
   ```bash
   sudo /opt/offgridcloud/src/deploy/update.sh          # oder --check nur prüfen
   ```
+  Ist das **On-Box-Menü (Kiosk)** installiert, wird auch die Konsole aus der
+  neuen Quelle **mit aktualisiert** (Dashboard, SSH-Start …) — vorher blieb sie
+  bei einem Selbst-Update still zurück. PIN und Boot-Zustand bleiben erhalten.
 - **One-Click im Web-UI:** standardmäßig aktiv. Der Installer richtet die
   nötige NOPASSWD-`sudoers`-Regel automatisch ein, sodass unter **System** ein
   „Jetzt aktualisieren"-Knopf erscheint, sobald ein neueres Release vorliegt.
+  Der Knopf ruft dieselbe `update.sh` auf, aktualisiert also auch das Kiosk-Menü.
   Abschalten (z. B. bei Docker) mit `OGC_SELF_UPDATE=false` in der `.env` — dann
   zeigt die UI stattdessen den obigen Befehl an.
+- **Installer erneut ausführen** (One-Liner/`install.sh`): ebenfalls ein
+  vollwertiges Update. Der Installer erkennt die bestehende Installation, wählt
+  jede aktive Funktion als Vorgabe vor und aktualisiert sie beim Durchbestätigen
+  (siehe [§1](#1-installation)). Nützlich, wenn eine **neue** Funktion (z. B. das
+  Kiosk-Menü) nachträglich dazukommen soll — die entsprechende Frage dann auf ja.
 - **Docker:** Image neu bauen/ziehen, Container ersetzen (Volume `/data` bleibt erhalten).
 
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
