@@ -35,10 +35,11 @@ Das Skript
    (`/etc/systemd/system/offgridcloud.service.d/10-vpn-caps.conf`), und startet
    den Dienst neu.
 
-Alternativ direkt bei der Installation:
+Alternativ direkt bei der Installation — die Frage „VPN-Client … einrichten?"
+mit ja beantworten (oder `OGC_WITH_VPN=1` für eine unbeaufsichtigte Installation):
 
 ```bash
-sudo ./deploy/install.sh --start --with-vpn
+sudo ./deploy/install.sh
 ```
 
 Danach die VPN-Seite neu laden — der Hinweis „erhöhte Rechte" verschwindet.

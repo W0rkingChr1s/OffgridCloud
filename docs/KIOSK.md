@@ -52,24 +52,24 @@ und ohne Desktop; sie fragt nur `systemctl`/`ip`/`hostname` und den lokalen
 
 ## Installation
 
-Am einfachsten direkt beim Einrichten der Box mitinstallieren:
+Am einfachsten direkt beim Einrichten der Box: Der Installer **fragt danach**.
 
 ```bash
-# nur die leichte Text-Konsole (empfohlen, auch für den Pi 3)
-sudo ./deploy/install.sh --with-kiosk
-
-# zusätzlich den optionalen Vollbild-Browser (Pi 4/5)
-sudo ./deploy/install.sh --with-chromium-kiosk
-
-# eigene PIN vorgeben (sonst wird eine zufällige 6-stellige einmalig angezeigt)
-sudo ./deploy/install.sh --with-kiosk --kiosk-pin 4242
+sudo ./deploy/install.sh
 ```
 
-Beim One-Liner werden die Flags nach `--` durchgereicht:
+Auf die Frage „**OffgridCloud-OS-Menü am Bildschirm der Box (Kiosk)?**" mit **ja**
+antworten. Danach folgen zwei Unterfragen: ob zusätzlich der **Vollbild-Browser**
+(Chromium, eher Pi 4/5) installiert werden soll, und die **Admin-PIN** (leer
+lassen → es wird eine zufällige 6-stellige PIN erzeugt und einmalig angezeigt).
+
+Unbeaufsichtigt (z. B. über den One-Liner) geht es per Umgebungs­variablen:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
-  | sudo bash -s -- --with-kiosk
+  | sudo OGC_NONINTERACTIVE=1 OGC_WITH_KIOSK=1 bash
+# zusätzlich Browser + eigene PIN:
+#   ... | sudo OGC_NONINTERACTIVE=1 OGC_WITH_KIOSK=1 OGC_WITH_CHROMIUM_KIOSK=1 OGC_KIOSK_PIN=4242 bash
 ```
 
 Nachträglich auf einer bereits installierten Box:
@@ -85,7 +85,7 @@ Der Installer
 2. **maskiert `getty@tty1`**, damit Login-Prompt und Menü sich nicht um den
    Bildschirm streiten,
 3. setzt die **Admin-PIN** (vorgegeben oder zufällig, einmalig angezeigt) und
-4. installiert bei `--with-chromium` einen minimalen **X + Chromium**-Stack.
+4. installiert bei Bedarf einen minimalen **X + Chromium**-Stack.
 
 ## Die Admin-PIN
 

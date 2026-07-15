@@ -6,83 +6,161 @@
 # to /opt/offgridcloud, writes a .env with a random secret AND a random admin
 # password, and registers a systemd service.
 #
-# Usage:
-#   sudo ./deploy/install.sh [options]
+# The installer is INTERACTIVE: run it and answer a short list of questions
+# (press Enter to accept the sensible default in brackets). No flags to memorise.
 #
-# Options:
-#   --start                Enable and start the service right away, then verify
-#                          it answers on /api/health.
-#   --admin-email EMAIL    Initial admin login (default: admin@offgrid.local).
-#   --port PORT            Port to serve on (default: 8000).
-#   --prefix DIR           Install location (default: /opt/offgridcloud).
-#   --with-ffmpeg          Also install ffmpeg (enables video thumbnails).
-#   --self-update          Deprecated no-op — one-click updates are on by default
-#                          (the installer always wires up the sudoers rule).
-#   --power-control        Deprecated no-op — the "System steuern" buttons are on
-#                          by default (the installer always wires up the sudoers
-#                          rules for systemctl restart / reboot / poweroff).
-#   --with-ap-fallback     Install the network-redundancy layer: the box hosts
-#                          its own Wi-Fi AP when it loses its uplink (needs
-#                          NetworkManager; sets up a watchdog + sudoers rule).
-#   --with-vpn             Enable the VPN client on this native install: installs
-#                          wireguard-tools/openvpn, loads the tun module and
-#                          grants the service CAP_NET_ADMIN (systemd drop-in).
-#   --with-kiosk           Install the on-box "OffgridCloud OS" console: a
-#                          full-screen menu on tty1 (a monitor on the box shows
-#                          only OffgridCloud; a PIN drops to the Raspbian shell).
-#   --with-chromium-kiosk  Like --with-kiosk, plus a minimal X + Chromium stack so
-#                          the menu can open the full web UI full-screen (Pi 4/5).
-#   --kiosk-pin PIN        PIN for the kiosk shell gate (default: random, shown once).
-#   --no-speedtest         Skip installing the Ookla Speedtest CLI (used for the
-#                          bandwidth "measure now"; the HTTP probe still works).
-#   --no-service           Skip installing the systemd unit.
-#   -h, --help             Show this help and exit.
+# Usage:
+#   sudo ./deploy/install.sh
+#
+# Automation / headless installs: there are no config flags — set OGC_* env vars
+# instead and it runs unattended (also happens automatically when there is no
+# terminal, e.g. during a self-update). Recognised variables and their defaults:
+#
+#   OGC_PREFIX=/opt/offgridcloud     OGC_PORT=8000
+#   OGC_ADMIN_EMAIL=admin@offgrid.local
+#   OGC_WITH_FFMPEG=0                OGC_WITH_SPEEDTEST=1
+#   OGC_WITH_AP_FALLBACK=0           OGC_WITH_VPN=0
+#   OGC_WITH_KIOSK=0                 OGC_WITH_CHROMIUM_KIOSK=0   OGC_KIOSK_PIN=
+#   OGC_INSTALL_SERVICE=1            OGC_START=1
+#   OGC_NONINTERACTIVE=1             # force unattended even with a terminal
+#
+# Only -h/--help is a flag; any other argument is ignored (older flag-style
+# commands still run, they just fall through to the questions / env defaults).
 set -euo pipefail
 
-PREFIX="/opt/offgridcloud"
-SERVICE_USER="offgrid"
-ADMIN_EMAIL="admin@offgrid.local"
-PORT="8000"
-DO_START=0
-INSTALL_SERVICE=1
-WITH_FFMPEG=0
-WITH_AP_FALLBACK=0
-WITH_VPN=0
-WITH_KIOSK=0
-WITH_CHROMIUM_KIOSK=0
-KIOSK_PIN=""
-WITH_SPEEDTEST=1
+# --- Defaults (env-overridable; also serve as the interactive defaults) ------
+PREFIX="${OGC_PREFIX:-/opt/offgridcloud}"
+SERVICE_USER="${OGC_SERVICE_USER:-offgrid}"
+ADMIN_EMAIL="${OGC_ADMIN_EMAIL:-admin@offgrid.local}"
+PORT="${OGC_PORT:-8000}"
+DO_START="${OGC_START:-1}"
+INSTALL_SERVICE="${OGC_INSTALL_SERVICE:-1}"
+WITH_FFMPEG="${OGC_WITH_FFMPEG:-0}"
+WITH_AP_FALLBACK="${OGC_WITH_AP_FALLBACK:-0}"
+WITH_VPN="${OGC_WITH_VPN:-0}"
+WITH_KIOSK="${OGC_WITH_KIOSK:-0}"
+WITH_CHROMIUM_KIOSK="${OGC_WITH_CHROMIUM_KIOSK:-0}"
+KIOSK_PIN="${OGC_KIOSK_PIN:-}"
+WITH_SPEEDTEST="${OGC_WITH_SPEEDTEST:-1}"
 SPEEDTEST_VER="1.2.0"
+NONINTERACTIVE="${OGC_NONINTERACTIVE:-0}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-usage() { sed -n '2,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --start) DO_START=1; shift ;;
-    --admin-email) ADMIN_EMAIL="${2:?--admin-email needs a value}"; shift 2 ;;
-    --port) PORT="${2:?--port needs a value}"; shift 2 ;;
-    --prefix) PREFIX="${2:?--prefix needs a value}"; shift 2 ;;
-    --with-ffmpeg) WITH_FFMPEG=1; shift ;;
-    # Deprecated no-ops: both features are enabled by default now (the sudoers
-    # rules below are always installed). Accepted so existing commands don't break.
-    --self-update) echo "   Note: --self-update is now the default; flag ignored."; shift ;;
-    --power-control) echo "   Note: --power-control is now the default; flag ignored."; shift ;;
-    --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
-    --with-vpn) WITH_VPN=1; shift ;;
-    --with-kiosk) WITH_KIOSK=1; shift ;;
-    --with-chromium-kiosk) WITH_KIOSK=1; WITH_CHROMIUM_KIOSK=1; shift ;;
-    --kiosk-pin) KIOSK_PIN="${2:?--kiosk-pin needs a value}"; shift 2 ;;
-    --no-speedtest) WITH_SPEEDTEST=0; shift ;;
-    --no-service) INSTALL_SERVICE=0; shift ;;
+# Only --help remains a flag. Everything else is asked below (or comes from the
+# OGC_* env vars). Legacy flags are accepted-and-ignored so old commands and the
+# piped one-liner (`bash -s -- --start`) don't break.
+for arg in "$@"; do
+  case "$arg" in
     -h|--help) usage; exit 0 ;;
-    *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
+    --non-interactive|--defaults|--yes|-y) NONINTERACTIVE=1 ;;
+    *) : ;;
   esac
 done
 
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root (sudo)." >&2
   exit 1
+fi
+
+# --- Interactive questionnaire ----------------------------------------------
+# The one-line installer runs as `curl ... | sudo bash`, so stdin is the piped
+# script, not the keyboard — prompts therefore talk to the controlling terminal
+# (/dev/tty). With no terminal (headless self-update, CI) we skip the questions
+# and use the defaults / OGC_* values from above.
+if [[ $NONINTERACTIVE -eq 0 ]] && { [[ ! -r /dev/tty ]] || [[ ! -w /dev/tty ]]; }; then
+  NONINTERACTIVE=1
+fi
+
+ask() {  # ask VAR "Question" "default"
+  local __var="$1" __q="$2" __def="$3" __ans=""
+  if [[ $NONINTERACTIVE -eq 1 ]]; then printf -v "$__var" '%s' "$__def"; return; fi
+  printf '\033[1m%s\033[0m [\033[36m%s\033[0m]: ' "$__q" "$__def" > /dev/tty
+  IFS= read -r __ans < /dev/tty || __ans=""
+  printf -v "$__var" '%s' "${__ans:-$__def}"
+}
+
+ask_yn() {  # ask_yn VAR "Question" <0|1 default>
+  local __var="$1" __q="$2" __def="$3" __ans="" __hint
+  [[ "$__def" -eq 1 ]] && __hint="J/n" || __hint="j/N"
+  if [[ $NONINTERACTIVE -eq 1 ]]; then printf -v "$__var" '%s' "$__def"; return; fi
+  while true; do
+    printf '\033[1m%s\033[0m [%s]: ' "$__q" "$__hint" > /dev/tty
+    IFS= read -r __ans < /dev/tty || __ans=""
+    case "${__ans:-}" in
+      "") printf -v "$__var" '%s' "$__def"; return ;;
+      [JjYy]|[Jj]a|[Yy]es) printf -v "$__var" '%s' 1; return ;;
+      [Nn]|[Nn]ein|[Nn]o) printf -v "$__var" '%s' 0; return ;;
+      *) printf '  Bitte j oder n eingeben.\n' > /dev/tty ;;
+    esac
+  done
+}
+
+ask_secret() {  # ask_secret VAR "Question"
+  local __var="$1" __q="$2" __ans=""
+  if [[ $NONINTERACTIVE -eq 1 ]]; then printf -v "$__var" '%s' ""; return; fi
+  printf '\033[1m%s\033[0m: ' "$__q" > /dev/tty
+  IFS= read -rs __ans < /dev/tty || __ans=""
+  printf '\n' > /dev/tty
+  printf -v "$__var" '%s' "$__ans"
+}
+
+if [[ $NONINTERACTIVE -eq 0 ]]; then
+  cat > /dev/tty <<'BANNER'
+
+  ┌────────────────────────────────────────────────┐
+  │   OffgridCloud — Installation                   │
+  │   Ein paar Fragen, dann läuft der Rest allein.  │
+  │   [Wert] = Vorgabe, einfach Enter drücken.      │
+  └────────────────────────────────────────────────┘
+BANNER
+fi
+
+ask        PREFIX              "Installationsverzeichnis"                                   "$PREFIX"
+ask        ADMIN_EMAIL         "Admin-E-Mail (Login)"                                       "$ADMIN_EMAIL"
+ask        PORT                "Port für die Weboberfläche"                                 "$PORT"
+ask_yn     WITH_FFMPEG         "Video-Thumbnails aktivieren? (installiert ffmpeg)"          "$WITH_FFMPEG"
+ask_yn     WITH_SPEEDTEST      "Ookla-Speedtest-CLI für genauere Bandbreitenmessung?"       "$WITH_SPEEDTEST"
+ask_yn     WITH_AP_FALLBACK    "Netzwerk-Redundanz: eigenes WLAN, wenn der Uplink ausfällt?" "$WITH_AP_FALLBACK"
+ask_yn     WITH_VPN            "VPN-Client (WireGuard/OpenVPN) einrichten?"                 "$WITH_VPN"
+ask_yn     WITH_KIOSK          "OffgridCloud-OS-Menü am Bildschirm der Box (Kiosk)?"        "$WITH_KIOSK"
+if [[ "$WITH_KIOSK" -eq 1 ]]; then
+  ask_yn   WITH_CHROMIUM_KIOSK "  … zusätzlich Vollbild-Browser (Chromium, eher Pi 4/5)?"   "$WITH_CHROMIUM_KIOSK"
+  if [[ -z "$KIOSK_PIN" ]]; then
+    ask_secret KIOSK_PIN       "  … Admin-PIN für den Shell-Zugang (leer = zufällig)"
+  fi
+else
+  WITH_CHROMIUM_KIOSK=0
+fi
+ask_yn     INSTALL_SERVICE     "systemd-Dienst installieren?"                               "$INSTALL_SERVICE"
+if [[ "$INSTALL_SERVICE" -eq 1 ]]; then
+  ask_yn   DO_START            "Dienst am Ende aktivieren und starten?"                     "$DO_START"
+else
+  DO_START=0
+fi
+
+if [[ $NONINTERACTIVE -eq 0 ]]; then
+  yesno() { [[ "$1" -eq 1 ]] && echo "ja" || echo "nein"; }
+  cat > /dev/tty <<EOF
+
+  Zusammenfassung:
+    Verzeichnis .......... $PREFIX
+    Admin-E-Mail ......... $ADMIN_EMAIL
+    Port ................. $PORT
+    Video-Thumbnails ..... $(yesno "$WITH_FFMPEG")
+    Speedtest-CLI ........ $(yesno "$WITH_SPEEDTEST")
+    Netzwerk-Redundanz ... $(yesno "$WITH_AP_FALLBACK")
+    VPN-Client ........... $(yesno "$WITH_VPN")
+    Kiosk-Menü ........... $(yesno "$WITH_KIOSK")$([[ "$WITH_KIOSK" -eq 1 && "$WITH_CHROMIUM_KIOSK" -eq 1 ]] && echo " (+ Chromium)")
+    Dienst installieren .. $(yesno "$INSTALL_SERVICE")
+    Jetzt starten ........ $(yesno "$DO_START")
+EOF
+  ask_yn __CONFIRM "Installation jetzt starten?" 1
+  if [[ "$__CONFIRM" -ne 1 ]]; then
+    echo "Abgebrochen — nichts wurde verändert." > /dev/tty
+    exit 0
+  fi
 fi
 
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
