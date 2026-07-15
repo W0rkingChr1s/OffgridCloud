@@ -112,6 +112,21 @@ Der Installer
 > weg vom Desktop greift erst beim nächsten Boot. Der vorherige Zustand (Boot-Ziel
 > + Display-Manager) wird gesichert und von `uninstall.sh` wiederhergestellt.
 
+## Aktualisieren
+
+Die Konsole wird bei jedem **Selbst-Update mitgezogen** — man muss nichts extra
+tun. Sowohl `deploy/update.sh` als auch der **„Jetzt aktualisieren"-Knopf** unter
+*System* kopieren die Konsole aus der frischen Quelle neu und richten sie erneut
+ein, sobald der Kiosk-Dienst vorhanden ist. So landen Verbesserungen (getabbtes
+Dashboard, SSH-Start, neue Einstellungsfelder …) auch auf bereits eingerichteten
+Boxen, statt still zurückzubleiben.
+
+Das Nachziehen ist **idempotent**: die **PIN** und der gesicherte **Boot-Zustand**
+(`data/kiosk-boot.state`, für die Wiederherstellung des Desktops bei der
+Deinstallation) bleiben unangetastet. Wer den Installer stattdessen von Hand
+erneut ausführt, erhält dasselbe — er erkennt das vorhandene Kiosk-Menü und wählt
+es als Vorgabe vor (siehe [Betriebshandbuch, §9 Updates](BETRIEB.md#9-updates)).
+
 ## Die Admin-PIN
 
 Die PIN schützt **nur den Sprung in die OS-Shell** aus dem Menü — Neustart und
