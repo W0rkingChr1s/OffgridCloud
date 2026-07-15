@@ -12,7 +12,14 @@ from ..db import get_db
 from ..deps import require_admin
 from ..models import User
 from ..schemas import UpdateApplyResult, UpdateInfoOut, UpdateProgressOut
-from ..updater import check_for_update, read_log_tail, read_state, start_update
+from ..updater import (
+    PHASE_RUNNING,
+    check_for_update,
+    clear_state,
+    read_log_tail,
+    read_state,
+    start_update,
+)
 
 router = APIRouter(prefix="/api/updates", tags=["updates"], dependencies=[Depends(require_admin)])
 
@@ -93,8 +100,6 @@ def update_progress(_: User = Depends(require_admin)) -> UpdateProgressOut:
     Polled by the portal so the operator sees the whole update — including
     success/failure and the transcript — without opening a terminal.
     """
-    from ..updater import PHASE_RUNNING
-
     settings = get_settings()
     state = read_state(settings.data_dir)
     return UpdateProgressOut(
@@ -108,3 +113,17 @@ def update_progress(_: User = Depends(require_admin)) -> UpdateProgressOut:
         finished_at=state.finished_at,
         log=read_log_tail(settings.data_dir),
     )
+
+
+@router.post("/dismiss", response_model=UpdateProgressOut)
+def dismiss_update(_: User = Depends(require_admin)) -> UpdateProgressOut:
+    """Clear a finished update result so the portal card can be dismissed.
+
+    Refuses while an update is still running (nothing to dismiss yet). Resets the
+    persisted state to idle and drops the log — used by the "Verstanden" button.
+    """
+    settings = get_settings()
+    if read_state(settings.data_dir).phase == PHASE_RUNNING:
+        raise HTTPException(status_code=409, detail="Update läuft noch — bitte warten.")
+    clear_state(settings.data_dir)
+    return UpdateProgressOut(phase="idle", running=False)

@@ -679,6 +679,18 @@ function UpdateCard() {
     }
   }
 
+  async function dismiss() {
+    // Clear a finished result (incl. a stale one left by a pre-fix update) so
+    // the card goes away — no terminal needed. Optimistically hide it first.
+    setProgress(null);
+    setApplying(false);
+    try {
+      await api("/api/updates/dismiss", { method: "POST" });
+    } catch {
+      /* best-effort — the card is already hidden locally */
+    }
+  }
+
   const available = info?.update_available;
   const phase = progress?.phase;
   const running = applying || phase === "running";
@@ -712,7 +724,7 @@ function UpdateCard() {
 
       {info?.error && !running && <div className="mt-2 text-xs text-slate-500">{info.error}</div>}
 
-      {available && !running && !TERMINAL_PHASES.includes(phase ?? "") && (
+      {available && !running && (
         <div className="mt-3 space-y-3">
           {info?.release_url && (
             <a
@@ -747,7 +759,12 @@ function UpdateCard() {
       )}
 
       {progress && (running || TERMINAL_PHASES.includes(progress.phase)) && (
-        <UpdateProgressView progress={progress} logRef={logRef} onReload={() => window.location.reload()} />
+        <UpdateProgressView
+          progress={progress}
+          logRef={logRef}
+          onReload={() => window.location.reload()}
+          onDismiss={dismiss}
+        />
       )}
 
       {msg && <div className="mt-3 text-sm text-slate-300">{msg}</div>}
@@ -759,10 +776,12 @@ function UpdateProgressView({
   progress,
   logRef,
   onReload,
+  onDismiss,
 }: {
   progress: UpdateProgress;
   logRef: RefObject<HTMLPreElement>;
   onReload: () => void;
+  onDismiss: () => void;
 }) {
   const { phase, message, log, to_version } = progress;
   const tone =
@@ -811,14 +830,25 @@ function UpdateProgressView({
         </pre>
       )}
 
-      {phase === "success" && (
-        <button
-          type="button"
-          onClick={onReload}
-          className="mt-3 rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
-        >
-          Portal neu laden
-        </button>
+      {phase !== "running" && (
+        <div className="mt-3 flex gap-2">
+          {phase === "success" && (
+            <button
+              type="button"
+              onClick={onReload}
+              className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+            >
+              Portal neu laden
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/5"
+          >
+            Verstanden
+          </button>
+        </div>
       )}
     </div>
   );

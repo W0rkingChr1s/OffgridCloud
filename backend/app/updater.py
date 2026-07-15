@@ -246,6 +246,15 @@ def is_running(data_dir: Path) -> bool:
     return read_state(data_dir).phase == PHASE_RUNNING
 
 
+def clear_state(data_dir: Path) -> None:
+    """Reset to idle and drop the log — dismisses a finished result in the UI."""
+    write_state(data_dir, UpdateState())
+    try:
+        _log_path(Path(data_dir)).unlink()
+    except OSError:
+        pass
+
+
 def _monitor(proc: subprocess.Popen, data_dir: Path, current_version: str, now) -> None:
     """Record the outcome if the command exits before the restart kills us."""
     code = proc.wait()
