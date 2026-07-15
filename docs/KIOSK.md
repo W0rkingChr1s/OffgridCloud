@@ -8,68 +8,56 @@ wie ein Bastel-Pi.
 
 Genau das ist die On-Box-Konsole (das „OffgridCloud OS"):
 
-1. Beim Start übernimmt ein **Vollbild-Menü die primäre Konsole (tty1)**. Wer auf
-   den Bildschirm schaut, sieht Live-Status und ein paar Geräte-Aktionen — sonst
-   nichts.
+1. Beim Start übernimmt eine **getabbte Dashboard-App die primäre Konsole (tty1)**.
+   Wer auf den Bildschirm schaut, sieht zuerst das **Dashboard** mit Live-Status —
+   und kann über **Tabs** die ganze Box verwalten. Sonst nichts.
 2. Das darunterliegende **Raspberry Pi OS** ist weiterhin erreichbar, aber
-   **geschützt**: über den Menüpunkt „Zur Raspberry-Pi-Shell" nur mit **Admin-PIN**.
+   **geschützt**: über System → „Zur Raspberry-Pi-Shell" nur mit **Admin-PIN**.
 3. Als Sicherheitsnetz bleiben die übrigen Text-Konsolen (**Strg+Alt+F2** …
    **F6**) mit dem normalen Login bestehen — so sperrt man sich nie aus.
 
-Optional kann das Menü auch die **volle Web-Oberfläche im Vollbild-Chromium**
-öffnen (für einen Pi 4/5 mit Desktop-Leistung).
+Dieselbe App erscheint auch beim **SSH-Login** (siehe „Fernzugriff"), und optional
+lässt sich die **volle Web-Oberfläche im Vollbild-Chromium** öffnen (Pi 4/5).
 
-## Was das Menü zeigt und kann
+## Dashboard & Tabs
 
-**Live-Status** (alles lokal ermittelt, ohne Login):
+Oben läuft eine **Tab-Leiste**; gewechselt wird mit **←/→** oder den Zahlen **1–6**.
+Innerhalb eines Tabs: **↑/↓** wählen, **Enter** öffnen, **Esc** zurück.
 
-- Gerätename und IP-Adresse(n), die **Web-Oberflächen-URL** zum Abtippen
-- **Dienst**-Status (`active`) und ob der lokale Health-Endpoint antwortet
-- Version, ob **rclone** (die Cloud-Engine) verfügbar ist
-- **Puffer-Speicher** (belegt/frei) — dieselbe Platte, auf die das Feld lädt
-- **VPN** (aktives `wg`/`tun`-Interface) und **WLAN-Rückfallebene** (Watchdog)
+- **1 · Dashboard** — Live-Status (ohne Login): Gerät/IP, **Web-URL**, Dienst-Status,
+  Version, rclone, **Puffer-Speicher**, VPN, WLAN-Rückfallebene. Auto-Refresh alle 5 s.
+- **2 · Provider** — Cloud-Ziele anzeigen, **testen**, **löschen**, **neu anlegen**
+  (Formular dynamisch aus dem Provider-Katalog: S3, MinIO, Azure, WebDAV, SFTP,
+  Nextcloud … alle Typen der Web-UI, inkl. der passenden Felder & Passwörter).
+- **3 · Netz & Verbindung** — **WLAN & Fallback-AP** (AP/Watchdog, bekannte WLANs
+  hinzufügen/löschen, Scan, „Anwenden"), **Bandbreite** (Limit + Mindest-Gate) und
+  **VPN** (Profile verbinden/trennen/löschen, neues Profil aus `.conf`/`.ovpn`).
+- **4 · Pool** — Pool-Übersicht (dieser Knoten + Peers), diesen Knoten **teilbar**
+  machen (Token erzeugen/anzeigen/entfernen), **Peers** (andere Boxen) verwalten.
+- **5 · Benutzer & Gruppen** — Benutzer anlegen/löschen, Passwort zurücksetzen,
+  aktivieren/deaktivieren, Rolle wechseln; Gruppen anlegen/löschen und **Mitglieder**
+  per Häkchenliste verwalten.
+- **6 · System** — **Version & Updates** (prüfen und, wenn eingerichtet, per
+  One-Click aktualisieren), **Speicherbelegung**, **Systemeinstellungen &
+  Benachrichtigungen** (Lösch-/Sync-Regeln, Bandbreiten-Mess-URL, Webhook/Telegram/
+  SMTP + alle Ereignis-Schalter), **Dienst neu starten / Neustart / Herunterfahren**,
+  optional **Browser**, und **Zur Raspberry-Pi-Shell (PIN)**.
 
-**Aktionen:**
+## Admin-Login & Sicherheit
 
-| Menüpunkt | Wirkung |
-|---|---|
-| Status aktualisieren | Werte neu einlesen (passiert auch alle 5 s automatisch) |
-| Admin-Zugang anzeigen | URL + Admin-E-Mail einblenden (Passwort steht im Installations-Protokoll) |
-| **Einstellungen (Admin)** | **Alle Einstellungen direkt an der Box** — siehe unten |
-| Web-Oberfläche im Browser öffnen | Nur wenn Chromium installiert ist (siehe unten) |
-| OffgridCloud-Dienst neu starten | `systemctl restart offgridcloud` (mit Rückfrage) |
-| Box neu starten / herunterfahren | `reboot` / `poweroff` (mit Rückfrage) |
-| Zur Raspberry-Pi-Shell (PIN) | Nach korrekter PIN eine Root-Shell; `exit` führt zurück ins Menü |
+Das **Dashboard** und die Geräte-Aktionen (Neustart/Herunterfahren) brauchen keinen
+Login. Sobald man einen **Verwaltungs-Bereich** öffnet (Provider, Netz, Pool,
+Benutzer, System-Einstellungen/Updates), fragt die Konsole **einmal pro Sitzung**
+nach **Admin-E-Mail und Passwort** — dieselben Zugangsdaten wie in der Web-UI.
 
-Bedienung: **Pfeiltasten** (oder `j`/`k`) wählen, **Enter** bestätigt.
+Der Grund: die Konsole baut die Web-UI **nicht nach**, sondern steuert **dieselbe
+lokale REST-API**. So gibt es keine doppelte Logik, und Konsole und Web-UI bleiben
+immer synchron. Passwörter/Tokens sind reine **Schreibfelder** — angezeigt wird nur
+„gesetzt/leer", nie Klartext (wie in der API).
 
-## Einstellungen (Admin) — ohne Web-UI
-
-Unter **„Einstellungen (Admin)"** lässt sich die Box **komplett lokal** einrichten,
-ohne ein zweites Gerät. Beim ersten Aufruf fragt die Konsole einmal pro Sitzung
-nach **Admin-E-Mail und Passwort** (dieselben Zugangsdaten wie in der Web-UI) —
-denn intern steuert die Konsole **dieselbe lokale API** wie die Weboberfläche.
-So gibt es keine doppelte Logik, und Konsole und Web-UI bleiben immer synchron.
-
-Verfügbare Bereiche:
-
-- **System & Benachrichtigungen** — Lösch-/Sync-Regeln, Mess-URL der Bandbreiten-
-  Probe, sowie alle Alert-Kanäle (Webhook, **Telegram**, **E-Mail/SMTP**) und die
-  Ereignis-Schalter (Empfang, fertig, fehlgeschlagen, wenig Speicher, Start,
-  Wieder-online, Bandbreite). Jede Zeile mit **Enter** umschalten/ändern.
-- **Cloud-Ziele (Provider)** — vorhandene Ziele anzeigen, **Verbindung testen**,
-  **löschen** und **neu anlegen**. Das Formular wird dynamisch aus dem Provider-
-  Katalog gebaut (S3, MinIO, Azure, WebDAV, SFTP, Nextcloud … — alle Typen der
-  Web-UI, inkl. der jeweils passenden Felder und Passwort-Eingaben).
-- **VPN** — WireGuard/OpenVPN-Profile **verbinden/trennen/löschen** und ein neues
-  Profil **aus einer Datei** (`.conf`/`.ovpn`) anlegen.
-- **Netzwerk (WLAN / Fallback-AP)** — Fallback-AP + Watchdog einstellen, bekannte
-  **WLANs hinzufügen/löschen**, einen **WLAN-Scan** ausführen und die Konfiguration
-  **anwenden** (`Jetzt anwenden`).
-
-Sicherheit: Passwörter/Tokens sind reine Schreibfelder — die Konsole zeigt nur
-„gesetzt/leer" an, nie den Klartext (genau wie die API). Die Anmeldung gilt nur
-für die laufende Sitzung; „Abmelden" verwirft das Token sofort.
+> Voraussetzung für die Verwaltungs-Tabs ist ein **laufender Dienst** (die Konsole
+> spricht `http://127.0.0.1:<port>`). Dashboard, Neustart und Herunterfahren gehen
+> auch, wenn der Dienst aus ist.
 
 ## Warum eine Text-Konsole (und nicht sofort ein Browser)
 
@@ -154,10 +142,10 @@ das Gesicht der Box.
 
 Es gibt bewusst **zwei** Wege — einer bequem, einer als Netz:
 
-- **Aus dem Menü:** „Zur Raspberry-Pi-Shell (PIN)" → PIN eingeben → Root-Shell.
-  `exit` (oder `logout`) bringt das Menü zurück. tty1 bleibt die ganze Zeit unter
-  Kontrolle des Dienstes, deshalb landet man nach dem Shell-Ende **immer** wieder
-  im Menü.
+- **Aus der App:** Tab **System** → „Zur Raspberry-Pi-Shell (PIN)" → PIN eingeben →
+  Root-Shell. `exit` (oder `logout`) bringt die App zurück. tty1 bleibt die ganze
+  Zeit unter Kontrolle des Dienstes, deshalb landet man nach dem Shell-Ende
+  **immer** wieder im Dashboard.
 - **Direkt:** **Strg+Alt+F2** wechselt auf tty2 mit dem normalen Login (Benutzer
   + Passwort des Raspberry Pi OS). Zurück zum Menü mit **Strg+Alt+F1**.
 
@@ -168,19 +156,29 @@ Es gibt bewusst **zwei** Wege — einer bequem, einer als Netz:
 
 ## Fernzugriff (SSH / Raspberry Pi Connect)
 
-Das Menü ist eine **lokale** Konsole auf tty1. Es lässt sich aber auch aus der
-Ferne öffnen — der Installer legt dafür den Befehl **`offgrid-console`** nach
-`/usr/local/bin`:
+Die Dashboard-App läuft auf tty1 — erscheint aber **auch beim SSH-Login**
+automatisch: Der Installer legt ein `profile.d`-Snippet an, das interaktive
+**SSH-Sitzungen** direkt auf dem OffgridCloud-Dashboard landen lässt (statt auf
+einem nackten Prompt). **`q` beendet** die App und führt zur normalen Shell —
+über SSH bist du ja bereits angemeldet, deshalb gibt es hier **keine Sperre**
+(anders als am tty1-Kiosk, wo der Shell-Sprung PIN-geschützt ist). `scp`/`sftp`/
+`rsync` sind nicht interaktiv und werden übersprungen; lokale tty-Logins behalten
+ihre normale Shell.
+
+Manuell öffnen geht immer über den Befehl **`offgrid-console`** (vom Installer nach
+`/usr/local/bin` gelegt):
 
 ```bash
-sudo offgrid-console            # das komplette Menü in der aktuellen Sitzung
-sudo offgrid-console --set-pin  # PIN ändern
+offgrid-console            # Dashboard in der aktuellen Sitzung (q beendet)
+sudo offgrid-console       # als root — für Neustart/Herunterfahren/PIN-Shell
+sudo offgrid-console --set-pin
 ```
 
 Weil das Programm seinen echten Pfad selbst auflöst, funktioniert der Befehl auch
-über den Symlink korrekt (findet `.env` und die PIN-Datei). Er startet eine
-**eigene** Menü-Instanz — nicht die tty1-Sitzung gespiegelt —, alle Aktionen
-(Status, Neustart, Herunterfahren, PIN→Shell) wirken aber identisch.
+über den Symlink korrekt (findet `.env` und die PIN-Datei). Hinweis: Geräte-
+Aktionen (Dienst-Neustart, Reboot, Shutdown) brauchen root — per SSH also
+`sudo offgrid-console`. Die Verwaltung (Provider, Netz, Pool, Benutzer, System)
+läuft über den Admin-Login der API und funktioniert auch ohne root.
 
 ### Raspberry Pi Connect
 

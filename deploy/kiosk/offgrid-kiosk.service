@@ -20,6 +20,9 @@ Before=getty.target
 Type=idle
 Environment=TERM=linux
 Environment=OGC_PREFIX=/opt/offgridcloud
+# Kiosk mode: the console cannot be quit to a shell here (only the PIN gate).
+# An SSH login runs the same program WITHOUT this, so it may quit to the shell.
+Environment=OGC_KIOSK=1
 ExecStart=/opt/offgridcloud/deploy/kiosk/offgrid-console.py
 Restart=always
 RestartSec=2
