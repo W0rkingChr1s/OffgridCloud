@@ -308,6 +308,68 @@ class Api:
     def network_scan(self) -> dict:
         return self._request("POST", "/api/network/scan")
 
+    # Bandwidth
+    def get_bandwidth(self) -> dict:
+        return self._request("GET", "/api/bandwidth")
+
+    def put_bandwidth(self, patch: dict) -> dict:
+        return self._request("PUT", "/api/bandwidth", patch)
+
+    # Pool (multi-server)
+    def get_pool_overview(self) -> dict:
+        return self._request("GET", "/api/pool/overview")
+
+    def get_pool_self(self) -> dict:
+        return self._request("GET", "/api/pool/self")
+
+    def pool_token_generate(self) -> dict:
+        return self._request("POST", "/api/pool/token")
+
+    def pool_token_clear(self) -> dict:
+        return self._request("DELETE", "/api/pool/token")
+
+    def get_pool_peers(self) -> list:
+        return self._request("GET", "/api/pool/peers")
+
+    def add_pool_peer(self, payload: dict) -> dict:
+        return self._request("POST", "/api/pool/peers", payload)
+
+    def delete_pool_peer(self, peer_id: int) -> dict:
+        return self._request("DELETE", f"/api/pool/peers/{peer_id}")
+
+    # Users
+    def get_users(self) -> list:
+        return self._request("GET", "/api/users")
+
+    def create_user(self, payload: dict) -> dict:
+        return self._request("POST", "/api/users", payload)
+
+    def update_user(self, user_id: int, patch: dict) -> dict:
+        return self._request("PATCH", f"/api/users/{user_id}", patch)
+
+    def delete_user(self, user_id: int) -> dict:
+        return self._request("DELETE", f"/api/users/{user_id}")
+
+    # Groups
+    def get_groups(self) -> list:
+        return self._request("GET", "/api/groups")
+
+    def create_group(self, payload: dict) -> dict:
+        return self._request("POST", "/api/groups", payload)
+
+    def delete_group(self, group_id: int) -> dict:
+        return self._request("DELETE", f"/api/groups/{group_id}")
+
+    def set_group_members(self, group_id: int, user_ids: list) -> dict:
+        return self._request("PUT", f"/api/groups/{group_id}/members", {"user_ids": user_ids})
+
+    # Updates
+    def get_update_info(self) -> dict:
+        return self._request("GET", "/api/updates")
+
+    def apply_update(self) -> dict:
+        return self._request("POST", "/api/updates/apply", {})
+
 
 # System settings, grouped. ("group", title) is a non-selectable header; every
 # other row is (key, label, kind). kind: bool | text | int | secret:<status_key>
@@ -354,6 +416,24 @@ NETWORK_AP_FIELDS = [
     ("fail_threshold", "Fehlversuche bis AP", "int"),
 ]
 
+# Bandwidth policy (PUT /api/bandwidth). The time-window schedule stays web-only.
+BANDWIDTH_FIELDS = [
+    ("group", "Bandbreiten-Steuerung"),
+    ("enabled", "Steuerung aktiv", "bool"),
+    ("bwlimit_kbps", "Upload-Limit (KiB/s, 0 = unbegrenzt)", "int"),
+    ("min_bandwidth_kbps", "Mindest-Bandbreite-Gate (KiB/s)", "int"),
+]
+
+# Top-level tabs. The dashboard is the landing view (also shown on SSH login).
+TABS = [
+    ("dashboard", "Dashboard"),
+    ("providers", "Provider"),
+    ("network", "Netz & Verbindung"),
+    ("pool", "Pool"),
+    ("users", "Benutzer & Gruppen"),
+    ("system", "System"),
+]
+
 
 # --- Curses UI --------------------------------------------------------------
 # "OffgridCloud" in the figlet "cybermedium" font — compact (3 rows) so it fits
@@ -364,24 +444,19 @@ LOGO = [
     "|__| |    |    |__] |  \\ | |__/ |___ |___ |__| |__| |__/",
 ]
 
-MENU = [
-    ("refresh", "Status aktualisieren"),
-    ("url", "Admin-Zugang anzeigen"),
-    ("settings", "Einstellungen (Admin)"),
-    ("browser", "Web-Oberfläche im Browser öffnen"),
-    ("restart", "OffgridCloud-Dienst neu starten"),
-    ("reboot", "Box neu starten"),
-    ("shutdown", "Box herunterfahren"),
-    ("shell", "Zur Raspberry-Pi-Shell (PIN)"),
-]
-
-
 class Console:
     def __init__(self, stdscr):
         self.scr = stdscr
-        self.selected = 0
+        self.tab = 0
+        self.sel = 0
+        self.running = True
+        # Kiosk mode (tty1, set by the systemd unit) locks the box in: no
+        # quit-to-shell except the PIN gate. Any other launch (SSH / `sudo
+        # offgrid-console`) is already an authenticated session, so it may quit.
+        self.kiosk = os.environ.get("OGC_KIOSK") == "1"
         self.status = gather_status()
-        self.message = "Pfeiltasten: Auswahl · Enter: bestätigen · q: nichts tun"
+        self.message = ("←→ Tab · ↑↓ Auswahl · Enter · q beenden" if not self.kiosk
+                        else "←→ Tab wechseln · ↑↓ Auswahl · Enter: öffnen")
         self.api = Api(api_base())
         self.admin_email = read_env().get("OGC_INITIAL_ADMIN_EMAIL", "admin@offgrid.local")
         self._init_colors()
@@ -400,23 +475,31 @@ class Console:
         except curses.error:
             pass
 
-    # -- drawing --
+    # -- drawing (tabbed dashboard) --
     def draw(self):
         self.scr.erase()
         h, w = self.scr.getmaxyx()
-        y = 1
-        for line in LOGO:
-            self._center(y, line, curses.A_BOLD | self.color(1))
-            y += 1
-        self._center(y + 1, "OS · Lokale Konsole", self.color(4))
-        y += 3
-
-        y = self._draw_status(y + 1, w)
-        y += 1
-        self._draw_menu(y, w)
-        self._status_bar(h, w)
+        self._draw_tabbar(0, w)
+        if TABS[self.tab][0] == "dashboard":
+            self._draw_dashboard(3, w)
+        else:
+            self._draw_tabpage(3, w, TABS[self.tab][1], self._tab_actions())
+        self._addstr(h - 1, 1, self.message[: w - 2], self.color(4))
         self.scr.noutrefresh()
         curses.doupdate()
+
+    def _draw_tabbar(self, y, w):
+        x = 1
+        for i, (_, label) in enumerate(TABS):
+            seg = f" {i + 1} {label} "
+            active = i == self.tab
+            self._addstr(y, x, seg,
+                         (curses.A_REVERSE | curses.A_BOLD) if active else self.color(1))
+            x += len(seg)
+            if i < len(TABS) - 1:
+                self._addstr(y, x, "│", curses.A_DIM)
+                x += 1
+        self._addstr(y + 1, 1, "─" * (w - 2), curses.A_DIM)
 
     def _center(self, y, text, attr=0):
         _, w = self.scr.getmaxyx()
@@ -430,6 +513,16 @@ class Console:
                 self.scr.addnstr(y, x, text, max(0, w - x - 1), attr)
             except curses.error:
                 pass
+
+    def _draw_dashboard(self, y, w):
+        for line in LOGO:
+            self._center(y, line, curses.A_BOLD | self.color(1))
+            y += 1
+        self._center(y + 1, "OS · Lokale Konsole", self.color(4))
+        y = self._draw_status(y + 3, w)
+        self._addstr(y + 1, max(2, (w - 64) // 2),
+                     "Tabs: ←/→ oder 1–6 · Details öffnen: Tab wählen, ↑↓/Enter",
+                     curses.A_DIM)
 
     def _draw_status(self, y, w):
         s = self.status
@@ -454,29 +547,49 @@ class Console:
             y += 1
         return y
 
-    def _draw_menu(self, y, w):
-        x = max(2, (w - 64) // 2)
-        for i, (key, label) in enumerate(self._visible_menu()):
-            selected = i == self.selected
-            prefix = " ▶ " if selected else "   "
-            attr = curses.A_REVERSE | curses.A_BOLD if selected else 0
-            self._addstr(y, x, f"{prefix}{label}", attr)
-            y += 1
+    def _draw_tabpage(self, y, w, title, actions):
+        self._center(y, title, curses.A_BOLD | self.color(1))
+        x = max(2, (w - 56) // 2)
+        yy = y + 2
+        if not self.api.authed:
+            self._addstr(yy, x, "Admin-Login nötig — Enter auf einer Aktion.", curses.A_DIM)
+            yy += 2
+        for i, (_, label) in enumerate(actions):
+            sel = i == self.sel
+            self._addstr(yy, x, f"{' ▶ ' if sel else '   '}{label}",
+                         (curses.A_REVERSE | curses.A_BOLD) if sel else 0)
+            yy += 1
 
-    def _status_bar(self, h, w):
-        self._addstr(h - 1, 1, self.message[: w - 2], self.color(4))
+    # -- top-level navigation --
+    def _tab_actions(self):
+        key = TABS[self.tab][0]
+        if key == "providers":
+            return [("providers", "Cloud-Ziele verwalten")]
+        if key == "network":
+            return [("wifi", "WLAN & Fallback-AP"), ("bandwidth", "Bandbreite"), ("vpn", "VPN")]
+        if key == "pool":
+            return [("pool_ov", "Pool-Übersicht"),
+                    ("pool_token", "Diesen Knoten teilbar machen (Token)"),
+                    ("pool_peers", "Peers (andere Boxen) verwalten")]
+        if key == "users":
+            return [("users", "Benutzer"), ("groups", "Gruppen")]
+        if key == "system":
+            acts = [("updates", "Version & Updates"),
+                    ("storage", "Speicherbelegung"),
+                    ("syscfg", "Systemeinstellungen & Benachrichtigungen"),
+                    ("restart", "OffgridCloud-Dienst neu starten"),
+                    ("reboot", "Box neu starten"),
+                    ("shutdown", "Box herunterfahren")]
+            if CHROMIUM_LAUNCHER.exists() and _has_chromium():
+                acts.append(("browser", "Web-Oberfläche im Browser"))
+            acts.append(("shell", "Zur Raspberry-Pi-Shell (PIN)") if self.kiosk
+                        else ("quit", "Beenden (zur Shell)"))
+            return acts
+        return []
 
-    def _visible_menu(self):
-        items = list(MENU)
-        # Hide the browser item unless a chromium launcher is actually installed.
-        if not (CHROMIUM_LAUNCHER.exists() and _has_chromium()):
-            items = [it for it in items if it[0] != "browser"]
-        return items
-
-    # -- interaction --
     def run(self):
         self.scr.timeout(5000)  # auto-refresh status every 5s
-        while True:
+        while self.running:
             self.draw()
             try:
                 ch = self.scr.getch()
@@ -485,36 +598,67 @@ class Console:
             if ch == -1:
                 self.status = gather_status()
                 continue
-            if ch in (curses.KEY_UP, ord("k")):
-                self.selected = (self.selected - 1) % len(self._visible_menu())
+            actions = self._tab_actions()
+            if actions and self.sel >= len(actions):
+                self.sel = len(actions) - 1
+            if ch in (curses.KEY_LEFT, ord("h")):
+                self.tab = (self.tab - 1) % len(TABS)
+                self.sel = 0
+            elif ch in (curses.KEY_RIGHT, ord("l")):
+                self.tab = (self.tab + 1) % len(TABS)
+                self.sel = 0
+            elif ord("1") <= ch <= ord("0") + len(TABS):
+                self.tab = ch - ord("1")
+                self.sel = 0
+            elif ch in (curses.KEY_UP, ord("k")):
+                if actions:
+                    self.sel = (self.sel - 1) % len(actions)
             elif ch in (curses.KEY_DOWN, ord("j")):
-                self.selected = (self.selected + 1) % len(self._visible_menu())
+                if actions:
+                    self.sel = (self.sel + 1) % len(actions)
             elif ch in (curses.KEY_ENTER, 10, 13):
-                self._activate(self._visible_menu()[self.selected][0])
+                if actions:
+                    self._run_tab_action(actions[self.sel][0])
             elif ch in (ord("q"), ord("Q")):
-                self.message = "Kein Grund zu gehen — die Box läuft. (Enter für Aktionen)"
+                if self.kiosk:
+                    self.message = "Kiosk-Modus: Shell nur über System → PIN."
+                else:
+                    self.running = False
 
-    def _activate(self, key):
-        if key == "refresh":
-            self.status = gather_status()
-            self.message = "Status aktualisiert."
-        elif key == "url":
-            self._show_access()
-        elif key == "settings":
-            self._settings_area()
-        elif key == "browser":
-            self._launch_browser()
-        elif key == "restart":
+    def _run_tab_action(self, key):
+        no_auth = {"restart", "reboot", "shutdown", "shell", "browser", "quit"}
+        if key not in no_auth and not self._ensure_login():
+            return
+        if key == "restart":
             self._power("restart", "OffgridCloud-Dienst neu starten?",
                         ["systemctl", "restart", SERVICE_NAME])
         elif key == "reboot":
-            self._power("reboot", "Box wirklich NEU STARTEN?",
-                        ["systemctl", "reboot"])
+            self._power("reboot", "Box wirklich NEU STARTEN?", ["systemctl", "reboot"])
         elif key == "shutdown":
-            self._power("shutdown", "Box wirklich HERUNTERFAHREN?",
-                        ["systemctl", "poweroff"])
-        elif key == "shell":
-            self._drop_to_shell()
+            self._power("shutdown", "Box wirklich HERUNTERFAHREN?", ["systemctl", "poweroff"])
+        elif key == "quit":
+            self.running = False
+        elif key == "syscfg":
+            self._live_editor("System & Benachrichtigungen", SYSTEM_FIELDS,
+                              self.api.get_system, self.api.patch_system)
+        else:
+            handler = {
+                "providers": self._providers_area,
+                "wifi": self._network_area,
+                "bandwidth": self._bandwidth_editor,
+                "vpn": self._vpn_area,
+                "pool_ov": self._pool_overview,
+                "pool_token": self._pool_token,
+                "pool_peers": self._pool_peers,
+                "users": self._users_area,
+                "groups": self._groups_area,
+                "updates": self._updates_area,
+                "storage": self._storage_view,
+                "browser": self._launch_browser,
+                "shell": self._drop_to_shell,
+            }.get(key)
+            if handler:
+                handler()
 
     # -- dialogs --
     def _prompt(self, question, mask=False, default=""):
@@ -550,13 +694,6 @@ class Console:
     def _confirm(self, question):
         answer = self._prompt(f"{question} [j/N]")
         return bool(answer) and answer.strip().lower() in ("j", "ja", "y", "yes")
-
-    def _show_access(self):
-        s = self.status
-        self.message = (
-            f"Öffnen: {s['url']}  ·  Login: {s['admin_email']} "
-            f"(Passwort steht im Installations-Protokoll)"
-        )
 
     def _power(self, _key, question, cmd):
         if not self._confirm(question):
@@ -635,39 +772,6 @@ class Console:
         self.admin_email = email.strip()
         self.message = f"Angemeldet als {self.admin_email}."
         return True
-
-    def _settings_area(self):
-        if not self._ensure_login():
-            return
-        items = [
-            ("system", "System & Benachrichtigungen"),
-            ("providers", "Cloud-Ziele (Provider)"),
-            ("vpn", "VPN"),
-            ("network", "Netzwerk (WLAN / Fallback-AP)"),
-            ("logout", "Abmelden"),
-            ("back", "Zurück zum Hauptmenü"),
-        ]
-        sel = 0
-        while True:
-            sel = self._submenu(f"Einstellungen — {self.admin_email}", items, sel)
-            if sel is None:
-                return
-            key = items[sel][0]
-            if key == "system":
-                self._live_editor("System & Benachrichtigungen", SYSTEM_FIELDS,
-                                  self.api.get_system, self.api.patch_system)
-            elif key == "providers":
-                self._providers_area()
-            elif key == "vpn":
-                self._vpn_area()
-            elif key == "network":
-                self._network_area()
-            elif key == "logout":
-                self.api.token = None
-                self.message = "Abgemeldet."
-                return
-            else:  # back
-                return
 
     def _submenu(self, title, items, selected=0, hint=""):
         """Modal list screen; returns the chosen index, or None on Esc/q."""
@@ -1137,6 +1241,375 @@ class Console:
         except (ApiError, ValueError) as exc:
             detail = getattr(exc, "detail", str(exc))
             self.message = f"Speichern fehlgeschlagen: {detail}"
+
+    # -- read-only text viewer (pool overview, storage, release notes) --
+    def _show_text(self, title, lines):
+        top = 0
+        self.scr.timeout(-1)
+        try:
+            while True:
+                self.scr.erase()
+                h, w = self.scr.getmaxyx()
+                self._center(0, title, curses.A_BOLD | self.color(1))
+                view = max(3, h - 3)
+                for i in range(view):
+                    if top + i < len(lines):
+                        self._addstr(2 + i, 2, str(lines[top + i])[: w - 3])
+                more = " · ↑↓ scrollen" if len(lines) > view else ""
+                self._addstr(h - 1, 1, f"Esc: zurück{more}", curses.A_DIM)
+                self.scr.noutrefresh()
+                curses.doupdate()
+                ch = self.scr.getch()
+                if ch in (curses.KEY_UP, ord("k")):
+                    top = max(0, top - 1)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    top = min(max(0, len(lines) - view), top + 1)
+                elif ch in (27, ord("q"), ord("Q"), curses.KEY_ENTER, 10, 13):
+                    return
+        finally:
+            self.scr.timeout(5000)
+
+    # -- Bandwidth --
+    def _bandwidth_editor(self):
+        self._live_editor("Bandbreite", BANDWIDTH_FIELDS,
+                          self.api.get_bandwidth, self.api.put_bandwidth)
+
+    # -- Pool (multi-server) --
+    def _pool_overview(self):
+        try:
+            ov = self.api.get_pool_overview()
+        except ApiError as exc:
+            self.message = f"Konnte Pool nicht laden: {exc.detail}"
+            return
+
+        def node_lines(n, prefix=""):
+            out = [f"{prefix}{n.get('name', '?')}"
+                   f"  ({'erreichbar' if n.get('reachable') else 'offline'})"]
+            if n.get("version"):
+                out.append(f"{prefix}   Version: {n['version']}")
+            out.append(f"{prefix}   Medien: {n.get('media_total', 0)}"
+                       f" · aktive Transfers: {n.get('active_transfers', 0)}")
+            if n.get("disk_total"):
+                out.append(f"{prefix}   Speicher frei: {_h(n.get('disk_free', 0))}"
+                           f" / {_h(n['disk_total'])}")
+            if n.get("throughput_kbps"):
+                out.append(f"{prefix}   Durchsatz: {n['throughput_kbps']:.0f} KiB/s")
+            if n.get("error"):
+                out.append(f"{prefix}   Fehler: {n['error']}")
+            return out
+
+        lines = ["— Dieser Knoten —"] + node_lines(ov.get("self") or {})
+        peers = ov.get("peers", [])
+        lines += ["", f"— Peers ({len(peers)}) —"]
+        if not peers:
+            lines.append("  (keine konfiguriert)")
+        for p in peers:
+            lines += node_lines(p, prefix="  ")
+        self._show_text("Pool-Übersicht", lines)
+
+    def _pool_token(self):
+        try:
+            s = self.api.get_pool_self()
+        except ApiError as exc:
+            self.message = f"Konnte Token-Status nicht laden: {exc.detail}"
+            return
+        token = s.get("pool_token", "")
+        token_set = s.get("token_set")
+        items = []
+        if token:
+            items.append(("show", "Token anzeigen"))
+        items.append(("gen", "Neuen Token erzeugen" if token_set else "Token erzeugen"))
+        if token_set:
+            items.append(("clear", "Token entfernen (nicht mehr teilen)"))
+        items.append(("back", "Zurück"))
+        hint = "Teilbar (Token gesetzt)" if token_set else "Nicht teilbar (kein Token)"
+        sel = self._submenu("Diesen Knoten teilbar machen", items, 0, hint=hint)
+        if sel is None:
+            return
+        key = items[sel][0]
+        try:
+            if key == "show" and token:
+                self._show_text("Pool-Token", [
+                    "Diesen Token bei anderen Boxen als „Peer-Token“ eintragen:", "", token])
+            elif key == "gen":
+                r = self.api.pool_token_generate()
+                self._show_text("Neuer Pool-Token", [
+                    "Token erzeugt — bei anderen Boxen als Peer-Token eintragen:",
+                    "", r.get("pool_token", "")])
+            elif key == "clear" and self._confirm("Token wirklich entfernen?"):
+                self.api.pool_token_clear()
+                self.message = "Token entfernt."
+        except ApiError as exc:
+            self.message = f"Fehlgeschlagen: {exc.detail}"
+
+    def _pool_peers(self):
+        while True:
+            try:
+                peers = self.api.get_pool_peers()
+            except ApiError as exc:
+                self.message = f"Konnte Peers nicht laden: {exc.detail}"
+                return
+            items = [("__add__", "+ Peer hinzufügen")]
+            for p in peers:
+                items.append((str(p["id"]),
+                              f"{p['name']}  {p['base_url']}  {'✓' if p['enabled'] else '×'}"))
+            items.append(("__back__", "Zurück"))
+            sel = self._submenu("Pool-Peers (andere Boxen)", items, 0)
+            if sel is None:
+                return
+            key = items[sel][0]
+            if key == "__back__":
+                return
+            if key == "__add__":
+                fields = [
+                    {"key": "name", "label": "Name", "type": "text", "required": True},
+                    {"key": "base_url", "label": "URL (http://host:8000)", "type": "text",
+                     "required": True},
+                    {"key": "token", "label": "Peer-Token", "type": "password", "required": False},
+                ]
+                vals = self._collect_form("Peer hinzufügen", fields)
+                if vals is None:
+                    continue
+                try:
+                    self.api.add_pool_peer({"name": str(vals["name"]).strip(),
+                                            "base_url": str(vals["base_url"]).strip(),
+                                            "token": str(vals["token"])})
+                    self.message = "Peer hinzugefügt."
+                except ApiError as exc:
+                    self.message = f"Fehlgeschlagen: {exc.detail}"
+            elif self._confirm("Peer löschen?"):
+                try:
+                    self.api.delete_pool_peer(int(key))
+                    self.message = "Peer gelöscht."
+                except ApiError as exc:
+                    self.message = f"Löschen fehlgeschlagen: {exc.detail}"
+
+    # -- Users --
+    def _users_area(self):
+        while True:
+            try:
+                users = self.api.get_users()
+            except ApiError as exc:
+                self.message = f"Konnte Benutzer nicht laden: {exc.detail}"
+                return
+            items = [("__add__", "+ Benutzer anlegen")]
+            for u in users:
+                flag = "" if u["active"] else " · inaktiv"
+                items.append((str(u["id"]), f"{u['email']}  [{u['role']}]{flag}"))
+            items.append(("__back__", "Zurück"))
+            sel = self._submenu("Benutzer", items, 0)
+            if sel is None:
+                return
+            key = items[sel][0]
+            if key == "__back__":
+                return
+            if key == "__add__":
+                self._user_add()
+            else:
+                self._user_actions(next(u for u in users if str(u["id"]) == key))
+
+    def _user_add(self):
+        fields = [
+            {"key": "email", "label": "E-Mail", "type": "text", "required": True},
+            {"key": "name", "label": "Name", "type": "text", "required": False},
+            {"key": "password", "label": "Passwort (min. 8)", "type": "password", "required": True},
+            {"key": "role", "label": "Rolle", "type": "select",
+             "options": ["user", "admin"], "default": "user", "required": True},
+        ]
+        vals = self._collect_form("Benutzer anlegen", fields)
+        if vals is None:
+            return
+        try:
+            self.api.create_user({"email": str(vals["email"]).strip(),
+                                  "name": str(vals["name"]).strip(),
+                                  "password": str(vals["password"]),
+                                  "role": str(vals["role"])})
+            self.message = f"Benutzer „{vals['email']}“ angelegt."
+        except ApiError as exc:
+            self.message = f"Anlegen fehlgeschlagen: {exc.detail}"
+
+    def _user_actions(self, user):
+        active = user["active"]
+        acts = [("pw", "Passwort zurücksetzen"),
+                ("toggle", "Deaktivieren" if active else "Aktivieren"),
+                ("role", "Rolle wechseln (user/admin)"),
+                ("delete", "Löschen"), ("back", "Zurück")]
+        sel = self._submenu(f"{user['email']} [{user['role']}]", acts, 0)
+        if sel is None:
+            return
+        key = acts[sel][0]
+        try:
+            if key == "pw":
+                pw = self._prompt("Neues Passwort (min. 8):", mask=True)
+                if pw:
+                    self.api.update_user(user["id"], {"password": pw})
+                    self.message = "Passwort geändert."
+            elif key == "toggle":
+                self.api.update_user(user["id"], {"active": not active})
+                self.message = "Aktualisiert."
+            elif key == "role":
+                new = "admin" if user["role"] == "user" else "user"
+                if self._confirm(f"Rolle auf „{new}“ setzen?"):
+                    self.api.update_user(user["id"], {"role": new})
+                    self.message = f"Rolle: {new}."
+            elif key == "delete" and self._confirm(f"„{user['email']}“ löschen?"):
+                self.api.delete_user(user["id"])
+                self.message = "Benutzer gelöscht."
+        except ApiError as exc:
+            self.message = f"Fehlgeschlagen: {exc.detail}"
+
+    # -- Groups --
+    def _groups_area(self):
+        while True:
+            try:
+                groups = self.api.get_groups()
+                users = self.api.get_users()
+            except ApiError as exc:
+                self.message = f"Konnte Gruppen nicht laden: {exc.detail}"
+                return
+            items = [("__add__", "+ Gruppe anlegen")]
+            for g in groups:
+                items.append((str(g["id"]),
+                              f"{g['name']}  ({len(g.get('member_ids', []))} Mitglieder)"))
+            items.append(("__back__", "Zurück"))
+            sel = self._submenu("Gruppen", items, 0)
+            if sel is None:
+                return
+            key = items[sel][0]
+            if key == "__back__":
+                return
+            if key == "__add__":
+                fields = [{"key": "name", "label": "Name", "type": "text", "required": True},
+                          {"key": "description", "label": "Beschreibung", "type": "text",
+                           "required": False}]
+                vals = self._collect_form("Gruppe anlegen", fields)
+                if vals is None:
+                    continue
+                try:
+                    self.api.create_group({"name": str(vals["name"]).strip(),
+                                           "description": str(vals["description"]).strip()})
+                    self.message = "Gruppe angelegt."
+                except ApiError as exc:
+                    self.message = f"Anlegen fehlgeschlagen: {exc.detail}"
+            else:
+                self._group_actions(next(g for g in groups if str(g["id"]) == key), users)
+
+    def _group_actions(self, group, users):
+        acts = [("members", "Mitglieder verwalten"), ("delete", "Löschen"), ("back", "Zurück")]
+        sel = self._submenu(f"Gruppe: {group['name']}", acts, 0)
+        if sel is None:
+            return
+        key = acts[sel][0]
+        if key == "members":
+            self._group_members(group, users)
+        elif key == "delete" and self._confirm(f"Gruppe „{group['name']}“ löschen?"):
+            try:
+                self.api.delete_group(group["id"])
+                self.message = "Gruppe gelöscht."
+            except ApiError as exc:
+                self.message = f"Löschen fehlgeschlagen: {exc.detail}"
+
+    def _group_members(self, group, users):
+        if not users:
+            self.message = "Keine Benutzer vorhanden."
+            return
+        member_ids = set(group.get("member_ids", []))
+        pos = 0
+        top = 0
+        self.scr.timeout(-1)
+        try:
+            while True:
+                h, w = self.scr.getmaxyx()
+                rows = max(3, h - 4)
+                if pos < top:
+                    top = pos
+                elif pos >= top + rows:
+                    top = pos - rows + 1
+                self.scr.erase()
+                self._center(0, f"Mitglieder: {group['name']}", curses.A_BOLD | self.color(1))
+                x = max(2, (w - 56) // 2)
+                y = 2
+                for idx in range(top, min(len(users), top + rows)):
+                    u = users[idx]
+                    box = "[x]" if u["id"] in member_ids else "[ ]"
+                    is_sel = idx == pos
+                    self._addstr(y, x, f"{'▶' if is_sel else ' '} {box} {u['email']}",
+                                 curses.A_REVERSE if is_sel else 0)
+                    y += 1
+                self._addstr(h - 1, 1,
+                             "Space: umschalten · s: speichern · Esc: abbrechen", curses.A_DIM)
+                self.scr.noutrefresh()
+                curses.doupdate()
+                ch = self.scr.getch()
+                if ch in (curses.KEY_UP, ord("k")):
+                    pos = (pos - 1) % len(users)
+                elif ch in (curses.KEY_DOWN, ord("j")):
+                    pos = (pos + 1) % len(users)
+                elif ch in (ord(" "), curses.KEY_ENTER, 10, 13):
+                    uid = users[pos]["id"]
+                    member_ids.discard(uid) if uid in member_ids else member_ids.add(uid)
+                elif ch in (ord("s"), ord("S")):
+                    try:
+                        self.api.set_group_members(group["id"], sorted(member_ids))
+                        self.message = "Mitglieder gespeichert."
+                    except ApiError as exc:
+                        self.message = f"Speichern fehlgeschlagen: {exc.detail}"
+                    return
+                elif ch == 27:
+                    return
+        finally:
+            self.scr.timeout(5000)
+
+    # -- System: updates + storage --
+    def _updates_area(self):
+        try:
+            info = self.api.get_update_info()
+        except ApiError as exc:
+            self.message = f"Konnte Update-Info nicht laden: {exc.detail}"
+            return
+        cur = info.get("current", "?")
+        latest = info.get("latest") or "—"
+        avail = info.get("update_available")
+        hint = f"Installiert {cur} · verfügbar {latest} · " + \
+               ("UPDATE VERFÜGBAR" if avail else "aktuell")
+        items = [("info", "Details / Release-Notes")]
+        if avail and info.get("self_update_enabled"):
+            items.append(("apply", f"Jetzt aktualisieren ({latest})"))
+        items.append(("back", "Zurück"))
+        sel = self._submenu("Version & Updates", items, 0, hint=hint)
+        if sel is None:
+            return
+        key = items[sel][0]
+        if key == "info":
+            lines = [f"Installiert: {cur}", f"Verfügbar:   {latest}",
+                     f"Status:      {'Update verfügbar' if avail else 'aktuell'}"]
+            for lbl, k in [("Release", "release_name"), ("Datum", "published_at"),
+                           ("Hinweis", "error")]:
+                if info.get(k):
+                    lines.append(f"{lbl + ':':<12} {info[k]}")
+            if info.get("notes"):
+                lines += ["", "Release-Notes:"] + info["notes"].splitlines()
+            self._show_text("Version & Updates", lines)
+        elif key == "apply" and self._confirm(f"Auf {latest} aktualisieren? Der Dienst startet neu."):
+            try:
+                r = self.api.apply_update()
+                self.message = f"Update: {r.get('message', 'gestartet')}"
+            except ApiError as exc:
+                self.message = f"Update fehlgeschlagen: {exc.detail}"
+
+    def _storage_view(self):
+        try:
+            sysd = self.api.get_system()
+        except ApiError as exc:
+            self.message = f"Konnte Speicher nicht laden: {exc.detail}"
+            return
+        d = sysd.get("disk", {})
+        lines = [f"Belegt:      {_h(d.get('used', 0))}",
+                 f"Frei:        {_h(d.get('free', 0))}",
+                 f"Gesamt:      {_h(d.get('total', 0))}",
+                 f"Auslastung:  {d.get('percent_used', 0):.0f} %",
+                 f"Wenig Speicher: {'JA' if d.get('low_space') else 'nein'}"]
+        self._show_text("Speicherbelegung (Puffer)", lines)
 
 
 def _has_chromium() -> bool:

@@ -62,6 +62,15 @@ else
   echo "   Could not create /usr/local/bin/offgrid-console (non-fatal)." >&2
 fi
 
+# --- SSH login → the dashboard ---------------------------------------------
+# Drop a profile.d snippet so interactive SSH logins land on the console.
+step "Showing the dashboard on SSH login (/etc/profile.d)..."
+if install -m 644 "$HERE/offgrid-console.profile.sh" /etc/profile.d/offgrid-console.sh 2>/dev/null; then
+  echo "   SSH sessions now open the OffgridCloud dashboard (press q for a shell)."
+else
+  echo "   Could not write /etc/profile.d/offgrid-console.sh (non-fatal)." >&2
+fi
+
 # --- 1. Admin PIN -----------------------------------------------------------
 step "Configuring the admin PIN (gates the drop-to-shell action)..."
 PIN_FILE="$PREFIX/data/kiosk.pin"
