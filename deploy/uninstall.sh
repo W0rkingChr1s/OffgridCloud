@@ -33,6 +33,14 @@ rm -f /etc/systemd/system/offgridcloud.service
 rm -f /etc/sudoers.d/offgridcloud
 systemctl daemon-reload 2>/dev/null || true
 
+echo ">> Removing the on-box console (kiosk), if installed..."
+systemctl disable --now offgrid-kiosk.service 2>/dev/null || true
+rm -f /etc/systemd/system/offgrid-kiosk.service
+# Hand tty1 back to a normal login prompt.
+systemctl unmask getty@tty1.service 2>/dev/null || true
+systemctl daemon-reload 2>/dev/null || true
+systemctl start getty@tty1.service 2>/dev/null || true
+
 if [[ $PURGE -eq 1 ]]; then
   echo ">> Purging everything under $PREFIX (including data)..."
   rm -rf "$PREFIX"

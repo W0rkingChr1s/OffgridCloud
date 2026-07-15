@@ -27,6 +27,12 @@
 #   --with-vpn             Enable the VPN client on this native install: installs
 #                          wireguard-tools/openvpn, loads the tun module and
 #                          grants the service CAP_NET_ADMIN (systemd drop-in).
+#   --with-kiosk           Install the on-box "OffgridCloud OS" console: a
+#                          full-screen menu on tty1 (a monitor on the box shows
+#                          only OffgridCloud; a PIN drops to the Raspbian shell).
+#   --with-chromium-kiosk  Like --with-kiosk, plus a minimal X + Chromium stack so
+#                          the menu can open the full web UI full-screen (Pi 4/5).
+#   --kiosk-pin PIN        PIN for the kiosk shell gate (default: random, shown once).
 #   --no-speedtest         Skip installing the Ookla Speedtest CLI (used for the
 #                          bandwidth "measure now"; the HTTP probe still works).
 #   --no-service           Skip installing the systemd unit.
@@ -42,6 +48,9 @@ INSTALL_SERVICE=1
 WITH_FFMPEG=0
 WITH_AP_FALLBACK=0
 WITH_VPN=0
+WITH_KIOSK=0
+WITH_CHROMIUM_KIOSK=0
+KIOSK_PIN=""
 WITH_SPEEDTEST=1
 SPEEDTEST_VER="1.2.0"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -61,6 +70,9 @@ while [[ $# -gt 0 ]]; do
     --power-control) echo "   Note: --power-control is now the default; flag ignored."; shift ;;
     --with-ap-fallback) WITH_AP_FALLBACK=1; shift ;;
     --with-vpn) WITH_VPN=1; shift ;;
+    --with-kiosk) WITH_KIOSK=1; shift ;;
+    --with-chromium-kiosk) WITH_KIOSK=1; WITH_CHROMIUM_KIOSK=1; shift ;;
+    --kiosk-pin) KIOSK_PIN="${2:?--kiosk-pin needs a value}"; shift 2 ;;
     --no-speedtest) WITH_SPEEDTEST=0; shift ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -289,6 +301,21 @@ if [[ $WITH_VPN -eq 1 ]]; then
     echo "   --no-service given: VPN needs the systemd unit for the CAP_NET_ADMIN"
     echo "   drop-in. Skipped; run $PREFIX/deploy/vpn/install.sh after installing the service."
   fi
+fi
+
+# --- Optional: on-box "OffgridCloud OS" console (kiosk) --------------------
+if [[ $WITH_KIOSK -eq 1 ]]; then
+  step "Installing the on-box OffgridCloud OS console (kiosk on tty1)..."
+  # Copy the kiosk scripts somewhere persistent so the systemd unit's path
+  # survives after the source checkout is gone, then run the installer there.
+  mkdir -p "$PREFIX/deploy"
+  cp -r "$REPO_ROOT/deploy/kiosk" "$PREFIX/deploy/kiosk"
+  chmod +x "$PREFIX/deploy/kiosk/"*.sh "$PREFIX/deploy/kiosk/offgrid-console.py" 2>/dev/null || true
+  KIOSK_ARGS=(--prefix "$PREFIX")
+  [[ $WITH_CHROMIUM_KIOSK -eq 1 ]] && KIOSK_ARGS+=(--with-chromium)
+  [[ -n "$KIOSK_PIN" ]] && KIOSK_ARGS+=(--pin "$KIOSK_PIN")
+  bash "$PREFIX/deploy/kiosk/install.sh" "${KIOSK_ARGS[@]}" \
+    || echo "   Kiosk setup reported an issue — see docs/KIOSK.md." >&2
 fi
 
 # --- Optional start + health check -----------------------------------------
