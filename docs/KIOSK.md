@@ -35,12 +35,41 @@ Optional kann das Menü auch die **volle Web-Oberfläche im Vollbild-Chromium**
 |---|---|
 | Status aktualisieren | Werte neu einlesen (passiert auch alle 5 s automatisch) |
 | Admin-Zugang anzeigen | URL + Admin-E-Mail einblenden (Passwort steht im Installations-Protokoll) |
+| **Einstellungen (Admin)** | **Alle Einstellungen direkt an der Box** — siehe unten |
 | Web-Oberfläche im Browser öffnen | Nur wenn Chromium installiert ist (siehe unten) |
 | OffgridCloud-Dienst neu starten | `systemctl restart offgridcloud` (mit Rückfrage) |
 | Box neu starten / herunterfahren | `reboot` / `poweroff` (mit Rückfrage) |
 | Zur Raspberry-Pi-Shell (PIN) | Nach korrekter PIN eine Root-Shell; `exit` führt zurück ins Menü |
 
 Bedienung: **Pfeiltasten** (oder `j`/`k`) wählen, **Enter** bestätigt.
+
+## Einstellungen (Admin) — ohne Web-UI
+
+Unter **„Einstellungen (Admin)"** lässt sich die Box **komplett lokal** einrichten,
+ohne ein zweites Gerät. Beim ersten Aufruf fragt die Konsole einmal pro Sitzung
+nach **Admin-E-Mail und Passwort** (dieselben Zugangsdaten wie in der Web-UI) —
+denn intern steuert die Konsole **dieselbe lokale API** wie die Weboberfläche.
+So gibt es keine doppelte Logik, und Konsole und Web-UI bleiben immer synchron.
+
+Verfügbare Bereiche:
+
+- **System & Benachrichtigungen** — Lösch-/Sync-Regeln, Mess-URL der Bandbreiten-
+  Probe, sowie alle Alert-Kanäle (Webhook, **Telegram**, **E-Mail/SMTP**) und die
+  Ereignis-Schalter (Empfang, fertig, fehlgeschlagen, wenig Speicher, Start,
+  Wieder-online, Bandbreite). Jede Zeile mit **Enter** umschalten/ändern.
+- **Cloud-Ziele (Provider)** — vorhandene Ziele anzeigen, **Verbindung testen**,
+  **löschen** und **neu anlegen**. Das Formular wird dynamisch aus dem Provider-
+  Katalog gebaut (S3, MinIO, Azure, WebDAV, SFTP, Nextcloud … — alle Typen der
+  Web-UI, inkl. der jeweils passenden Felder und Passwort-Eingaben).
+- **VPN** — WireGuard/OpenVPN-Profile **verbinden/trennen/löschen** und ein neues
+  Profil **aus einer Datei** (`.conf`/`.ovpn`) anlegen.
+- **Netzwerk (WLAN / Fallback-AP)** — Fallback-AP + Watchdog einstellen, bekannte
+  **WLANs hinzufügen/löschen**, einen **WLAN-Scan** ausführen und die Konfiguration
+  **anwenden** (`Jetzt anwenden`).
+
+Sicherheit: Passwörter/Tokens sind reine Schreibfelder — die Konsole zeigt nur
+„gesetzt/leer" an, nie den Klartext (genau wie die API). Die Anmeldung gilt nur
+für die laufende Sitzung; „Abmelden" verwirft das Token sofort.
 
 ## Warum eine Text-Konsole (und nicht sofort ein Browser)
 
