@@ -300,6 +300,32 @@ def test_progress_endpoint_reports_state(client, admin_auth):
     write_state(data_dir, UpdateState())
 
 
+def test_dismiss_clears_finished_result(client, admin_auth):
+    from app.config import get_settings
+
+    data_dir = get_settings().data_dir
+    write_state(data_dir, UpdateState(phase=PHASE_FAILED, message="stuck", from_version="0.3.5"))
+    (Path(data_dir) / "update.log").write_text("old transcript\n")
+    r = client.post("/api/updates/dismiss", headers=admin_auth)
+    assert r.status_code == 200
+    assert r.json()["phase"] == "idle"
+    # Progress now reports idle with no leftover log.
+    body = client.get("/api/updates/progress", headers=admin_auth).json()
+    assert body["phase"] == "idle"
+    assert body["log"] == ""
+
+
+def test_dismiss_refuses_while_running(client, admin_auth):
+    from app.config import get_settings
+
+    data_dir = get_settings().data_dir
+    write_state(data_dir, UpdateState(phase=PHASE_RUNNING, from_version="0.3.5"))
+    r = client.post("/api/updates/dismiss", headers=admin_auth)
+    assert r.status_code == 409
+    # Reset so it doesn't leak into other tests sharing the data dir.
+    write_state(data_dir, UpdateState())
+
+
 def test_progress_endpoint_requires_admin(client, admin_auth):
     client.post(
         "/api/users",
