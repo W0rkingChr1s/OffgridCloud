@@ -190,11 +190,12 @@ def gather_status() -> dict[str, str]:
 
 
 # --- Curses UI --------------------------------------------------------------
+# "OffgridCloud" in the figlet "cybermedium" font — compact (3 rows) so it fits
+# even an 80x24 console, and reads clearly on the framebuffer console font.
 LOGO = [
-    "  ___  __  __ ___         _    ___ _             _ ",
-    " / _ \\|  \\/  / __|_ _ ___| |__| |  / __|_  _ __| |",
-    "| (_) | |\\/| \\__ \\ '_|_ / '_ \\_ _| (__| || / _` |",
-    " \\___/|_|  |_|___/_| /__|_.__/|_|  \\___|\\_,_\\__,_|",
+    "____ ____ ____ ____ ____ _ ___  ____ _    ____ _  _ ___",
+    "|  | |___ |___ | __ |__/ | |  \\ |    |    |  | |  | |  \\",
+    "|__| |    |    |__] |  \\ | |__/ |___ |___ |__| |__| |__/",
 ]
 
 MENU = [
@@ -238,7 +239,7 @@ class Console:
         for line in LOGO:
             self._center(y, line, curses.A_BOLD | self.color(1))
             y += 1
-        self._center(y + 1, "OffgridCloud OS · lokale Konsole", self.color(4))
+        self._center(y + 1, "OS · Lokale Konsole", self.color(4))
         y += 3
 
         y = self._draw_status(y + 1, w)
