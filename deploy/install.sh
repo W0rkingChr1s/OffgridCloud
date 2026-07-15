@@ -28,23 +28,44 @@
 # commands still run, they just fall through to the questions / env defaults).
 set -euo pipefail
 
-# --- Defaults (env-overridable; also serve as the interactive defaults) ------
+# --- Defaults ---------------------------------------------------------------
 PREFIX="${OGC_PREFIX:-/opt/offgridcloud}"
 SERVICE_USER="${OGC_SERVICE_USER:-offgrid}"
-ADMIN_EMAIL="${OGC_ADMIN_EMAIL:-admin@offgrid.local}"
-PORT="${OGC_PORT:-8000}"
-DO_START="${OGC_START:-1}"
-INSTALL_SERVICE="${OGC_INSTALL_SERVICE:-1}"
-WITH_FFMPEG="${OGC_WITH_FFMPEG:-0}"
-WITH_AP_FALLBACK="${OGC_WITH_AP_FALLBACK:-0}"
-WITH_VPN="${OGC_WITH_VPN:-0}"
-WITH_KIOSK="${OGC_WITH_KIOSK:-0}"
-WITH_CHROMIUM_KIOSK="${OGC_WITH_CHROMIUM_KIOSK:-0}"
-KIOSK_PIN="${OGC_KIOSK_PIN:-}"
-WITH_SPEEDTEST="${OGC_WITH_SPEEDTEST:-1}"
 SPEEDTEST_VER="1.2.0"
 NONINTERACTIVE="${OGC_NONINTERACTIVE:-0}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Detect what's already installed so a plain re-run pre-selects it: re-running
+# the installer IS the update path — Enter through the questions to update every
+# feature you already have (no flags, no env vars). Explicit OGC_* still wins.
+_svc_unit="/etc/systemd/system/offgridcloud.service"
+_has_service=0;  [[ -f "$_svc_unit" ]] && _has_service=1
+_has_kiosk=0;    [[ -f /etc/systemd/system/offgrid-kiosk.service ]] && _has_kiosk=1
+_has_ap=0;       [[ -f /etc/systemd/system/offgridcloud-netwatch.service ]] && _has_ap=1
+_has_vpn=0;      [[ -f /etc/systemd/system/offgridcloud.service.d/10-vpn-caps.conf ]] && _has_vpn=1
+_has_ffmpeg=0;   command -v ffmpeg >/dev/null 2>&1 && _has_ffmpeg=1
+_has_speed=1;    # installed by default; keep on unless the operator opts out
+_has_chrome=0;   { command -v chromium-browser || command -v chromium; } >/dev/null 2>&1 \
+                 && [[ $_has_kiosk -eq 1 ]] && _has_chrome=1
+# Carry the existing admin e-mail + port so a re-run doesn't silently change them.
+_det_email="admin@offgrid.local"
+[[ -f "$PREFIX/.env" ]] && { _v="$(sed -n 's/^OGC_INITIAL_ADMIN_EMAIL=//p' "$PREFIX/.env" | head -1)"; [[ -n "$_v" ]] && _det_email="$_v"; }
+_det_port="8000"
+[[ -f "$_svc_unit" ]] && { _v="$(sed -n 's/.*--port \([0-9]*\).*/\1/p' "$_svc_unit" | head -1)"; [[ -n "$_v" ]] && _det_port="$_v"; }
+EXISTING_INSTALL=$_has_service
+
+# Values (env-overridable; the detected state is the interactive default) ------
+ADMIN_EMAIL="${OGC_ADMIN_EMAIL:-$_det_email}"
+PORT="${OGC_PORT:-$_det_port}"
+DO_START="${OGC_START:-1}"
+INSTALL_SERVICE="${OGC_INSTALL_SERVICE:-1}"
+WITH_FFMPEG="${OGC_WITH_FFMPEG:-$_has_ffmpeg}"
+WITH_AP_FALLBACK="${OGC_WITH_AP_FALLBACK:-$_has_ap}"
+WITH_VPN="${OGC_WITH_VPN:-$_has_vpn}"
+WITH_KIOSK="${OGC_WITH_KIOSK:-$_has_kiosk}"
+WITH_CHROMIUM_KIOSK="${OGC_WITH_CHROMIUM_KIOSK:-$_has_chrome}"
+KIOSK_PIN="${OGC_KIOSK_PIN:-}"
+WITH_SPEEDTEST="${OGC_WITH_SPEEDTEST:-$_has_speed}"
 
 usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
@@ -115,6 +136,11 @@ if [[ $NONINTERACTIVE -eq 0 ]]; then
   │   [Wert] = Vorgabe, einfach Enter drücken.      │
   └────────────────────────────────────────────────┘
 BANNER
+  if [[ $EXISTING_INSTALL -eq 1 ]]; then
+    printf '  \033[1;32mBestehende Installation erkannt — dies ist ein Update.\033[0m\n' > /dev/tty
+    printf '  Die Vorgaben spiegeln, was schon da ist. Einfach mit Enter durch\n' > /dev/tty
+    printf '  bestätigen, dann werden App und alle aktiven Funktionen aktualisiert.\n' > /dev/tty
+  fi
 fi
 
 ask        PREFIX              "Installationsverzeichnis"                                   "$PREFIX"
@@ -359,6 +385,7 @@ if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
   # Copy the scripts somewhere persistent so the watchdog/sudoers paths survive
   # after the source checkout is gone, then run the installer from there.
   mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/netfallback"   # replace, don't nest, on a re-run/update
   cp -r "$REPO_ROOT/deploy/netfallback" "$PREFIX/deploy/netfallback"
   chmod +x "$PREFIX/deploy/netfallback/"*.sh "$PREFIX/deploy/netfallback/_apply.py" 2>/dev/null || true
   bash "$PREFIX/deploy/netfallback/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
@@ -370,6 +397,7 @@ if [[ $WITH_VPN -eq 1 ]]; then
   step "Enabling the VPN client (native prerequisites)..."
   # Copy the helper somewhere persistent so it can be re-run later, then apply.
   mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/vpn"   # replace, don't nest, on a re-run/update
   cp -r "$REPO_ROOT/deploy/vpn" "$PREFIX/deploy/vpn"
   chmod +x "$PREFIX/deploy/vpn/install.sh" 2>/dev/null || true
   if [[ $INSTALL_SERVICE -eq 1 ]]; then
@@ -387,6 +415,7 @@ if [[ $WITH_KIOSK -eq 1 ]]; then
   # Copy the kiosk scripts somewhere persistent so the systemd unit's path
   # survives after the source checkout is gone, then run the installer there.
   mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/kiosk"   # replace, don't nest, on a re-run/update
   cp -r "$REPO_ROOT/deploy/kiosk" "$PREFIX/deploy/kiosk"
   chmod +x "$PREFIX/deploy/kiosk/"*.sh "$PREFIX/deploy/kiosk/offgrid-console.py" 2>/dev/null || true
   KIOSK_ARGS=(--prefix "$PREFIX")
