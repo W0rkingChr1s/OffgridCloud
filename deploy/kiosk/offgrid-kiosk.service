@@ -1,0 +1,38 @@
+# systemd unit for the OffgridCloud local console ("OffgridCloud OS" menu).
+#
+# Owns the primary virtual terminal (tty1) and shows the full-screen menu there,
+# so a monitor attached to the box only ever sees OffgridCloud — not a Linux
+# login prompt. Installed by deploy/kiosk/install.sh, which also masks
+# getty@tty1 so the two never fight over the console.
+#
+# Runs as root so the PIN-gated "drop to shell" can spawn a login shell and the
+# power actions can call systemctl directly (no extra sudoers rules needed).
+# The underlying OS stays reachable on tty2-tty6 (Strg+Alt+F2) with the normal
+# login, and — from the menu — behind the admin PIN.
+[Unit]
+Description=OffgridCloud local console (kiosk menu on tty1)
+Documentation=https://github.com/W0rkingChr1s/OffgridCloud/blob/main/docs/KIOSK.md
+After=systemd-user-sessions.service offgridcloud.service
+Conflicts=getty@tty1.service
+Before=getty.target
+
+[Service]
+Type=idle
+Environment=TERM=linux
+Environment=OGC_PREFIX=/opt/offgridcloud
+ExecStart=/opt/offgridcloud/deploy/kiosk/offgrid-console.py
+Restart=always
+RestartSec=2
+# Bind the process to tty1 as a real terminal.
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+# Keep it out of the way of the app on a small Pi.
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
