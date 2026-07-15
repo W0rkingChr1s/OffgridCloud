@@ -114,6 +114,20 @@ OGC_STAMP_VERSION="$STAMP" OGC_NONINTERACTIVE=1 \
   OGC_PREFIX="$PREFIX" OGC_PORT="$PORT" OGC_START=0 OGC_INSTALL_SERVICE=1 \
   bash "$SRC/deploy/install.sh"
 
+# The core reinstall doesn't touch the optional on-box console (kiosk). If it's
+# installed, refresh it from the new source too, so self-updates carry console
+# improvements (dashboard, SSH launch, …) — otherwise it silently stays behind.
+# Idempotent and non-interactive: keeps the existing PIN and boot-state record.
+if [[ -f /etc/systemd/system/offgrid-kiosk.service ]]; then
+  step "Refreshing the on-box console (kiosk) from the new source..."
+  mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/kiosk"
+  cp -r "$SRC/deploy/kiosk" "$PREFIX/deploy/kiosk"
+  chmod +x "$PREFIX/deploy/kiosk/"*.sh "$PREFIX/deploy/kiosk/offgrid-console.py" 2>/dev/null || true
+  bash "$PREFIX/deploy/kiosk/install.sh" --prefix "$PREFIX" \
+    || echo "   Kiosk refresh reported an issue — see docs/KIOSK.md." >&2
+fi
+
 step "Restarting the service..."
 systemctl restart offgridcloud
 printf "   Waiting for http://127.0.0.1:%s/api/health " "$PORT"
