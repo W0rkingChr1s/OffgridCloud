@@ -14,13 +14,21 @@ Health-Endpoint:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
-# mit Optionen:
-curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
-  | sudo bash -s -- --with-ffmpeg --port 8080 --admin-email admin@example.com
 ```
 
-Überschreibbar per Env: `OGC_REPO`, `OGC_BRANCH`, `OGC_SRC`. **Update:** den
-One-Liner erneut ausführen (Daten & `.env` bleiben erhalten).
+Der Installer **fragt danach interaktiv** ab, was eingerichtet werden soll (Port,
+Admin-E-Mail, Video-Thumbnails, VPN, Kiosk-Menü usw.) — einfach Enter für die
+Vorgabe. Für eine **unbeaufsichtigte** Installation die Fragen per Umgebungs­variablen
+vorbeantworten (durch `sudo` durchreichen):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \
+  | sudo OGC_NONINTERACTIVE=1 OGC_PORT=8080 OGC_ADMIN_EMAIL=admin@example.com OGC_WITH_FFMPEG=1 bash
+```
+
+Überschreibbar per Env: `OGC_REPO`, `OGC_BRANCH`, `OGC_SRC` sowie alle `OGC_*`
+des Installers (siehe `deploy/install.sh --help`). **Update:** den One-Liner
+erneut ausführen (Daten & `.env` bleiben erhalten).
 
 ### Variante 0 — lokal ausprobieren (ohne Installation)
 
@@ -37,18 +45,24 @@ Kein root, kein systemd. Für den echten Betrieb Variante A verwenden.
 
 ```bash
 git clone <repo> && cd OffgridCloud
-sudo ./deploy/install.sh --start        # baut, installiert, startet, prüft Health
+sudo ./deploy/install.sh                 # fragt interaktiv, baut, installiert, startet
 ```
 
-Der Installer erzeugt `/opt/offgridcloud/.env` mit zufälligem `OGC_SECRET_KEY`
-**und zufälligem Admin-Passwort** — das Passwort wird am Ende **einmalig**
-angezeigt, also notieren. rclone wird über den offiziellen Installer in aktueller
-Version bereitgestellt.
+Der Installer stellt eine kurze Liste Fragen (Enter = Vorgabe in eckigen Klammern):
+Verzeichnis, Admin-E-Mail, Port, Video-Thumbnails, Speedtest-CLI, Netzwerk-Redundanz,
+VPN, Kiosk-Menü, ob der Dienst gleich starten soll. Danach läuft alles allein.
 
-Optionen: `--admin-email EMAIL`, `--port PORT`, `--prefix DIR`, `--with-ffmpeg`
-(Video-Thumbnails), `--no-service`, `--start`. Ohne `--start` danach:
+Er erzeugt `/opt/offgridcloud/.env` mit zufälligem `OGC_SECRET_KEY` **und
+zufälligem Admin-Passwort** — das Passwort wird am Ende **einmalig** angezeigt,
+also notieren. rclone wird über den offiziellen Installer in aktueller Version
+bereitgestellt.
+
+Für Skripte/Automatisierung gibt es **keine Flags**, sondern `OGC_*`-Variablen
+(`sudo ./deploy/install.sh --help` listet sie). Beispiel — ohne Rückfragen, ohne
+Autostart, damit man vorher noch `.env` anpassen kann:
 
 ```bash
+sudo OGC_NONINTERACTIVE=1 OGC_START=0 ./deploy/install.sh
 sudo nano /opt/offgridcloud/.env        # z. B. OGC_BUFFER_DIR auf USB-SSD
 sudo systemctl enable --now offgridcloud
 ```
@@ -133,8 +147,9 @@ Wege und nimmt das erste Ergebnis:
    abweichen.
 2. **Ookla Speedtest CLI** (`speedtest`, letzter Ausweg): greift, wenn die
    HTTP-Ziele z. B. mit **HTTP 403** (Bot-Sperre eines CDN) blocken. Misst den
-   Upload gegen einen nahen Speedtest-Server. `deploy/install.sh` installiert sie
-   automatisch (abschaltbar mit `--no-speedtest`); manuell:
+   Upload gegen einen nahen Speedtest-Server. Der Installer bietet sie
+   standardmäßig an (Frage „Ookla-Speedtest-CLI …?" bzw. `OGC_WITH_SPEEDTEST=0`
+   zum Überspringen); manuell:
    <https://www.speedtest.net/apps/cli>.
    Hinweis: Speedtest-Server nutzen oft Port 8080 — auf stark eingeschränkten
    Uplinks (nur 80/443 erlaubt) kann das mit `Cannot open socket` scheitern; dann
@@ -233,8 +248,8 @@ Box optional ihr **eigenes WLAN** als Rückfallebene und verbindet sich wieder
 als Client, sobald ein hinterlegtes Netz erreichbar ist.
 
 ```bash
-# bei der Installation:
-sudo ./deploy/install.sh --with-ap-fallback
+# bei der Installation: die Frage „Netzwerk-Redundanz …?" mit ja beantworten
+sudo ./deploy/install.sh
 # oder nachträglich:
 sudo /opt/offgridcloud/deploy/netfallback/install.sh
 ```

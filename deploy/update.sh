@@ -107,7 +107,12 @@ fi
 
 step "Rebuilding and reinstalling (keeps data & .env)..."
 chmod +x "$SRC/deploy/install.sh"
-OGC_STAMP_VERSION="$STAMP" bash "$SRC/deploy/install.sh" --prefix "$PREFIX" --port "$PORT"
+# Headless: no questions, keep the existing prefix/port, refresh the unit but
+# leave starting to us (below). Optional features stay as they were — their
+# separate units/sudoers are untouched by a core reinstall.
+OGC_STAMP_VERSION="$STAMP" OGC_NONINTERACTIVE=1 \
+  OGC_PREFIX="$PREFIX" OGC_PORT="$PORT" OGC_START=0 OGC_INSTALL_SERVICE=1 \
+  bash "$SRC/deploy/install.sh"
 
 step "Restarting the service..."
 systemctl restart offgridcloud

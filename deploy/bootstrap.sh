@@ -7,14 +7,16 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
 #
-# Pass installer options after `--`:
+# The native installer is interactive — it asks a short list of questions once
+# the source is fetched. To run it unattended, pass OGC_* variables through sudo:
 #
-#   curl -fsSL .../bootstrap.sh | sudo bash -s -- --with-ffmpeg --port 8080
+#   curl -fsSL .../bootstrap.sh | sudo OGC_NONINTERACTIVE=1 OGC_WITH_KIOSK=1 bash
 #
 # Overridable via environment:
 #   OGC_REPO    git URL   (default: https://github.com/W0rkingChr1s/OffgridCloud.git)
 #   OGC_BRANCH  branch    (default: main)
 #   OGC_SRC     checkout  (default: /opt/offgridcloud/src)
+#   OGC_*       any installer variable (see deploy/install.sh) — forwarded as-is
 set -euo pipefail
 
 OGC_REPO="${OGC_REPO:-https://github.com/W0rkingChr1s/OffgridCloud.git}"
@@ -78,7 +80,10 @@ else
   git clone --branch "$OGC_BRANCH" "$OGC_REPO" "$OGC_SRC"
 fi
 
-# --- Run the installer (and start it) ---------------------------------------
+# --- Run the installer ------------------------------------------------------
+# It asks its questions on the controlling terminal (/dev/tty), which is still
+# the user's keyboard even though this script arrived over a pipe. Env vars set
+# on the `sudo bash` line above are inherited here and become the answers.
 step "Running the native installer..."
 chmod +x "$OGC_SRC/deploy/install.sh"
-exec bash "$OGC_SRC/deploy/install.sh" --start "$@"
+exec bash "$OGC_SRC/deploy/install.sh"

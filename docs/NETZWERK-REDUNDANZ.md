@@ -58,12 +58,13 @@ Gerät übernommen.
 ### Bei der Installation
 
 ```bash
-sudo ./deploy/install.sh --start --with-ap-fallback
+sudo ./deploy/install.sh      # Frage „Netzwerk-Redundanz …?" mit ja beantworten
 ```
 
-`--with-ap-fallback` installiert NetworkManager (+ `dnsmasq-base` für die
-AP-DHCP, `iw` für die Funkregulierung), richtet den Watchdog-Dienst ein, legt
-eine eng gefasste sudoers-Regel für **nur** `apply.sh` an und verdrahtet
+Wird die Frage bejaht (oder `OGC_WITH_AP_FALLBACK=1` für eine unbeaufsichtigte
+Installation gesetzt), installiert der Installer NetworkManager (+ `dnsmasq-base`
+für die AP-DHCP, `iw` für die Funkregulierung), richtet den Watchdog-Dienst ein,
+legt eine eng gefasste sudoers-Regel für **nur** `apply.sh` an und verdrahtet
 `OGC_NET_APPLY_COMMAND` in der `.env`.
 
 ### Nachträglich
