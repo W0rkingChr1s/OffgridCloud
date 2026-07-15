@@ -36,6 +36,7 @@ systemctl daemon-reload 2>/dev/null || true
 echo ">> Removing the on-box console (kiosk), if installed..."
 systemctl disable --now offgrid-kiosk.service 2>/dev/null || true
 rm -f /etc/systemd/system/offgrid-kiosk.service
+rm -f /usr/local/bin/offgrid-console
 # Hand tty1 back to a normal login prompt.
 systemctl unmask getty@tty1.service 2>/dev/null || true
 # Restore the boot behaviour the kiosk installer changed (desktop vs. console).
