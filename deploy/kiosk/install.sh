@@ -149,10 +149,14 @@ else
   echo "   Already booting to the console (multi-user.target)."
 fi
 [[ -n "$DISABLED_DMS" ]] && echo "   Disabled display manager(s):$DISABLED_DMS"
-# Quote the values — DISABLED_DMS holds a space-separated list, and this file is
-# sourced by uninstall.sh, so an unquoted value would run as a command.
-{ printf 'PREV_TARGET="%s"\n' "$PREV_TARGET"
-  printf 'DISABLED_DMS="%s"\n' "$DISABLED_DMS"; } > "$STATE_FILE" 2>/dev/null || true
+# Record the ORIGINAL pre-kiosk state once. On a later refresh/re-run the target
+# is already multi-user and the DMs are already disabled, so re-writing would
+# clobber the real "restore to desktop" info uninstall needs — keep the first
+# capture. Quote the values (sourced by uninstall.sh; unquoted → runs as a cmd).
+if [[ ! -f "$STATE_FILE" ]]; then
+  { printf 'PREV_TARGET="%s"\n' "$PREV_TARGET"
+    printf 'DISABLED_DMS="%s"\n' "$DISABLED_DMS"; } > "$STATE_FILE" 2>/dev/null || true
+fi
 
 systemctl daemon-reload
 if systemctl enable --now offgrid-kiosk.service 2>/dev/null; then
