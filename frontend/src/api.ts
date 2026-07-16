@@ -237,7 +237,8 @@ export interface SystemStatus {
 }
 
 export interface HttpsStatus {
-  enabled: boolean;
+  enabled: boolean; // HTTPS is actually serving (Caddy up / config applied)
+  manageable: boolean; // the UI can change the domain (apply command wired up)
   hostname: string;
   domain: string;
   lan_url: string;

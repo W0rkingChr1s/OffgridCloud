@@ -132,12 +132,105 @@ def test_run_apply_rejects_empty_command():
         https_config.run_apply("   ", hostname="box1", domain="")
 
 
-def test_https_status_disabled_by_default(client, admin_auth):
-    # No https_apply_command configured in the test settings → enabled False.
+def test_caddy_running_true_on_zero_exit():
+    def fake_run(argv, **kwargs):
+        assert argv == ["systemctl", "is-active", "--quiet", "caddy"]
+
+        class R:
+            returncode = 0
+
+        return R()
+
+    assert https_config.caddy_running(run=fake_run) is True
+
+
+def test_caddy_running_false_on_nonzero_exit():
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 3
+
+        return R()
+
+    assert https_config.caddy_running(run=fake_run) is False
+
+
+def test_caddy_running_false_when_systemctl_missing():
+    def fake_run(argv, **kwargs):
+        raise FileNotFoundError("systemctl")
+
+    assert https_config.caddy_running(run=fake_run) is False
+
+
+def test_is_active_true_when_state_has_hostname(tmp_path: Path):
+    (tmp_path / "https_state.json").write_text('{"hostname": "box1", "domain": ""}')
+    # Hostname present → active without ever shelling out to systemctl.
+    called = {"n": 0}
+
+    def fake_run(argv, **kwargs):
+        called["n"] += 1
+        raise AssertionError("should not run systemctl")
+
+    assert https_config.is_active(tmp_path, run=fake_run) is True
+    assert called["n"] == 0
+
+
+def test_is_active_falls_back_to_caddy_when_no_state(tmp_path: Path):
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 0
+
+        return R()
+
+    assert https_config.is_active(tmp_path, run=fake_run) is True
+
+
+def test_is_active_false_when_no_state_and_no_caddy(tmp_path: Path):
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 1
+
+        return R()
+
+    assert https_config.is_active(tmp_path, run=fake_run) is False
+
+
+def test_https_status_disabled_by_default(client, admin_auth, monkeypatch):
+    # No https_apply_command, no state file, Caddy not running → enabled False.
+    import app.routers.https as https_router
+
+    monkeypatch.setattr(https_router.https_config, "caddy_running", lambda **_: False)
     body = client.get("/api/system/https", headers=admin_auth).json()
     assert body["enabled"] is False
+    assert body["manageable"] is False
     assert body["hostname"] == ""
     assert body["lan_url"] == ""
+
+
+def test_https_status_active_but_not_manageable(client, admin_auth, monkeypatch):
+    # HTTPS is serving (apply.sh wrote a hostname) but the UI management command
+    # was never wired: enabled True, manageable False. This is the case where the
+    # box is reachable over https:// yet the old code wrongly said "not set up".
+    import app.routers.https as https_router
+
+    monkeypatch.setattr(
+        https_router.https_config,
+        "read_state",
+        lambda data_dir: {"hostname": "offgridcloud", "domain": ""},
+    )
+    body = client.get("/api/system/https", headers=admin_auth).json()
+    assert body["enabled"] is True
+    assert body["manageable"] is False
+    assert body["lan_url"] == "https://offgridcloud.local"
+
+
+def test_https_status_active_via_running_caddy(client, admin_auth, monkeypatch):
+    # No state file, but Caddy is up (hand-configured box) → still enabled.
+    import app.routers.https as https_router
+
+    monkeypatch.setattr(https_router.https_config, "caddy_running", lambda **_: True)
+    body = client.get("/api/system/https", headers=admin_auth).json()
+    assert body["enabled"] is True
+    assert body["manageable"] is False
 
 
 def test_https_status_requires_admin(client, admin_auth):
@@ -173,6 +266,8 @@ def test_https_status_reports_urls_from_state(client, admin_auth, monkeypatch):
     assert body["hostname"] == "box1"
     assert body["lan_url"] == "https://box1.local"
     assert body["public_url"] == "https://cloud.example.com"
+    # A written state file means apply.sh ran → HTTPS is active.
+    assert body["enabled"] is True
 
 
 def test_https_put_runs_apply_and_returns_new_state(client, admin_auth, monkeypatch):

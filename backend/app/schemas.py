@@ -570,7 +570,8 @@ class UpdateProgressOut(BaseModel):
 class HttpsStatusOut(BaseModel):
     """Current reverse-proxy state, read from data/https_state.json."""
 
-    enabled: bool  # True when https_apply_command is wired up on this box
+    enabled: bool  # True when HTTPS is actually serving (apply.sh ran / Caddy up)
+    manageable: bool  # True when the UI can re-apply config (apply_command wired)
     hostname: str  # mDNS short name, reachable as <hostname>.local
     domain: str  # public domain, or "" if none
     lan_url: str  # e.g. https://offgridcloud.local
