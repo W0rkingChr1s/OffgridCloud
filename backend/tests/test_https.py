@@ -21,7 +21,9 @@ def test_normalise_hostname_strips_local_suffix_and_lowercases():
     assert https_config.normalise_hostname("  box1  ") == "box1"
 
 
-@pytest.mark.parametrize("bad", ["", "   ", "has space", "under_score", "-lead", "trail-", "a" * 64])
+@pytest.mark.parametrize(
+    "bad", ["", "   ", "has space", "under_score", "-lead", "trail-", "a" * 64]
+)
 def test_validate_hostname_rejects_bad(bad):
     with pytest.raises(ValueError):
         https_config.validate_hostname(https_config.normalise_hostname(bad))
