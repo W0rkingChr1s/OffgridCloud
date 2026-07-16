@@ -24,7 +24,9 @@
 #   OGC_WITH_AP_FALLBACK=0           OGC_WITH_VPN=0
 #   OGC_WITH_KIOSK=0                 OGC_WITH_CHROMIUM_KIOSK=0   OGC_KIOSK_PIN=
 #   OGC_INSTALL_SERVICE=1            OGC_START=1
-#   OGC_WITH_HTTPS=1                 OGC_HTTPS_HOSTNAME=offgridcloud   OGC_HTTPS_DOMAIN=
+#   OGC_WITH_HTTPS=1                 OGC_HTTPS_HOSTNAME=offgridcloud-XXXXX   OGC_HTTPS_DOMAIN=
+#                                    (Vorgabe: offgridcloud- + 5 Zufallszeichen [a-z0-9],
+#                                     damit mehrere Boxen im selben LAN nicht kollidieren)
 #   OGC_NONINTERACTIVE=1             # force unattended even with a terminal
 #
 # Only -h/--help is a flag; any other argument is ignored (older flag-style
@@ -56,8 +58,24 @@ _det_email="admin@offgrid.local"
 _det_port="8000"
 [[ -f "$_svc_unit" ]] && { _v="$(sed -n 's/.*--port \([0-9]*\).*/\1/p' "$_svc_unit" | head -1)"; [[ -n "$_v" ]] && _det_port="$_v"; }
 _has_https=0;    [[ -f /etc/caddy/Caddyfile ]] && _has_https=1
-# Carry the existing HTTPS hostname/domain so a re-run pre-fills them.
-_det_hostname="offgridcloud"
+# A short random suffix (5 × [a-z0-9]) so several boxes flashed from the same
+# image or installed side by side don't all fight over "offgridcloud.local".
+# Generated once here; once HTTPS is applied it's frozen in https_state.json and
+# a re-run pre-fills the saved value (see below), so the name stays stable.
+_rand_suffix() {
+  local out=""
+  out="$( { LC_ALL=C tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 5; } || true )"
+  if [[ ${#out} -lt 5 ]]; then          # /dev/urandom unavailable → $RANDOM fallback
+    out=""
+    while [[ ${#out} -lt 5 ]]; do out+="$(printf '%x' "$((RANDOM % 16))")"; done
+    out="${out:0:5}"
+  fi
+  printf '%s' "$out"
+}
+
+# Carry the existing HTTPS hostname/domain so a re-run pre-fills them. On a fresh
+# install the default gets a random suffix (offgridcloud-XXXXX) for uniqueness.
+_det_hostname="offgridcloud-$(_rand_suffix)"
 _det_domain=""
 if [[ -f "$PREFIX/data/https_state.json" ]]; then
   _v="$(sed -n 's/.*"hostname"[: ]*"\([^"]*\)".*/\1/p' "$PREFIX/data/https_state.json" | head -1)"; [[ -n "$_v" ]] && _det_hostname="$_v"
