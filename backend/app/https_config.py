@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
+import subprocess
 from pathlib import Path
 
 _STATE_FILENAME = "https_state.json"
@@ -69,3 +71,24 @@ def read_state(data_dir: Path) -> dict[str, str]:
         "hostname": str(raw.get("hostname", "")),
         "domain": str(raw.get("domain", "")),
     }
+
+
+def run_apply(command: str, *, hostname: str, domain: str, run=subprocess.run) -> str:
+    """Run the configured apply command with --hostname (and --domain if set).
+
+    ``command`` is an operator-configured value from the .env (trusted, never
+    user input) — we split it with shlex and append the validated flags. Returns
+    stdout on success; raises RuntimeError with the stderr tail on a non-zero
+    exit so the endpoint can surface *why* it failed. ``run`` is injectable for
+    tests (mirrors power.run_power_command's ``popen`` seam).
+    """
+    if not command.strip():
+        raise ValueError("empty https apply command")
+    argv = [*shlex.split(command), "--hostname", hostname]
+    if domain:
+        argv += ["--domain", domain]
+    result = run(argv, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        tail = (result.stderr or result.stdout or "").strip()[-500:]
+        raise RuntimeError(tail or f"apply.sh exited with {result.returncode}")
+    return result.stdout

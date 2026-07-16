@@ -57,3 +57,76 @@ def test_read_state_reads_written_file(tmp_path: Path):
 def test_read_state_tolerates_garbage(tmp_path: Path):
     (tmp_path / "https_state.json").write_text("not json{")
     assert https_config.read_state(tmp_path) == {"hostname": "", "domain": ""}
+
+
+def test_run_apply_builds_command_and_succeeds():
+    captured = {}
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+
+        class R:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return R()
+
+    https_config.run_apply(
+        "sudo /opt/offgridcloud/deploy/https/apply.sh",
+        hostname="box1",
+        domain="cloud.example.com",
+        run=fake_run,
+    )
+
+    # The command string is split (trusted, operator-configured) and the two
+    # flags appended. Domain passed through because it's non-empty.
+    assert captured["argv"] == [
+        "sudo",
+        "/opt/offgridcloud/deploy/https/apply.sh",
+        "--hostname",
+        "box1",
+        "--domain",
+        "cloud.example.com",
+    ]
+    assert captured["kwargs"]["capture_output"] is True
+    assert captured["kwargs"]["text"] is True
+    assert captured["kwargs"]["timeout"] == 30
+
+
+def test_run_apply_omits_domain_flag_when_empty():
+    captured = {}
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return R()
+
+    https_config.run_apply("sudo apply.sh", hostname="box1", domain="", run=fake_run)
+    assert "--domain" not in captured["argv"]
+    assert captured["argv"] == ["sudo", "apply.sh", "--hostname", "box1"]
+
+
+def test_run_apply_raises_with_stderr_tail_on_failure():
+    def fake_run(argv, **kwargs):
+        class R:
+            returncode = 1
+            stdout = ""
+            stderr = "caddy validate failed: bad domain\n"
+
+        return R()
+
+    with pytest.raises(RuntimeError) as exc:
+        https_config.run_apply("sudo apply.sh", hostname="box1", domain="", run=fake_run)
+    assert "caddy validate failed" in str(exc.value)
+
+
+def test_run_apply_rejects_empty_command():
+    with pytest.raises(ValueError):
+        https_config.run_apply("   ", hostname="box1", domain="")
