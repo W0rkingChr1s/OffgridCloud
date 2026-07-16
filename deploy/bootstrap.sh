@@ -5,10 +5,17 @@
 # Debian/Raspberry Pi OS (or Fedora/Arch) box into a running OffgridCloud with
 # a single command:
 #
-#   curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
+#   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh)"
 #
-# The native installer is interactive — it asks a short list of questions once
-# the source is fetched. To run it unattended, pass OGC_* variables through sudo:
+# Use THIS form (command substitution), not `... | sudo bash`: the native
+# installer is interactive, and piping the script into sudo makes the script the
+# process's stdin instead of your keyboard. Modern sudo runs the command in its
+# own pseudo-terminal and then does not forward keystrokes, so the menu never
+# reacts. `bash -c "$(curl ...)"` keeps your terminal as stdin. (Download-then-
+# run works too:  curl -fsSL .../bootstrap.sh -o ogc.sh && sudo bash ogc.sh)
+#
+# To run it UNATTENDED no keyboard is needed, so the pipe form is fine — pass
+# OGC_* variables through sudo:
 #
 #   curl -fsSL .../bootstrap.sh | sudo OGC_NONINTERACTIVE=1 OGC_WITH_KIOSK=1 bash
 #
@@ -26,7 +33,7 @@ OGC_SRC="${OGC_SRC:-/opt/offgridcloud/src}"
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
 if [[ $EUID -ne 0 ]]; then
-  echo "Please run as root, e.g.  curl -fsSL <url> | sudo bash" >&2
+  echo "Please run as root, e.g.  sudo bash -c \"\$(curl -fsSL <url>)\"" >&2
   exit 1
 fi
 
@@ -81,9 +88,15 @@ else
 fi
 
 # --- Run the installer ------------------------------------------------------
-# It asks its questions on the controlling terminal (/dev/tty), which is still
-# the user's keyboard even though this script arrived over a pipe. Env vars set
-# on the `sudo bash` line above are inherited here and become the answers.
+# It asks its questions on the controlling terminal. Reattach stdin to /dev/tty
+# explicitly so the keyboard is fd 0 for the installer even though this bootstrap
+# arrived over a pipe (harmless when there is no tty — the installer then detects
+# a non-interactive run and uses the OGC_* / default answers). Env vars set on the
+# invoking line above are inherited here and become the answers.
 step "Running the native installer..."
 chmod +x "$OGC_SRC/deploy/install.sh"
-exec bash "$OGC_SRC/deploy/install.sh"
+if [[ -e /dev/tty ]]; then
+  exec bash "$OGC_SRC/deploy/install.sh" </dev/tty
+else
+  exec bash "$OGC_SRC/deploy/install.sh"
+fi

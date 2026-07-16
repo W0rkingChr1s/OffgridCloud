@@ -40,7 +40,7 @@ step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 if [[ $EUID -ne 0 ]]; then echo "Please run as root (sudo)." >&2; exit 1; fi
 if [[ ! -d "$SRC/.git" ]]; then
   echo "No git checkout at $SRC. Re-run the one-line installer to update:" >&2
-  echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/deploy/bootstrap.sh | sudo bash" >&2
+  echo "  sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$REPO/main/deploy/bootstrap.sh)\"" >&2
   exit 1
 fi
 
