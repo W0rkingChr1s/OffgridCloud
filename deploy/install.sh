@@ -22,6 +22,7 @@
 #   OGC_WITH_AP_FALLBACK=0           OGC_WITH_VPN=0
 #   OGC_WITH_KIOSK=0                 OGC_WITH_CHROMIUM_KIOSK=0   OGC_KIOSK_PIN=
 #   OGC_INSTALL_SERVICE=1            OGC_START=1
+#   OGC_WITH_HTTPS=1                 OGC_HTTPS_HOSTNAME=offgridcloud   OGC_HTTPS_DOMAIN=
 #   OGC_NONINTERACTIVE=1             # force unattended even with a terminal
 #
 # Only -h/--help is a flag; any other argument is ignored (older flag-style
@@ -52,6 +53,14 @@ _det_email="admin@offgrid.local"
 [[ -f "$PREFIX/.env" ]] && { _v="$(sed -n 's/^OGC_INITIAL_ADMIN_EMAIL=//p' "$PREFIX/.env" | head -1)"; [[ -n "$_v" ]] && _det_email="$_v"; }
 _det_port="8000"
 [[ -f "$_svc_unit" ]] && { _v="$(sed -n 's/.*--port \([0-9]*\).*/\1/p' "$_svc_unit" | head -1)"; [[ -n "$_v" ]] && _det_port="$_v"; }
+_has_https=0;    [[ -f /etc/caddy/Caddyfile ]] && _has_https=1
+# Carry the existing HTTPS hostname/domain so a re-run pre-fills them.
+_det_hostname="offgridcloud"
+_det_domain=""
+if [[ -f "$PREFIX/data/https_state.json" ]]; then
+  _v="$(sed -n 's/.*"hostname"[: ]*"\([^"]*\)".*/\1/p' "$PREFIX/data/https_state.json" | head -1)"; [[ -n "$_v" ]] && _det_hostname="$_v"
+  _v="$(sed -n 's/.*"domain"[: ]*"\([^"]*\)".*/\1/p' "$PREFIX/data/https_state.json" | head -1)"; [[ -n "$_v" ]] && _det_domain="$_v"
+fi
 EXISTING_INSTALL=$_has_service
 
 # Values (env-overridable; the detected state is the interactive default) ------
@@ -66,6 +75,10 @@ WITH_KIOSK="${OGC_WITH_KIOSK:-$_has_kiosk}"
 WITH_CHROMIUM_KIOSK="${OGC_WITH_CHROMIUM_KIOSK:-$_has_chrome}"
 KIOSK_PIN="${OGC_KIOSK_PIN:-}"
 WITH_SPEEDTEST="${OGC_WITH_SPEEDTEST:-$_has_speed}"
+# HTTPS is recommended-on: default 1 whether or not it's already set up.
+WITH_HTTPS="${OGC_WITH_HTTPS:-1}"
+HTTPS_HOSTNAME="${OGC_HTTPS_HOSTNAME:-$_det_hostname}"
+HTTPS_DOMAIN="${OGC_HTTPS_DOMAIN:-$_det_domain}"
 
 usage() { sed -n '2,26p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
@@ -148,6 +161,11 @@ ask        ADMIN_EMAIL         "Admin-E-Mail (Login)"                           
 ask        PORT                "Port für die Weboberfläche"                                 "$PORT"
 ask_yn     WITH_FFMPEG         "Video-Thumbnails aktivieren? (installiert ffmpeg)"          "$WITH_FFMPEG"
 ask_yn     WITH_SPEEDTEST      "Ookla-Speedtest-CLI für genauere Bandbreitenmessung?"       "$WITH_SPEEDTEST"
+ask_yn     WITH_HTTPS          "HTTPS aktivieren (empfohlen, Zugriff per https://<name>.local)?" "$WITH_HTTPS"
+if [[ "$WITH_HTTPS" -eq 1 ]]; then
+  ask      HTTPS_HOSTNAME      "  … mDNS-Hostname (erreichbar als <name>.local)"            "$HTTPS_HOSTNAME"
+  ask      HTTPS_DOMAIN        "  … öffentliche Domain (leer lassen, falls keine)"          "$HTTPS_DOMAIN"
+fi
 ask_yn     WITH_AP_FALLBACK    "Netzwerk-Redundanz: eigenes WLAN, wenn der Uplink ausfällt?" "$WITH_AP_FALLBACK"
 ask_yn     WITH_VPN            "VPN-Client (WireGuard/OpenVPN) einrichten?"                 "$WITH_VPN"
 ask_yn     WITH_KIOSK          "OffgridCloud-OS-Menü am Bildschirm der Box (Kiosk)?"        "$WITH_KIOSK"
@@ -176,6 +194,7 @@ if [[ $NONINTERACTIVE -eq 0 ]]; then
     Port ................. $PORT
     Video-Thumbnails ..... $(yesno "$WITH_FFMPEG")
     Speedtest-CLI ........ $(yesno "$WITH_SPEEDTEST")
+    HTTPS ................ $(yesno "$WITH_HTTPS")$([[ "$WITH_HTTPS" -eq 1 ]] && echo " ($HTTPS_HOSTNAME.local${HTTPS_DOMAIN:+ + $HTTPS_DOMAIN})")
     Netzwerk-Redundanz ... $(yesno "$WITH_AP_FALLBACK")
     VPN-Client ........... $(yesno "$WITH_VPN")
     Kiosk-Menü ........... $(yesno "$WITH_KIOSK")$([[ "$WITH_KIOSK" -eq 1 && "$WITH_CHROMIUM_KIOSK" -eq 1 ]] && echo " (+ Chromium)")
@@ -423,6 +442,19 @@ if [[ $WITH_KIOSK -eq 1 ]]; then
   [[ -n "$KIOSK_PIN" ]] && KIOSK_ARGS+=(--pin "$KIOSK_PIN")
   bash "$PREFIX/deploy/kiosk/install.sh" "${KIOSK_ARGS[@]}" \
     || echo "   Kiosk setup reported an issue — see docs/KIOSK.md." >&2
+fi
+
+# --- Optional: HTTPS reverse proxy (Caddy + mDNS hostname) -----------------
+if [[ $WITH_HTTPS -eq 1 ]]; then
+  step "Setting up HTTPS (Caddy reverse proxy + mDNS hostname)..."
+  mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/https"   # replace, don't nest, on a re-run/update
+  cp -r "$REPO_ROOT/deploy/https" "$PREFIX/deploy/https"
+  chmod +x "$PREFIX/deploy/https/"*.sh 2>/dev/null || true
+  HTTPS_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER" --port "$PORT" --hostname "$HTTPS_HOSTNAME")
+  [[ -n "$HTTPS_DOMAIN" ]] && HTTPS_ARGS+=(--domain "$HTTPS_DOMAIN")
+  bash "$PREFIX/deploy/https/install.sh" "${HTTPS_ARGS[@]}" \
+    || echo "   HTTPS setup reported an issue — see docs/BETRIEB.md §3." >&2
 fi
 
 # --- Optional start + health check -----------------------------------------
