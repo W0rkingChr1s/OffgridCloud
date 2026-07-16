@@ -119,14 +119,25 @@ Secret-Key erzeugen: `python3 -c "import secrets; print(secrets.token_urlsafe(48
 
 ## 3. HTTPS / Reverse-Proxy
 
-OffgridCloud lauscht intern auf Port 8000 (HTTP). Im Betrieb davor einen
-Reverse-Proxy mit TLS setzen:
+Der Installer richtet HTTPS automatisch ein (Frage „HTTPS aktivieren? Ja",
+Standard). Er installiert **Caddy** als Reverse-Proxy und **avahi** für den
+mDNS-Namen und erzeugt:
 
-- **Caddy** (einfachstes Auto-TLS): `deploy/Caddyfile` anpassen und starten.
-  Für den Offline-Feldeinsatz `tls internal` (self-signed) verwenden.
-- **nginx**: `deploy/nginx.conf.example` als Vorlage; enthält bereits die
-  SSE-freundliche `/api/events`-Location (Buffering aus, langer Timeout) und ein
-  Self-signed-Cert-Rezept.
+- einen **lokalen Zugang** `https://<hostname>.local` (Standard
+  `offgridcloud.local`) mit selbstsigniertem Zertifikat — funktioniert offline
+  im Feld, ohne Domain und ohne Internet;
+- optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
+  automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
+
+**Domain später ändern:** im Portal unter **System → HTTPS** die Domain
+eintragen oder entfernen — kein Neu-Installieren nötig. Der lokale
+`.local`-Zugang bleibt immer erhalten. Damit ein echtes Zertifikat ausgestellt
+werden kann, muss die Domain per DNS auf die Box zeigen und die Ports 80/443
+müssen von außen erreichbar sein (Portweiterleitung am Router).
+
+**Manuelle Alternative:** Wer statt Caddy lieber nginx nutzt, findet in
+`deploy/nginx.conf.example` eine Vorlage (inkl. Self-signed-Cert-Rezept und der
+SSE-freundlichen `/api/events`-Location).
 
 ## 4. Bandbreiten-Steuerung (Betrieb)
 

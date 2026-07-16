@@ -1,12 +1,14 @@
-# OffgridCloud reverse proxy (nginx). Adjust server_name and certificate paths.
+# OffgridCloud reverse proxy (nginx) — MANUAL ALTERNATIVE.
+# The installer sets up Caddy automatically (recommended); use this only if you
+# specifically want nginx. Adjust server_name and certificate paths.
 # Generate a self-signed cert for field use:
 #   sudo openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
 #     -keyout /etc/ssl/private/offgrid.key -out /etc/ssl/certs/offgrid.crt \
-#     -subj "/CN=offgrid.local"
+#     -subj "/CN=offgridcloud.local"
 
 server {
     listen 443 ssl;
-    server_name offgrid.local;
+    server_name offgridcloud.local;
 
     ssl_certificate     /etc/ssl/certs/offgrid.crt;
     ssl_certificate_key /etc/ssl/private/offgrid.key;
@@ -35,6 +37,6 @@ server {
 
 server {
     listen 80;
-    server_name offgrid.local;
+    server_name offgridcloud.local;
     return 301 https://$host$request_uri;
 }

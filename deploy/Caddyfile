@@ -1,18 +1,24 @@
-# OffgridCloud reverse proxy with automatic HTTPS (Caddy).
+# OffgridCloud reverse proxy (Caddy).
+#
+# NOTE: The installer now sets this up for you — run deploy/install.sh and
+# answer "HTTPS aktivieren? Ja". It writes /etc/caddy/Caddyfile via
+# deploy/https/apply.sh (a self-signed <hostname>.local block, plus a real
+# Let's-Encrypt block if you give it a public domain). Change the hostname or
+# domain later under System → HTTPS in the web UI.
+#
+# The blocks below are only a manual reference for a standalone setup:
 #
 #   sudo caddy run --config deploy/Caddyfile
 #
-# Replace the domain. Caddy obtains/renews a real certificate automatically.
-offgrid.example.com {
+offgridcloud.example.com {
     reverse_proxy localhost:8000
     # SSE (/api/events) works out of the box — Caddy does not buffer responses.
 }
 
 # --- Offline / field use (no public domain) -------------------------------
-# Use a self-signed certificate Caddy manages locally. Replace the address with
-# the Pi's hostname or IP and uncomment.
+# Self-signed certificate Caddy manages locally. Replace with the Pi's mDNS name.
 #
-# https://offgrid.local {
+# https://offgridcloud.local {
 #     tls internal
 #     reverse_proxy localhost:8000
 # }
