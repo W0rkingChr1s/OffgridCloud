@@ -133,9 +133,12 @@ Der Installer richtet HTTPS automatisch ein (Frage „HTTPS aktivieren? Ja",
 Standard). Er installiert **Caddy** als Reverse-Proxy und **avahi** für den
 mDNS-Namen und erzeugt:
 
-- einen **lokalen Zugang** `https://<hostname>.local` (Standard
-  `offgridcloud.local`) mit selbstsigniertem Zertifikat — funktioniert offline
-  im Feld, ohne Domain und ohne Internet;
+- einen **lokalen Zugang** `https://<hostname>.local` mit selbstsigniertem
+  Zertifikat — funktioniert offline im Feld, ohne Domain und ohne Internet. Die
+  Vorgabe ist `offgridcloud-XXXXX` (`XXXXX` = 5 Zufallszeichen aus Klein­buchstaben
+  und Ziffern), damit mehrere Boxen im selben Netz nicht auf denselben Namen
+  hören. Im Installer lässt sich der Name frei überschreiben, z. B. auf
+  `offgridcloud`;
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
