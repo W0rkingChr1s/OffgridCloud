@@ -120,7 +120,9 @@ def register_verify(
     try:
         entry = challenges.take(payload.nonce)
     except KeyError:
-        raise HTTPException(status_code=400, detail="Registrierung abgelaufen, bitte erneut.") from None
+        raise HTTPException(
+            status_code=400, detail="Registrierung abgelaufen, bitte erneut."
+        ) from None
     if entry.meta.get("user_id") != user.id:
         raise HTTPException(status_code=400, detail="Ungültige Registrierungs-Sitzung.")
 
@@ -133,7 +135,8 @@ def register_verify(
             require_user_verification=False,
         )
     except Exception as exc:  # noqa: BLE001 — surface verification failure
-        raise HTTPException(status_code=400, detail=f"Passkey-Prüfung fehlgeschlagen: {exc}") from exc
+        detail = f"Passkey-Prüfung fehlgeschlagen: {exc}"
+        raise HTTPException(status_code=400, detail=detail) from exc
 
     if db.scalar(
         select(WebAuthnCredential).where(
@@ -230,7 +233,8 @@ def login_verify(
             require_user_verification=False,
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Passkey-Prüfung fehlgeschlagen: {exc}") from exc
+        detail = f"Passkey-Prüfung fehlgeschlagen: {exc}"
+        raise HTTPException(status_code=400, detail=detail) from exc
 
     # Clone detection: a non-increasing counter (when the authenticator uses one)
     # means a possible cloned credential.

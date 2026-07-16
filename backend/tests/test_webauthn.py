@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 ORIGIN_HEADERS = {"Origin": "http://localhost:5173"}
 
 
