@@ -82,7 +82,11 @@ sudo nano /opt/offgridcloud/.env        # z. B. OGC_BUFFER_DIR auf USB-SSD
 sudo systemctl enable --now offgridcloud
 ```
 
-Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht alles).
+Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht
+alles inkl. der `ogc-wifi-*`-WLAN-Profile). Räumt auch alle Zusatzfunktionen ab:
+Kiosk-Konsole, HTTPS (Caddy-Konfiguration weg, ursprünglicher Hostname zurück),
+Netzwerk-Redundanz (Watchdog + Fallback-AP), VPN-Drop-in und sämtliche
+sudoers-Regeln. Installierte Pakete (caddy, avahi, rclone, ffmpeg, …) bleiben.
 
 ### Variante B — Windows (PowerShell)
 
@@ -151,6 +155,19 @@ müssen von außen erreichbar sein (Portweiterleitung am Router).
 **Manuelle Alternative:** Wer statt Caddy lieber nginx nutzt, findet in
 `deploy/nginx.conf.example` eine Vorlage (inkl. Self-signed-Cert-Rezept und der
 SSE-freundlichen `/api/events`-Location).
+
+**HTTPS wieder zurückbauen:** entweder beim erneuten Installer-Lauf die Frage
+„HTTPS aktivieren?" mit **nein** beantworten (eine bestehende Einrichtung wird
+dann automatisch entfernt) oder direkt:
+
+```bash
+sudo ./deploy/https/uninstall.sh
+```
+
+Beides entfernt die verwaltete Caddy-Konfiguration, deaktiviert caddy, löscht
+die sudoers-Regel samt `.env`-Verdrahtung und stellt den ursprünglichen
+Hostnamen wieder her (sofern er beim Einrichten aufgezeichnet wurde). Die
+Pakete caddy/avahi bleiben installiert.
 
 ### 3.1 Passkeys (WebAuthn)
 

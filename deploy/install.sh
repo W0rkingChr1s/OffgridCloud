@@ -628,6 +628,13 @@ if [[ $WITH_HTTPS -eq 1 ]]; then
   [[ -n "$HTTPS_DOMAIN" ]] && HTTPS_ARGS+=(--domain "$HTTPS_DOMAIN")
   bash "$PREFIX/deploy/https/install.sh" "${HTTPS_ARGS[@]}" \
     || echo "   HTTPS setup reported an issue — see docs/BETRIEB.md §3." >&2
+elif [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile 2>/dev/null; then
+  # HTTPS deselected but still set up from an earlier run — tear it down,
+  # otherwise "HTTPS: nein" on an update would silently leave Caddy serving.
+  step "Removing HTTPS (deselected; was installed by an earlier run)..."
+  bash "$REPO_ROOT/deploy/https/uninstall.sh" --prefix "$PREFIX" \
+    || echo "   HTTPS teardown reported an issue — see docs/BETRIEB.md §3." >&2
+  rm -rf "$PREFIX/deploy/https"
 fi
 
 # --- Optional start + health check -----------------------------------------

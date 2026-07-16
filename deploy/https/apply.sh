@@ -91,6 +91,14 @@ systemctl reload caddy 2>/dev/null || systemctl restart caddy
 CURRENT_HOST="$(hostnamectl --static 2>/dev/null || cat /etc/hostname 2>/dev/null || echo "")"
 if [[ "$CURRENT_HOST" != "$HOSTNAME_SHORT" ]]; then
   step "Setting hostname to '$HOSTNAME_SHORT'..."
+  # Record the ORIGINAL pre-OffgridCloud hostname once, so uninstall.sh can put
+  # it back. Later re-applies must not overwrite the first capture (quoted —
+  # the file is sourced by uninstall.sh).
+  HOST_STATE="$PREFIX/data/https-hostname.state"
+  if [[ ! -f "$HOST_STATE" && -n "$CURRENT_HOST" ]]; then
+    mkdir -p "$PREFIX/data"
+    printf 'PREV_HOSTNAME="%s"\n' "$CURRENT_HOST" > "$HOST_STATE" 2>/dev/null || true
+  fi
   hostnamectl set-hostname "$HOSTNAME_SHORT"
   # Keep /etc/hosts in sync so sudo doesn't warn about an unresolvable host.
   if grep -qE '^\s*127\.0\.1\.1' /etc/hosts; then
