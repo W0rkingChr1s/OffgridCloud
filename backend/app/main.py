@@ -33,6 +33,7 @@ from .routers import (
     events,
     folders,
     groups,
+    https,
     media,
     network,
     pool,
@@ -96,6 +97,7 @@ app.include_router(transfers.router)
 app.include_router(bandwidth.router)
 app.include_router(events.router)
 app.include_router(system.router)
+app.include_router(https.router)
 app.include_router(media.router)
 app.include_router(descriptions.router)
 app.include_router(pool.router)

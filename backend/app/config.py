@@ -92,6 +92,13 @@ class Settings(BaseSettings):
     # default — flipping real network state needs root, so it must be deliberate.
     net_apply_command: str = ""
 
+    # --- HTTPS reverse proxy (Caddy) ---------------------------------------
+    # Opt-in privileged command that re-renders the Caddyfile + sets the mDNS
+    # hostname (see deploy/https/apply.sh). Wired up by deploy/https/install.sh
+    # via a NOPASSWD sudoers rule; empty when HTTPS wasn't set up, so the System
+    # UI shows the feature as unavailable and PUT /api/system/https returns 409.
+    https_apply_command: str = ""
+
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
 

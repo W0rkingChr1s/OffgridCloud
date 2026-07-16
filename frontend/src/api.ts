@@ -236,6 +236,28 @@ export interface SystemStatus {
   power_shutdown_enabled: boolean;
 }
 
+export interface HttpsStatus {
+  enabled: boolean;
+  hostname: string;
+  domain: string;
+  lan_url: string;
+  public_url: string;
+}
+
+export async function getHttpsStatus(): Promise<HttpsStatus> {
+  return api<HttpsStatus>("/api/system/https");
+}
+
+export async function updateHttps(patch: {
+  hostname?: string;
+  domain?: string;
+}): Promise<HttpsStatus> {
+  return api<HttpsStatus>("/api/system/https", {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
 /** A server-side status blip carried in the live SSE snapshot (see
  * app/notices.py): startup summary, reconnect ping, bandwidth pause/resume. */
 export interface ServerNotice {
