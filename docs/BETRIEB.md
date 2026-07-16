@@ -82,7 +82,11 @@ sudo nano /opt/offgridcloud/.env        # z. B. OGC_BUFFER_DIR auf USB-SSD
 sudo systemctl enable --now offgridcloud
 ```
 
-Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht alles).
+Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht
+alles inkl. der `ogc-wifi-*`-WLAN-Profile). Räumt auch alle Zusatzfunktionen ab:
+Kiosk-Konsole, HTTPS (Caddy-Konfiguration weg, ursprünglicher Hostname zurück),
+Netzwerk-Redundanz (Watchdog + Fallback-AP), VPN-Drop-in und sämtliche
+sudoers-Regeln. Installierte Pakete (caddy, avahi, rclone, ffmpeg, …) bleiben.
 
 ### Variante B — Windows (PowerShell)
 
