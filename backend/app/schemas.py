@@ -686,3 +686,35 @@ class PoolSelfOut(BaseModel):
 
 class PoolTokenOut(BaseModel):
     pool_token: str
+
+
+# --- WebAuthn / passkeys ----------------------------------------------------
+class WebAuthnRegisterVerify(BaseModel):
+    """Attestation returned by navigator.credentials.create(), plus our nonce."""
+
+    nonce: str
+    credential: dict  # raw PublicKeyCredential JSON from the browser
+    name: str = ""
+
+
+class WebAuthnLoginOptionsRequest(BaseModel):
+    email: str | None = None
+
+
+class WebAuthnLoginVerify(BaseModel):
+    nonce: str
+    credential: dict
+
+
+class PasskeyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    rp_id: str
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class PasskeyRename(BaseModel):
+    name: str
