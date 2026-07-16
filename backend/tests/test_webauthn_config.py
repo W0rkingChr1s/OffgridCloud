@@ -86,3 +86,35 @@ def test_resolve_returns_rpid_and_origin_when_allowed():
     )
     assert rp_id == "offgridcloud.local"
     assert origin == "https://offgridcloud.local"
+
+
+def test_challenge_store_put_take_roundtrip():
+    store = webauthn_config.ChallengeStore(ttl_seconds=300, clock=lambda: 1000.0)
+    nonce = store.put(b"challengebytes", meta={"user_id": 7})
+    assert isinstance(nonce, str) and nonce
+    entry = store.take(nonce)
+    assert entry.challenge == b"challengebytes"
+    assert entry.meta == {"user_id": 7}
+
+
+def test_challenge_take_is_one_time():
+    store = webauthn_config.ChallengeStore(ttl_seconds=300, clock=lambda: 1000.0)
+    nonce = store.put(b"c", meta={})
+    store.take(nonce)
+    with pytest.raises(KeyError):
+        store.take(nonce)
+
+
+def test_challenge_expires_after_ttl():
+    now = {"t": 1000.0}
+    store = webauthn_config.ChallengeStore(ttl_seconds=300, clock=lambda: now["t"])
+    nonce = store.put(b"c", meta={})
+    now["t"] = 1000.0 + 301  # past TTL
+    with pytest.raises(KeyError):
+        store.take(nonce)
+
+
+def test_challenge_unknown_nonce_raises():
+    store = webauthn_config.ChallengeStore(ttl_seconds=300, clock=lambda: 1000.0)
+    with pytest.raises(KeyError):
+        store.take("nope")

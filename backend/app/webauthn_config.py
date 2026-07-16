@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 
@@ -53,3 +54,47 @@ def resolve_rp(origin: str, *, allowlist: set[str]) -> tuple[str, str]:
     if rp_id not in allowlist:
         raise OriginNotAllowed(f"origin not allowed: {rp_id}")
     return rp_id, normalised
+
+
+@dataclass
+class _Entry:
+    challenge: bytes
+    meta: dict
+    expires_at: float
+
+
+@dataclass
+class ChallengeStore:
+    """Process-local, one-time, TTL'd WebAuthn challenges.
+
+    Fine for the single-process uvicorn on the Pi (systemd unit has no
+    --workers). Lost on restart, which is harmless — challenges live seconds.
+    ``clock`` is injectable for tests.
+    """
+
+    ttl_seconds: float = 300.0
+    clock: object = time.monotonic
+    _entries: dict[str, _Entry] = field(default_factory=dict)
+
+    def put(self, challenge: bytes, *, meta: dict) -> str:
+        self._sweep()
+        nonce = secrets.token_urlsafe(16)
+        self._entries[nonce] = _Entry(
+            challenge=challenge, meta=meta, expires_at=self.clock() + self.ttl_seconds
+        )
+        return nonce
+
+    def take(self, nonce: str) -> _Entry:
+        """Pop and return an entry. Raises KeyError if missing or expired."""
+        entry = self._entries.pop(nonce, None)
+        if entry is None:
+            raise KeyError(nonce)
+        if self.clock() > entry.expires_at:
+            raise KeyError(nonce)
+        return entry
+
+    def _sweep(self) -> None:
+        now = self.clock()
+        expired = [n for n, e in self._entries.items() if now > e.expires_at]
+        for n in expired:
+            self._entries.pop(n, None)
