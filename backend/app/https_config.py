@@ -73,6 +73,41 @@ def read_state(data_dir: Path) -> dict[str, str]:
     }
 
 
+def caddy_running(*, run=subprocess.run) -> bool:
+    """Best-effort: is the Caddy reverse proxy up on this box?
+
+    Uses ``systemctl is-active`` and treats *any* problem (no systemd, no caddy
+    unit, timeout) as "not running" — never raises, so the status endpoint stays
+    safe on a dev box or in Docker. ``run`` is injectable for tests.
+    """
+    try:
+        result = run(
+            ["systemctl", "is-active", "--quiet", "caddy"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def is_active(data_dir: Path, *, run=subprocess.run) -> bool:
+    """True when HTTPS is actually serving on this box.
+
+    Two independent signals, either is enough — this is what tells "TLS is
+    genuinely up" apart from "the UI can re-apply the config" (see the router):
+      * apply.sh has run at least once (state file carries a hostname), or
+      * the Caddy service is up right now (covers a hand-configured box whose
+        state file we never wrote).
+    Checks the cheap file signal first and only shells out to systemctl when it
+    has to.
+    """
+    if read_state(data_dir)["hostname"]:
+        return True
+    return caddy_running(run=run)
+
+
 def run_apply(command: str, *, hostname: str, domain: str, run=subprocess.run) -> str:
     """Run the configured apply command with --hostname (and --domain if set).
 

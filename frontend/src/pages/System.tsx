@@ -316,6 +316,27 @@ function HttpsCard() {
           <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">Installer</code>{" "}
           erneut ausführen und HTTPS aktivieren.
         </div>
+      ) : !https.manageable ? (
+        <>
+          {https.lan_url && (
+            <p className="mb-3 text-xs text-slate-500">
+              Lokal erreichbar unter{" "}
+              <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.lan_url}</code>
+              {https.public_url && (
+                <>
+                  {" "}und öffentlich unter{" "}
+                  <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.public_url}</code>
+                </>
+              )}
+              .
+            </p>
+          )}
+          <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+            HTTPS ist aktiv. Um die Domain aus der Weboberfläche zu ändern, den{" "}
+            <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">Installer</code>{" "}
+            erneut ausführen und HTTPS aktivieren.
+          </div>
+        </>
       ) : (
         <>
           <p className="mb-3 text-xs text-slate-500">
