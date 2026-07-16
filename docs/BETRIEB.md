@@ -156,6 +156,19 @@ müssen von außen erreichbar sein (Portweiterleitung am Router).
 `deploy/nginx.conf.example` eine Vorlage (inkl. Self-signed-Cert-Rezept und der
 SSE-freundlichen `/api/events`-Location).
 
+**HTTPS wieder zurückbauen:** entweder beim erneuten Installer-Lauf die Frage
+„HTTPS aktivieren?" mit **nein** beantworten (eine bestehende Einrichtung wird
+dann automatisch entfernt) oder direkt:
+
+```bash
+sudo ./deploy/https/uninstall.sh
+```
+
+Beides entfernt die verwaltete Caddy-Konfiguration, deaktiviert caddy, löscht
+die sudoers-Regel samt `.env`-Verdrahtung und stellt den ursprünglichen
+Hostnamen wieder her (sofern er beim Einrichten aufgezeichnet wurde). Die
+Pakete caddy/avahi bleiben installiert.
+
 ### 3.1 Passkeys (WebAuthn)
 
 Nutzer können sich zusätzlich zum Passwort per **Passkey** anmelden (Fingerabdruck,

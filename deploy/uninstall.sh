@@ -78,28 +78,18 @@ if command -v nmcli >/dev/null 2>&1; then
 fi
 
 echo ">> Removing the HTTPS reverse proxy (Caddy config + hostname), if installed..."
-# Only touch the Caddyfile if it is the one our apply.sh rendered — a
-# hand-written Caddy setup is not ours to delete.
-if [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile; then
-  rm -f /etc/caddy/Caddyfile
-  systemctl disable --now caddy 2>/dev/null || true
-  echo "   Removed the managed Caddyfile and disabled caddy."
-fi
-# Restore the hostname the box had before the installer renamed it.
-HOST_STATE="$PREFIX/data/https-hostname.state"
-if [[ -f "$HOST_STATE" ]]; then
-  PREV_HOSTNAME=""
-  # shellcheck disable=SC1090
-  . "$HOST_STATE" 2>/dev/null || true
-  if [[ -n "$PREV_HOSTNAME" ]]; then
-    hostnamectl set-hostname "$PREV_HOSTNAME" 2>/dev/null \
-      && echo "   Restored hostname: $PREV_HOSTNAME"
-    if grep -qE '^\s*127\.0\.1\.1' /etc/hosts; then
-      sed -i -E "s/^\s*127\.0\.1\.1.*/127.0.1.1\t${PREV_HOSTNAME}/" /etc/hosts
-    fi
-    systemctl restart avahi-daemon 2>/dev/null || true
+# The dedicated teardown script ships next to this one (also used by install.sh
+# when HTTPS is deselected on a re-run).
+HTTPS_UNINSTALL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/https/uninstall.sh"
+if [[ -f "$HTTPS_UNINSTALL" ]]; then
+  bash "$HTTPS_UNINSTALL" --prefix "$PREFIX" || true
+else
+  # Minimal fallback if this script runs standalone, outside the repo layout.
+  if [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile; then
+    rm -f /etc/caddy/Caddyfile
+    systemctl disable --now caddy 2>/dev/null || true
+    echo "   Removed the managed Caddyfile and disabled caddy."
   fi
-  rm -f "$HOST_STATE"
 fi
 
 echo ">> Removing the on-box console (kiosk), if installed..."
