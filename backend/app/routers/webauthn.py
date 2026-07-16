@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from webauthn import (
@@ -245,3 +245,51 @@ def login_verify(
     db.commit()
     token = create_access_token(user_id=user.id, role=user.role.value)
     return TokenResponse(access_token=token)
+
+
+# --- Credential management (logged-in, own credentials) --------------------
+@router.get("/credentials", response_model=list[PasskeyOut])
+def list_credentials(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> list[WebAuthnCredential]:
+    return list(
+        db.scalars(
+            select(WebAuthnCredential)
+            .where(WebAuthnCredential.user_id == user.id)
+            .order_by(WebAuthnCredential.created_at.desc())
+        )
+    )
+
+
+def _own_credential(db: Session, user: User, cred_id: int) -> WebAuthnCredential:
+    cred = db.get(WebAuthnCredential, cred_id)
+    if cred is None or cred.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Passkey nicht gefunden.")
+    return cred
+
+
+@router.patch("/credentials/{cred_id}", response_model=PasskeyOut)
+def rename_credential(
+    cred_id: int,
+    payload: PasskeyRename,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WebAuthnCredential:
+    cred = _own_credential(db, user, cred_id)
+    cred.name = payload.name.strip() or cred.name
+    db.commit()
+    db.refresh(cred)
+    return cred
+
+
+@router.delete("/credentials/{cred_id}", status_code=204)
+def delete_credential(
+    cred_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    cred = _own_credential(db, user, cred_id)
+    audit(db, user, "auth.webauthn.delete", f"name={cred.name}")
+    db.delete(cred)
+    db.commit()
+    return Response(status_code=204)

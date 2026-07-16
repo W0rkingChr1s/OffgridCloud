@@ -151,3 +151,46 @@ def test_login_verify_rejects_stale_nonce(client):
         json={"nonce": "bogus", "credential": {}},
     )
     assert resp.status_code == 400
+
+
+def test_list_rename_delete_credentials(client, admin_auth, monkeypatch):
+    _register_a_credential(client, admin_auth, monkeypatch)
+
+    listed = client.get("/api/auth/webauthn/credentials", headers=admin_auth).json()
+    assert len(listed) == 1
+    cid = listed[0]["id"]
+
+    renamed = client.patch(
+        f"/api/auth/webauthn/credentials/{cid}",
+        headers=admin_auth,
+        json={"name": "Renamed Key"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["name"] == "Renamed Key"
+
+    deleted = client.delete(f"/api/auth/webauthn/credentials/{cid}", headers=admin_auth)
+    assert deleted.status_code == 204
+    assert client.get("/api/auth/webauthn/credentials", headers=admin_auth).json() == []
+
+
+def test_credentials_require_auth(client):
+    assert client.get("/api/auth/webauthn/credentials").status_code in (401, 403)
+
+
+def test_cannot_delete_another_users_credential(client, admin_auth, monkeypatch):
+    _register_a_credential(client, admin_auth, monkeypatch)
+    listed = client.get("/api/auth/webauthn/credentials", headers=admin_auth).json()
+    cid = listed[0]["id"]
+
+    # Make a second user and log in as them.
+    client.post(
+        "/api/users",
+        headers=admin_auth,
+        json={"email": "other@test.local", "password": "otherpass123", "role": "user"},
+    )
+    token = client.post(
+        "/api/auth/login", json={"email": "other@test.local", "password": "otherpass123"}
+    ).json()["access_token"]
+    other = {"Authorization": f"Bearer {token}"}
+
+    assert client.delete(f"/api/auth/webauthn/credentials/{cid}", headers=other).status_code == 404
