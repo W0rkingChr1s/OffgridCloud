@@ -139,6 +139,23 @@ müssen von außen erreichbar sein (Portweiterleitung am Router).
 `deploy/nginx.conf.example` eine Vorlage (inkl. Self-signed-Cert-Rezept und der
 SSE-freundlichen `/api/events`-Location).
 
+### 3.1 Passkeys (WebAuthn)
+
+Nutzer können sich zusätzlich zum Passwort per **Passkey** anmelden (Fingerabdruck,
+Gesichtserkennung, Sicherheitsschlüssel). Voraussetzung ist HTTPS — also der per
+Installer eingerichtete Zugang `https://offgridcloud.local` oder eine echte Domain
+(siehe oben). Über eine nackte LAN-IP ohne HTTPS funktionieren Passkeys nicht.
+
+- **Einrichten:** eingeloggt unter **Passkeys** → „Passkey hinzufügen".
+- **Anmelden:** auf der Login-Seite „Mit Passkey anmelden" (mit ausgefüllter
+  E-Mail gezielt, ohne E-Mail als Ein-Klick).
+- **Zwei Zugänge:** Ein Passkey gilt nur für die Adresse, unter der er angelegt
+  wurde. Wer sowohl lokal (`offgridcloud.local`) als auch über eine Domain
+  zugreift, legt pro Adresse einen eigenen Passkey an.
+- **Fallback:** Das Passwort bleibt immer gültig. Geht ein Gerät verloren, per
+  Passwort anmelden und den Passkey unter **Passkeys** löschen; ein Admin kann
+  zudem das Passwort zurücksetzen.
+
 ## 4. Bandbreiten-Steuerung (Betrieb)
 
 Im Admin-Bereich unter **Bandbreite**:

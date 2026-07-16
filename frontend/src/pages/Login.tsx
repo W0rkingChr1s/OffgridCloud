@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError } from "../api";
+import { ApiError, passkeysSupported } from "../api";
 import { useAuth } from "../auth";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginPasskey } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,6 +20,23 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Anmeldung fehlgeschlagen");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function passkey() {
+    setError(null);
+    setBusy(true);
+    try {
+      await loginPasskey(email || undefined);
+      navigate("/");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setError("Passkey-Anmeldung abgebrochen.");
+      } else {
+        setError(err instanceof ApiError ? err.message : "Passkey-Anmeldung fehlgeschlagen");
+      }
     } finally {
       setBusy(false);
     }
@@ -73,6 +90,17 @@ export default function Login() {
         >
           {busy ? "Anmelden…" : "Anmelden"}
         </button>
+
+        {passkeysSupported() && (
+          <button
+            type="button"
+            onClick={passkey}
+            disabled={busy}
+            className="mt-3 w-full rounded-lg border border-white/15 py-2.5 font-semibold text-slate-200 transition hover:bg-white/5 disabled:opacity-50"
+          >
+            Mit Passkey anmelden
+          </button>
+        )}
       </form>
     </div>
   );

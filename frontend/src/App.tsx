@@ -12,6 +12,7 @@ import Groups from "./pages/Groups";
 import Login from "./pages/Login";
 import Network from "./pages/Network";
 import Overview from "./pages/Overview";
+import Passkeys from "./pages/Passkeys";
 import Pool from "./pages/Pool";
 import Providers from "./pages/Providers";
 import Search from "./pages/Search";
@@ -58,6 +59,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Search />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/passkeys"
+            element={
+              <ProtectedRoute>
+                <Passkeys />
               </ProtectedRoute>
             }
           />

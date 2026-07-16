@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, getToken, setToken, type User } from "./api";
+import { loginWithPasskey } from "./webauthn";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginPasskey: (email?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -34,13 +36,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(await api<User>("/api/auth/me"));
   }
 
+  async function loginPasskey(email?: string) {
+    await loginWithPasskey(email);
+    setUser(await api<User>("/api/auth/me"));
+  }
+
   function logout() {
     setToken(null);
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginPasskey, logout }}>
       {children}
     </AuthContext.Provider>
   );

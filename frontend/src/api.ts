@@ -258,6 +258,39 @@ export async function updateHttps(patch: {
   });
 }
 
+export interface Passkey {
+  id: number;
+  name: string;
+  rp_id: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export async function listPasskeys(): Promise<Passkey[]> {
+  return api<Passkey[]>("/api/auth/webauthn/credentials");
+}
+
+export async function renamePasskey(id: number, name: string): Promise<Passkey> {
+  return api<Passkey>(`/api/auth/webauthn/credentials/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function deletePasskey(id: number): Promise<void> {
+  await api<void>(`/api/auth/webauthn/credentials/${id}`, { method: "DELETE" });
+}
+
+/** True when this browser + origin can use passkeys (WebAuthn needs a secure
+ * context: https, or http://localhost for dev). */
+export function passkeysSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    "PublicKeyCredential" in window &&
+    (window.isSecureContext || window.location.hostname === "localhost")
+  );
+}
+
 /** A server-side status blip carried in the live SSE snapshot (see
  * app/notices.py): startup summary, reconnect ping, bandwidth pause/resume. */
 export interface ServerNotice {

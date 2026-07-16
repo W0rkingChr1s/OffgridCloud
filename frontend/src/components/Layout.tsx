@@ -85,6 +85,12 @@ const icons = {
       <path d="M7 10v2h10v-2M12 12v2" />
     </svg>
   ),
+  passkey: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <circle cx="9" cy="8" r="4" />
+      <path d="M2 21a7 7 0 0 1 11-5.7M17 13l4 4-2 2-1-1M18 16l-2 2" />
+    </svg>
+  ),
 };
 
 type NavItem = { to: string; label: string; icon: (p: IconProps) => JSX.Element; admin?: boolean };
@@ -93,6 +99,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Übersicht", icon: icons.overview },
   { to: "/folders", label: "Ordner", icon: icons.folders },
   { to: "/search", label: "Suche", icon: icons.search },
+  { to: "/passkeys", label: "Passkeys", icon: icons.passkey },
   { to: "/admin/folders", label: "Verwalten", icon: icons.manage, admin: true },
   { to: "/admin/providers", label: "Provider", icon: icons.provider, admin: true },
   { to: "/admin/vpn", label: "VPN", icon: icons.vpn, admin: true },

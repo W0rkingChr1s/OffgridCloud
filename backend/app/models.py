@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -71,6 +72,30 @@ class User(Base):
     role: Mapped[Role] = mapped_column(Enum(Role), default=Role.USER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # WebAuthn: stable non-PII user handle for discoverable credentials.
+    # Nullable + filled lazily on first passkey registration (existing users
+    # created before this feature won't have one yet).
+    webauthn_user_handle: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
+
+class WebAuthnCredential(Base):
+    """A registered passkey. Bound to one RP-ID (origin) — a user may hold one
+    credential per origin (e.g. offgridcloud.local and a public domain)."""
+
+    __tablename__ = "webauthn_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    credential_id: Mapped[bytes] = mapped_column(LargeBinary, unique=True, index=True)
+    public_key: Mapped[bytes] = mapped_column(LargeBinary)
+    sign_count: Mapped[int] = mapped_column(default=0)
+    rp_id: Mapped[str] = mapped_column(String(255))
+    transports: Mapped[str] = mapped_column(String(255), default="")  # JSON list
+    name: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class UploadFolder(Base):

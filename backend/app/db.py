@@ -75,6 +75,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_bandwidth", "BOOLEAN NOT NULL DEFAULT 1"),
+    # WebAuthn user handle — added to an existing users table. Nullable (no
+    # DEFAULT): filled on first passkey registration.
+    ("users", "webauthn_user_handle", "BLOB"),
 ]
 
 
