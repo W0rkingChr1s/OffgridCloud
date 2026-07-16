@@ -2,7 +2,10 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   api,
   ApiError,
+  getHttpsStatus,
+  updateHttps,
   type AuditEvent,
+  type HttpsStatus,
   type SystemStatus,
   type UpdateInfo,
   type UpdateProgress,
@@ -198,6 +201,8 @@ export default function System() {
 
       {status && <PowerCard status={status} />}
 
+      <HttpsCard />
+
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Aktivität</h3>
       {audit.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Einträge.</p>
@@ -266,6 +271,93 @@ const POWER_ACTIONS: {
     enabled: "power_shutdown_enabled",
   },
 ];
+
+function HttpsCard() {
+  const toast = useToast();
+  const [https, setHttps] = useState<HttpsStatus | null>(null);
+  const [domain, setDomain] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getHttpsStatus()
+      .then((s) => {
+        setHttps(s);
+        setDomain(s.domain);
+      })
+      .catch(() => setHttps(null));
+  }, []);
+
+  async function saveDomain() {
+    setBusy(true);
+    try {
+      const s = await updateHttps({ domain: domain.trim() });
+      setHttps(s);
+      setDomain(s.domain);
+      toast.info("HTTPS", s.domain ? `Domain gesetzt: ${s.domain}` : "Domain entfernt.");
+    } catch (e) {
+      toast.error("HTTPS", e instanceof ApiError ? e.message : "Speichern fehlgeschlagen");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!https) return null;
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+        HTTPS
+        <InfoTip text="Die Box ist im lokalen Netz per https://<name>.local mit einem selbstsignierten Zertifikat erreichbar. Trägst du eine öffentliche Domain ein, holt Caddy zusätzlich automatisch ein echtes Zertifikat (Let's Encrypt) — der lokale Zugriff bleibt bestehen." />
+      </div>
+
+      {!https.enabled ? (
+        <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+          HTTPS ist auf dieser Box nicht eingerichtet. Den{" "}
+          <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">Installer</code>{" "}
+          erneut ausführen und HTTPS aktivieren.
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-xs text-slate-500">
+            Lokal erreichbar unter{" "}
+            <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.lan_url}</code>
+            {https.public_url && (
+              <>
+                {" "}und öffentlich unter{" "}
+                <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.public_url}</code>
+              </>
+            )}
+            .
+          </p>
+          <label className="block text-sm">
+            <span className="mb-1 block text-slate-300">Öffentliche Domain (optional)</span>
+            <div className="flex gap-2">
+              <input
+                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+                placeholder="z. B. cloud.example.com"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={saveDomain}
+                disabled={busy || domain.trim() === https.domain}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy ? "…" : "Speichern"}
+              </button>
+            </div>
+            <span className="mt-1 block text-xs text-slate-500">
+              Wichtig: Die Domain muss per DNS auf diese Box zeigen und die Ports 80/443 müssen von
+              außen erreichbar sein (Portweiterleitung am Router). Das Zertifikat wird dann
+              automatisch geholt — das kann bis zu einer Minute dauern.
+            </span>
+          </label>
+        </>
+      )}
+    </div>
+  );
+}
 
 function PowerCard({ status }: { status: SystemStatus }) {
   const toast = useToast();
