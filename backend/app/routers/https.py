@@ -26,7 +26,9 @@ from ..deps import require_admin
 from ..models import User
 from ..schemas import HttpsConfigUpdate, HttpsStatusOut
 
-router = APIRouter(prefix="/api/system/https", tags=["https"], dependencies=[Depends(require_admin)])
+router = APIRouter(
+    prefix="/api/system/https", tags=["https"], dependencies=[Depends(require_admin)]
+)
 
 
 def _status() -> HttpsStatusOut:
