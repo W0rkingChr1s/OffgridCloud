@@ -77,8 +77,15 @@ wenn die Leitung zu dünn wird.
 startet ihn und prüft den Health-Endpoint:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh)"
 ```
+
+> Diese Form gibt dem Installer deine **Tastatur** (nicht die heruntergeladene
+> Datei) als Eingabe — nötig, damit das interaktive Menü auf Tastendrücke
+> reagiert. `… | sudo bash` funktioniert für die interaktive Installation
+> **nicht** zuverlässig (moderne `sudo`-Versionen leiten dabei keine Tastatur
+> durch). Alternativ erst herunterladen, dann ausführen:
+> `curl -fsSL …/bootstrap.sh -o ogc.sh && sudo bash ogc.sh`.
 
 Am Ende zeigt der Installer **einmalig** ein zufälliges Admin-Passwort — notieren.
 Danach `http://<host-ip>:8000` und Login mit `admin@offgrid.local`.

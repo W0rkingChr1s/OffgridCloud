@@ -101,10 +101,15 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # --- Interactive questionnaire ----------------------------------------------
-# The one-line installer runs as `curl ... | sudo bash`, so stdin is the piped
-# script, not the keyboard — prompts therefore talk to the controlling terminal
-# (/dev/tty). With no terminal (headless self-update, CI) we skip the questions
-# and use the defaults / OGC_* values from above.
+# The recommended one-liner is `sudo bash -c "$(curl ... bootstrap.sh)"`, which
+# keeps the keyboard as stdin; the bootstrap also reattaches /dev/tty. Every
+# prompt reads from the controlling terminal (/dev/tty) so it works whether stdin
+# is the keyboard or a piped script. With no terminal (headless self-update, CI)
+# we skip the questions and use the defaults / OGC_* values from above.
+#
+# NOTE: `curl ... | sudo bash` is NOT reliable for the interactive run — modern
+# sudo uses its own pseudo-terminal and won't forward keystrokes when its stdin
+# is the pipe, so the whiptail menu never receives input. Use the form above.
 if [[ $NONINTERACTIVE -eq 0 ]] && { [[ ! -r /dev/tty ]] || [[ ! -w /dev/tty ]]; }; then
   NONINTERACTIVE=1
 fi

@@ -13,8 +13,15 @@ alle Abhängigkeiten (git, Node, Python, rclone), klont das Repo nach
 Health-Endpoint:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh)"
 ```
+
+> **Warum nicht `… | sudo bash`?** Beim Pipe-in-sudo ist die Standardeingabe des
+> Installers die heruntergeladene Datei, nicht deine Tastatur — modernes `sudo`
+> läuft in einem eigenen Pseudo-Terminal und reicht Tastendrücke dann nicht
+> durch, sodass das interaktive Menü nicht auf Eingaben reagiert. Die Form oben
+> übergibt `sudo` deine Tastatur. Alternativ: erst herunterladen, dann
+> ausführen — `curl -fsSL …/bootstrap.sh -o ogc.sh && sudo bash ogc.sh`.
 
 Der Installer **fragt danach interaktiv** ab, was eingerichtet werden soll (Port,
 Admin-E-Mail, Video-Thumbnails, VPN, Kiosk-Menü usw.). Ist `whiptail` vorhanden
