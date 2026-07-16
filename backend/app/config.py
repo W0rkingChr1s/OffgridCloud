@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     # UI shows the feature as unavailable and PUT /api/system/https returns 409.
     https_apply_command: str = ""
 
+    # --- WebAuthn / passkeys -----------------------------------------------
+    # Extra comma-separated origins allowed as passkey RP-IDs, beyond
+    # <hostname>.local + the configured domain + localhost. Usually empty.
+    webauthn_extra_origins: str = ""
+
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
 
