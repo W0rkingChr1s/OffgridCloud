@@ -567,6 +567,23 @@ class UpdateProgressOut(BaseModel):
     log: str = ""
 
 
+class HttpsStatusOut(BaseModel):
+    """Current reverse-proxy state, read from data/https_state.json."""
+
+    enabled: bool  # True when https_apply_command is wired up on this box
+    hostname: str  # mDNS short name, reachable as <hostname>.local
+    domain: str  # public domain, or "" if none
+    lan_url: str  # e.g. https://offgridcloud.local
+    public_url: str  # e.g. https://cloud.example.com, or "" if no domain
+
+
+class HttpsConfigUpdate(BaseModel):
+    """Patch semantics: only provided fields change. domain="" removes it."""
+
+    hostname: str | None = None
+    domain: str | None = None
+
+
 class AuditEventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
