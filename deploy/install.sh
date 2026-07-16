@@ -101,17 +101,36 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # --- Interactive questionnaire ----------------------------------------------
-# The recommended one-liner is `sudo bash -c "$(curl ... bootstrap.sh)"`, which
-# keeps the keyboard as stdin; the bootstrap also reattaches /dev/tty. Every
-# prompt reads from the controlling terminal (/dev/tty) so it works whether stdin
-# is the keyboard or a piped script. With no terminal (headless self-update, CI)
-# we skip the questions and use the defaults / OGC_* values from above.
-#
-# NOTE: `curl ... | sudo bash` is NOT reliable for the interactive run — modern
-# sudo uses its own pseudo-terminal and won't forward keystrokes when its stdin
-# is the pipe, so the whiptail menu never receives input. Use the form above.
+# Prompts read from the controlling terminal (/dev/tty). With no terminal at all
+# (headless self-update, CI) we skip the questions and use the defaults / OGC_*.
 if [[ $NONINTERACTIVE -eq 0 ]] && { [[ ! -r /dev/tty ]] || [[ ! -w /dev/tty ]]; }; then
   NONINTERACTIVE=1
+fi
+
+# The `curl ... | sudo bash` trap: modern sudo (Defaults use_pty) runs us in its
+# own pseudo-terminal but, when its stdin is the pipe, never forwards keystrokes.
+# The menu then shows but ignores every key (arrows echo as ^[[A/^[[B). We detect
+# it: our stdin is not a terminal (piped in) yet /dev/tty exists, so verify the
+# keyboard actually responds before committing to prompts. A real keyboard (e.g.
+# `curl | bash` as root, where /dev/tty IS the keyboard) answers the ENTER and we
+# proceed; a dead one (curl | sudo bash) times out and we abort with the fix.
+if [[ $NONINTERACTIVE -eq 0 && ! -t 0 ]]; then
+  _BOOT_URL="https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh"
+  printf '\n  Tastatur-Check: bitte \033[1mENTER\033[0m drücken, um fortzufahren … ' > /dev/tty
+  if IFS= read -r -t 30 _ < /dev/tty; then
+    printf '\n' > /dev/tty
+  else
+    {
+      printf '\n  \033[1;31mKeine Tastatureingabe möglich.\033[0m\n'
+      printf '  Das passiert bei »curl … | sudo bash«: sudo führt den Installer in einem\n'
+      printf '  eigenen Terminal aus und reicht deine Tastendrücke nicht durch.\n\n'
+      printf '  Bitte so neu starten (die Tastatur bleibt dann erhalten):\n\n'
+      printf '    curl -fsSL %s -o ogc.sh && sudo bash ogc.sh\n\n' "$_BOOT_URL"
+      printf '  oder:\n\n'
+      printf '    sudo bash -c "$(curl -fsSL %s)"\n\n' "$_BOOT_URL"
+    } > /dev/tty
+    exit 1
+  fi
 fi
 
 ask() {  # ask VAR "Question" "default"
