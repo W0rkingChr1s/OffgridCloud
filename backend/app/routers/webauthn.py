@@ -156,3 +156,92 @@ def register_verify(
     db.refresh(cred)
     audit(db, user, "auth.webauthn.register", f"rp_id={rp_id} name={cred.name}")
     return cred
+
+
+# --- Login (public) ---------------------------------------------------------
+@router.post("/login/options")
+def login_options(
+    payload: WebAuthnLoginOptionsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    rp_id, _origin = _rp_for_request(request)
+    allow: list[PublicKeyCredentialDescriptor] = []
+    if payload.email:
+        email = payload.email.strip().lower()
+        user = db.scalar(select(User).where(User.email == email))
+        if user is not None:
+            creds = db.scalars(
+                select(WebAuthnCredential).where(
+                    WebAuthnCredential.user_id == user.id,
+                    WebAuthnCredential.rp_id == rp_id,
+                )
+            ).all()
+            allow = [PublicKeyCredentialDescriptor(id=c.credential_id) for c in creds]
+        # Unknown email → empty allow list, still return options (no enumeration).
+    options = generate_authentication_options(
+        rp_id=rp_id,
+        allow_credentials=allow or None,
+        user_verification=UserVerificationRequirement.PREFERRED,
+    )
+    nonce = challenges.put(options.challenge, meta={"rp_id": rp_id})
+    return {"nonce": nonce, "options": json.loads(options_to_json(options))}
+
+
+@router.post("/login/verify", response_model=TokenResponse)
+def login_verify(
+    payload: WebAuthnLoginVerify,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    rp_id, origin = _rp_for_request(request)
+    try:
+        entry = challenges.take(payload.nonce)
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Anmeldung abgelaufen, bitte erneut.") from None
+    if entry.meta.get("rp_id") != rp_id:
+        raise HTTPException(status_code=400, detail="Origin passt nicht zur Anmeldung.")
+
+    # Locate the credential by its raw id (base64url in the browser payload).
+    raw_id = payload.credential.get("rawId") or payload.credential.get("id")
+    if not raw_id:
+        raise HTTPException(status_code=400, detail="Ungültige Anmeldedaten.")
+    cred_id = webauthn_config.b64url_decode(raw_id)
+    cred = db.scalar(
+        select(WebAuthnCredential).where(
+            WebAuthnCredential.credential_id == cred_id,
+            WebAuthnCredential.rp_id == rp_id,
+        )
+    )
+    if cred is None:
+        raise HTTPException(status_code=400, detail="Passkey unbekannt.")
+    user = db.get(User, cred.user_id)
+    if user is None or not user.active:
+        raise HTTPException(status_code=403, detail="Konto deaktiviert.")
+
+    try:
+        verified = verify_authentication_response(
+            credential=payload.credential,
+            expected_challenge=entry.challenge,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
+            credential_public_key=cred.public_key,
+            credential_current_sign_count=cred.sign_count,
+            require_user_verification=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Passkey-Prüfung fehlgeschlagen: {exc}") from exc
+
+    # Clone detection: a non-increasing counter (when the authenticator uses one)
+    # means a possible cloned credential.
+    if verified.new_sign_count and verified.new_sign_count <= cred.sign_count:
+        audit(db, user, "auth.webauthn.signcount_regression", f"cred={cred.id}")
+        raise HTTPException(status_code=400, detail="Passkey-Zähler ungültig.")
+
+    from datetime import UTC, datetime
+
+    cred.sign_count = verified.new_sign_count
+    cred.last_used_at = datetime.now(UTC)
+    db.commit()
+    token = create_access_token(user_id=user.id, role=user.role.value)
+    return TokenResponse(access_token=token)

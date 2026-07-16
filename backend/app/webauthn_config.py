@@ -8,6 +8,7 @@ make us accept an arbitrary RP-ID.
 
 from __future__ import annotations
 
+import base64
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -98,3 +99,9 @@ class ChallengeStore:
         expired = [n for n, e in self._entries.items() if now > e.expires_at]
         for n in expired:
             self._entries.pop(n, None)
+
+
+def b64url_decode(value: str) -> bytes:
+    """Decode a base64url string (no padding needed) to bytes."""
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)

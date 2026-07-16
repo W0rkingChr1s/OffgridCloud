@@ -78,3 +78,76 @@ def test_register_verify_rejects_stale_nonce(client, admin_auth, monkeypatch):
         json={"nonce": "bogus", "credential": {}, "name": ""},
     )
     assert resp.status_code == 400
+
+
+@dataclass
+class _FakeVerifiedAuth:
+    new_sign_count: int = 5
+    credential_id: bytes = b"cred-123"
+
+
+def _register_a_credential(client, admin_auth, monkeypatch, cred_id=b"cred-123"):
+    """Helper: drive register options+verify with a stubbed authenticator."""
+    import app.routers.webauthn as wa
+
+    opts = client.post(
+        "/api/auth/webauthn/register/options",
+        headers={**admin_auth, **ORIGIN_HEADERS},
+    ).json()
+
+    @dataclass
+    class _Reg:
+        credential_id: bytes = cred_id
+        credential_public_key: bytes = b"pubkey"
+        sign_count: int = 0
+
+    monkeypatch.setattr(wa, "verify_registration_response", lambda **kw: _Reg())
+    client.post(
+        "/api/auth/webauthn/register/verify",
+        headers={**admin_auth, **ORIGIN_HEADERS},
+        json={"nonce": opts["nonce"], "credential": {}, "name": "Test"},
+    )
+
+
+def test_login_options_unknown_email_is_enumeration_safe(client):
+    resp = client.post(
+        "/api/auth/webauthn/login/options",
+        headers=ORIGIN_HEADERS,
+        json={"email": "nobody@test.local"},
+    )
+    # Still 200 with a challenge; no "user not found" leak.
+    assert resp.status_code == 200
+    assert "nonce" in resp.json()
+
+
+def test_login_verify_issues_token(client, admin_auth, monkeypatch):
+    import base64
+
+    import app.routers.webauthn as wa
+
+    _register_a_credential(client, admin_auth, monkeypatch)
+
+    opts = client.post(
+        "/api/auth/webauthn/login/options",
+        headers=ORIGIN_HEADERS,
+        json={"email": "admin@test.local"},
+    ).json()
+
+    monkeypatch.setattr(wa, "verify_authentication_response", lambda **kw: _FakeVerifiedAuth())
+    raw = base64.urlsafe_b64encode(b"cred-123").rstrip(b"=").decode()
+    resp = client.post(
+        "/api/auth/webauthn/login/verify",
+        headers=ORIGIN_HEADERS,
+        json={"nonce": opts["nonce"], "credential": {"id": raw, "rawId": raw}},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_token"]
+
+
+def test_login_verify_rejects_stale_nonce(client):
+    resp = client.post(
+        "/api/auth/webauthn/login/verify",
+        headers=ORIGIN_HEADERS,
+        json={"nonce": "bogus", "credential": {}},
+    )
+    assert resp.status_code == 400
