@@ -88,15 +88,11 @@ else
 fi
 
 # --- Run the installer ------------------------------------------------------
-# It asks its questions on the controlling terminal. Reattach stdin to /dev/tty
-# explicitly so the keyboard is fd 0 for the installer even though this bootstrap
-# arrived over a pipe (harmless when there is no tty — the installer then detects
-# a non-interactive run and uses the OGC_* / default answers). Env vars set on the
+# Hand our own stdin straight through (do NOT force </dev/tty here): the installer
+# checks whether stdin is a real terminal to catch the `curl | sudo bash` trap,
+# where sudo's pseudo-terminal never forwards keystrokes. Forcing /dev/tty would
+# mask that check and leave the menu silently unresponsive. Env vars set on the
 # invoking line above are inherited here and become the answers.
 step "Running the native installer..."
 chmod +x "$OGC_SRC/deploy/install.sh"
-if [[ -e /dev/tty ]]; then
-  exec bash "$OGC_SRC/deploy/install.sh" </dev/tty
-else
-  exec bash "$OGC_SRC/deploy/install.sh"
-fi
+exec bash "$OGC_SRC/deploy/install.sh"
