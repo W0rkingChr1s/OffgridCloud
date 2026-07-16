@@ -17,9 +17,12 @@ curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/depl
 ```
 
 Der Installer **fragt danach interaktiv** ab, was eingerichtet werden soll (Port,
-Admin-E-Mail, Video-Thumbnails, VPN, Kiosk-Menü usw.) — einfach Enter für die
-Vorgabe. Für eine **unbeaufsichtigte** Installation die Fragen per Umgebungs­variablen
-vorbeantworten (durch `sudo` durchreichen):
+Admin-E-Mail, Video-Thumbnails, VPN, Kiosk-Menü usw.). Ist `whiptail` vorhanden
+(auf Debian/Raspberry Pi OS meist vorinstalliert, sonst versucht der Installer es
+still nachzuinstallieren), erscheint ein **grafisches Terminal-Menü** mit Eingabe­feldern
+und einer Funktions-Checkliste; ohne `whiptail` greifen die einfachen Text-Abfragen —
+in beiden Fällen ist der eingetragene Wert die Vorgabe. Für eine **unbeaufsichtigte**
+Installation die Fragen per Umgebungs­variablen vorbeantworten (durch `sudo` durchreichen):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/bootstrap.sh \

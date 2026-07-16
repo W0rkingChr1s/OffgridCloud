@@ -6,8 +6,10 @@
 # to /opt/offgridcloud, writes a .env with a random secret AND a random admin
 # password, and registers a systemd service.
 #
-# The installer is INTERACTIVE: run it and answer a short list of questions
-# (press Enter to accept the sensible default in brackets). No flags to memorise.
+# The installer is INTERACTIVE: run it and answer a short list of questions.
+# When `whiptail` is available it renders them as a graphical terminal menu
+# (input boxes + a feature checklist); otherwise it falls back to plain text
+# prompts (press Enter to accept the sensible default). No flags to memorise.
 #
 # Usage:
 #   sudo ./deploy/install.sh
@@ -140,6 +142,134 @@ ask_secret() {  # ask_secret VAR "Question"
   printf -v "$__var" '%s' "$__ans"
 }
 
+# --- Optional whiptail (ncurses) front-end ----------------------------------
+# Grafische Terminal-Menüs wie im Artikel. Nur genutzt, wenn wir interaktiv
+# sind UND das Programm `whiptail` vorhanden ist — sonst greifen die einfachen
+# Text-Prompts oben. Whiptail malt seine Oberfläche auf stdout und gibt den
+# gewählten Wert auf stderr zurück; da beim Einzeiler-Installer stdin das
+# gepipte Skript ist, liest jedes Widget die Tastatur aus /dev/tty, zeichnet
+# nach /dev/tty und das Ergebnis wird über `2>&1 1>/dev/tty` eingefangen.
+USE_WHIPTAIL=0
+WT_BACKTITLE="OffgridCloud — Installation"
+if [[ $NONINTERACTIVE -eq 0 ]]; then
+  # Debian / Raspberry Pi OS bringen whiptail meist mit; fehlt es, versuchen wir
+  # eine leise Best-Effort-Installation (fällt bei Fehlschlag stillschweigend
+  # auf die Text-Prompts zurück).
+  if ! command -v whiptail >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y whiptail >/dev/null 2>&1 || true
+  fi
+  if command -v whiptail >/dev/null 2>&1; then
+    USE_WHIPTAIL=1
+    export TERM="${TERM:-linux}"   # whiptail braucht ein sinnvolles TERM
+  fi
+fi
+
+wt_onoff() { [[ "$1" -eq 1 ]] && echo ON || echo OFF; }
+
+wt_msg() {  # wt_msg "text" [height] [width]
+  whiptail --backtitle "$WT_BACKTITLE" --title "OffgridCloud" \
+    --msgbox "$1" "${2:-14}" "${3:-72}" >/dev/tty 2>&1 </dev/tty || true
+}
+
+wt_input() {  # wt_input VAR "prompt" "default"
+  local __var="$1" __q="$2" __def="$3" __ans=""
+  __ans=$(whiptail --backtitle "$WT_BACKTITLE" --title "OffgridCloud" \
+            --inputbox "$__q" 10 72 "$__def" 2>&1 1>/dev/tty </dev/tty) \
+    || __ans="$__def"
+  printf -v "$__var" '%s' "${__ans:-$__def}"
+}
+
+wt_secret() {  # wt_secret VAR "prompt"
+  local __var="$1" __q="$2" __ans=""
+  __ans=$(whiptail --backtitle "$WT_BACKTITLE" --title "OffgridCloud" \
+            --passwordbox "$__q" 10 72 2>&1 1>/dev/tty </dev/tty) || __ans=""
+  printf -v "$__var" '%s' "$__ans"
+}
+
+wt_confirm() {  # wt_confirm "text" [height] [width]  -> 0 = ja, sonst = abbrechen
+  whiptail --backtitle "$WT_BACKTITLE" --title "OffgridCloud" \
+    --yesno "$1" "${2:-20}" "${3:-72}" >/dev/tty 2>&1 </dev/tty
+}
+
+if [[ $USE_WHIPTAIL -eq 1 ]]; then
+  # ---- Grafischer Fragebogen (whiptail) ------------------------------------
+  _welcome="OffgridCloud wird installiert.\n\nBeantworte ein paar Fragen, dann läuft der Rest allein.\nDer eingetragene Wert ist jeweils die Vorgabe."
+  if [[ $EXISTING_INSTALL -eq 1 ]]; then
+    _welcome="$_welcome\n\nBestehende Installation erkannt — dies ist ein Update.\nDie Vorgaben spiegeln, was schon da ist: einfach bestätigen,\ndann werden App und alle aktiven Funktionen aktualisiert."
+  fi
+  wt_msg "$_welcome" 16 74
+
+  wt_input PREFIX      "Installationsverzeichnis:"       "$PREFIX"
+  wt_input ADMIN_EMAIL "Admin-E-Mail (Login):"           "$ADMIN_EMAIL"
+  wt_input PORT        "Port für die Weboberfläche:"      "$PORT"
+
+  # Alle Funktions-Schalter in einer Checkliste (Leertaste schaltet um). Die
+  # Vorauswahl spiegelt den erkannten Zustand, damit ein Re-Run = Update ist.
+  _sel=$(whiptail --backtitle "$WT_BACKTITLE" --title "Funktionen wählen" \
+    --separate-output --checklist \
+    "Leertaste schaltet eine Option um, Enter bestätigt:" 20 78 9 \
+    FFMPEG     "Video-Thumbnails (installiert ffmpeg)"                  "$(wt_onoff "$WITH_FFMPEG")" \
+    SPEEDTEST  "Ookla-Speedtest-CLI (genauere Bandbreite)"             "$(wt_onoff "$WITH_SPEEDTEST")" \
+    HTTPS      "HTTPS (Zugriff per https://<name>.local)"              "$(wt_onoff "$WITH_HTTPS")" \
+    APFALLBACK "Netzwerk-Redundanz: eigenes WLAN bei Uplink-Ausfall"   "$(wt_onoff "$WITH_AP_FALLBACK")" \
+    VPN        "VPN-Client (WireGuard/OpenVPN)"                        "$(wt_onoff "$WITH_VPN")" \
+    KIOSK      "Kiosk-Menü am Bildschirm der Box"                      "$(wt_onoff "$WITH_KIOSK")" \
+    CHROMIUM   "  + Vollbild-Browser (Chromium, eher Pi 4/5)"          "$(wt_onoff "$WITH_CHROMIUM_KIOSK")" \
+    SERVICE    "systemd-Dienst installieren"                           "$(wt_onoff "$INSTALL_SERVICE")" \
+    START      "Dienst am Ende aktivieren und starten"                 "$(wt_onoff "$DO_START")" \
+    2>&1 1>/dev/tty </dev/tty) \
+    || { echo "Abgebrochen — nichts wurde verändert." > /dev/tty; exit 0; }
+
+  WITH_FFMPEG=0; WITH_SPEEDTEST=0; WITH_HTTPS=0; WITH_AP_FALLBACK=0
+  WITH_VPN=0; WITH_KIOSK=0; WITH_CHROMIUM_KIOSK=0; INSTALL_SERVICE=0; DO_START=0
+  while IFS= read -r _tag; do
+    case "$_tag" in
+      FFMPEG)     WITH_FFMPEG=1 ;;
+      SPEEDTEST)  WITH_SPEEDTEST=1 ;;
+      HTTPS)      WITH_HTTPS=1 ;;
+      APFALLBACK) WITH_AP_FALLBACK=1 ;;
+      VPN)        WITH_VPN=1 ;;
+      KIOSK)      WITH_KIOSK=1 ;;
+      CHROMIUM)   WITH_CHROMIUM_KIOSK=1 ;;
+      SERVICE)    INSTALL_SERVICE=1 ;;
+      START)      DO_START=1 ;;
+    esac
+  done <<< "$_sel"
+
+  if [[ $WITH_HTTPS -eq 1 ]]; then
+    wt_input HTTPS_HOSTNAME "mDNS-Hostname (erreichbar als <name>.local):"   "$HTTPS_HOSTNAME"
+    wt_input HTTPS_DOMAIN   "Öffentliche Domain (leer lassen, falls keine):" "$HTTPS_DOMAIN"
+  fi
+
+  if [[ $WITH_KIOSK -eq 1 ]]; then
+    [[ -n "$KIOSK_PIN" ]] || wt_secret KIOSK_PIN "Admin-PIN für den Shell-Zugang (leer = zufällig):"
+  else
+    WITH_CHROMIUM_KIOSK=0   # Chromium-Kiosk ergibt nur mit Kiosk-Menü Sinn
+  fi
+  [[ $INSTALL_SERVICE -eq 1 ]] || DO_START=0
+
+  yesno() { [[ "$1" -eq 1 ]] && echo "ja" || echo "nein"; }
+  _summary=$(cat <<EOF
+Verzeichnis .......... $PREFIX
+Admin-E-Mail ......... $ADMIN_EMAIL
+Port ................. $PORT
+Video-Thumbnails ..... $(yesno "$WITH_FFMPEG")
+Speedtest-CLI ........ $(yesno "$WITH_SPEEDTEST")
+HTTPS ................ $(yesno "$WITH_HTTPS")$([[ "$WITH_HTTPS" -eq 1 ]] && echo " ($HTTPS_HOSTNAME.local${HTTPS_DOMAIN:+ + $HTTPS_DOMAIN})")
+Netzwerk-Redundanz ... $(yesno "$WITH_AP_FALLBACK")
+VPN-Client ........... $(yesno "$WITH_VPN")
+Kiosk-Menü ........... $(yesno "$WITH_KIOSK")$([[ "$WITH_KIOSK" -eq 1 && "$WITH_CHROMIUM_KIOSK" -eq 1 ]] && echo " (+ Chromium)")
+Dienst installieren .. $(yesno "$INSTALL_SERVICE")
+Jetzt starten ........ $(yesno "$DO_START")
+
+Installation jetzt starten?
+EOF
+)
+  if ! wt_confirm "$_summary" 22 74; then
+    echo "Abgebrochen — nichts wurde verändert." > /dev/tty
+    exit 0
+  fi
+else
 if [[ $NONINTERACTIVE -eq 0 ]]; then
   cat > /dev/tty <<'BANNER'
 
@@ -207,6 +337,7 @@ EOF
     exit 0
   fi
 fi
+fi   # Ende: whiptail- vs. Text-Fragebogen
 
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
