@@ -88,7 +88,12 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/Offgri
 > `curl -fsSL …/bootstrap.sh -o ogc.sh && sudo bash ogc.sh`.
 
 Am Ende zeigt der Installer **einmalig** ein zufälliges Admin-Passwort — notieren.
-Danach `http://<host-ip>:8000` und Login mit `admin@offgrid.local`.
+Der Installer richtet standardmäßig auch **HTTPS** ein (Caddy + avahi/mDNS): die
+Box ist danach unter `https://offgridcloud-XXXXX.local` erreichbar (`XXXXX` =
+zufälliger Suffix je Box, im Installer frei überschreibbar) — mit selbstsigniertem
+Zertifikat, auch offline im Feld nutzbar. Alternativ direkt per `http://<host-ip>:8000`.
+Login mit `admin@offgrid.local`. Details zu HTTPS/Domain im
+[Betriebshandbuch](docs/BETRIEB.md) (Kapitel 3).
 
 **Lokal ausprobieren (ohne Installation)** — braucht nur `python3` und `npm`:
 
