@@ -253,10 +253,56 @@ Wiederherstellen:
 ## 8. Monitoring & Health
 
 - `GET /api/health` — unauthentifizierter Liveness-Check (für Uptime-Monitore).
+- `GET /api/health?format=prtg` — dieselben Daten als **PRTG**-Sensor-JSON (siehe unten).
 - Admin **System**-Seite — Disk-Auslastung, rclone-Verfügbarkeit, Einstellungen.
 - Logs:
   - nativ: `journalctl -u offgridcloud -f`
   - Docker: `docker logs -f offgridcloud`
+
+### PRTG einbinden
+
+Sensor **HTTP Data Advanced** anlegen und als URL eintragen:
+
+```
+http://<box>:8000/api/health?format=prtg
+```
+
+Die Antwort liefert das von PRTG erwartete Format inklusive Schwellwerten, der
+Sensor ist also ohne Nachkonfiguration einsatzbereit:
+
+```json
+{
+  "prtg": {
+    "result": [
+      { "channel": "Status", "value": "1", "limitmode": 1, "limitminerror": "1" },
+      { "channel": "rclone verfügbar", "value": "1", "limitmode": 1, "limitminerror": "1" },
+      { "channel": "Speicher belegt", "value": "42.0", "unit": "Percent", "float": 1,
+        "limitmode": 1, "limitmaxwarning": "85", "limitmaxerror": "95" },
+      { "channel": "Speicher frei", "value": "51539607552", "unit": "BytesDisk" }
+    ],
+    "text": "OffgridCloud 0.1.0 | rclone: rclone v1.66.0 | Speicher: 42.0% belegt"
+  }
+}
+```
+
+Kanäle:
+
+| Kanal | Bedeutung | Fehler ab |
+| --- | --- | --- |
+| Status | Dienst antwortet mit `ok` | 0 (Dienst meldet Störung) |
+| rclone verfügbar | rclone-Binary gefunden | 0 (Uploads schlagen fehl) |
+| Speicher belegt | Auslastung des Puffer-Verzeichnisses | Warnung ab 85 %, Fehler ab 95 % |
+| Speicher frei | freier Platz im Puffer-Verzeichnis | — |
+
+Antwortet der Server gar nicht, geht der Sensor über den HTTP-Fehler auf *Down*.
+Ist das Puffer-Verzeichnis nicht lesbar (z. B. ausgehängte USB-Platte), entfallen
+die beiden Speicher-Kanäle — Status und rclone bleiben erhalten.
+
+> **Hinweis:** `/api/health` ist bewusst unauthentifiziert, damit Monitoring ohne
+> Zugangsdaten funktioniert. Mit `format=prtg` sind darüber auch die
+> Speicher-Kennzahlen (Prozent belegt, freie Bytes) im Netz sichtbar. Soll das
+> nicht sein, den Endpunkt im Reverse-Proxy auf das Monitoring-Netz beschränken
+> (siehe [§3](#3-https--reverse-proxy)).
 
 ## 9. Updates
 

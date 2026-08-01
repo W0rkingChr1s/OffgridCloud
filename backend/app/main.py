@@ -12,19 +12,20 @@ import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, announce
-from .admin_ops import ensure_system_settings
+from .admin_ops import disk_usage, ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
 from .config import get_settings
 from .db import init_db
 from .integrity import run_startup_checks
 from .network import ensure_network_settings
+from .prtg import health_to_prtg
 from .rclone import check_rclone
 from .routers import (
     auth,
@@ -109,10 +110,15 @@ app.include_router(vpn.router)
 
 
 @app.get("/api/health")
-def health() -> dict:
-    """Liveness + environment summary (used by the dashboard and CI)."""
+def health(format: str = Query("json", pattern="^(json|prtg)$")) -> dict:
+    """Liveness + environment summary (used by the dashboard and CI).
+
+    ``?format=prtg`` renders the same data as a PRTG *HTTP Data Advanced*
+    result set (channels + thresholds) so the endpoint can be polled directly
+    by PRTG without a custom script — see ``prtg.py`` and ``docs/BETRIEB.md``.
+    """
     rclone = check_rclone()
-    return {
+    payload = {
         "status": "ok",
         "app": settings.app_name,
         "version": __version__,
@@ -123,6 +129,15 @@ def health() -> dict:
             "error": rclone.error,
         },
     }
+    if format != "prtg":
+        return payload
+    try:
+        disk = disk_usage()
+    except OSError:
+        # Buffer dir unreadable (unmounted USB disk, permissions): still report
+        # liveness rather than failing the whole sensor.
+        disk = None
+    return health_to_prtg(payload, disk)
 
 
 # --- Static frontend ------------------------------------------------------
