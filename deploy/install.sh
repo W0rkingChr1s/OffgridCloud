@@ -571,6 +571,21 @@ else
   echo "   Could not validate sudoers rule — skipped system control." >&2
 fi
 
+# --- Uninstaller (available on the box, without the source checkout) --------
+step "Installing the uninstaller (sudo offgridcloud-uninstall)..."
+mkdir -p "$PREFIX/deploy"
+# Root-owned: the chown above hands all of $PREFIX to the service user, but
+# everything in deploy/ is run by root (this uninstaller via sudo, apply.sh via
+# the NOPASSWD rules) — it must not be writable by the account it runs for.
+chown -R root:root "$PREFIX/deploy" 2>/dev/null || true
+chmod 755 "$PREFIX/deploy"
+install -m 755 -o root -g root "$REPO_ROOT/deploy/uninstall.sh" "$PREFIX/deploy/uninstall.sh"
+if ln -sfn "$PREFIX/deploy/uninstall.sh" /usr/local/bin/offgridcloud-uninstall 2>/dev/null; then
+  echo "   Remove OffgridCloud later with: sudo offgridcloud-uninstall"
+else
+  echo "   Remove OffgridCloud later with: sudo $PREFIX/deploy/uninstall.sh"
+fi
+
 # --- Optional: network-redundancy layer (AP fallback) ----------------------
 if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
   step "Installing the network-redundancy layer (AP fallback)..."
@@ -685,3 +700,9 @@ if [[ $DO_START -ne 1 ]]; then
     3. Open:                http://<host>:$PORT
 EOF
 fi
+
+cat <<EOF
+
+  Uninstall later:  sudo offgridcloud-uninstall     (asks what to remove;
+                    keeps data unless you confirm; --dry-run shows a preview)
+EOF

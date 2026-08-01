@@ -82,11 +82,10 @@ sudo nano /opt/offgridcloud/.env        # z. B. OGC_BUFFER_DIR auf USB-SSD
 sudo systemctl enable --now offgridcloud
 ```
 
-Entfernen: `sudo ./deploy/uninstall.sh` (behält Daten/`.env`; `--purge` löscht
-alles inkl. der `ogc-wifi-*`-WLAN-Profile). Räumt auch alle Zusatzfunktionen ab:
-Kiosk-Konsole, HTTPS (Caddy-Konfiguration weg, ursprünglicher Hostname zurück),
-Netzwerk-Redundanz (Watchdog + Fallback-AP), VPN-Drop-in und sämtliche
-sudoers-Regeln. Installierte Pakete (caddy, avahi, rclone, ffmpeg, …) bleiben.
+Entfernen: `sudo offgridcloud-uninstall` — der Installer legt den Uninstaller
+gleich mit auf der Box ab. Er fragt interaktiv, was mit weg soll, behält
+Daten/`.env` per Vorgabe und räumt alle Zusatzfunktionen ab. Details, Optionen
+und der Weg ohne Box-Installation stehen in [§10 Deinstallation](#10-deinstallation).
 
 ### Variante B — Windows (PowerShell)
 
@@ -355,7 +354,79 @@ Medien **ordnerübergreifend** nach Dateiname, Tag, Status und Ordner. Die Suche
 ist zugriffsgeschützt: Benutzer sehen nur Ordner, für die sie freigegeben sind;
 Admins sehen alles.
 
-## 10. Troubleshooting
+## 10. Deinstallation
+
+### Nativ (Linux / Raspberry Pi OS)
+
+Der Installer legt den Uninstaller mit auf der Box ab — es braucht also weder
+das Repo noch Internet:
+
+```bash
+sudo offgridcloud-uninstall            # fragt interaktiv, was weg soll
+sudo offgridcloud-uninstall --dry-run  # zeigt nur an, was passieren würde
+```
+
+Ohne die Box-Installation (oder wenn der Befehl fehlt) geht auch:
+
+```bash
+sudo /opt/offgridcloud/deploy/uninstall.sh          # vom Installer abgelegt
+sudo /opt/offgridcloud/src/deploy/uninstall.sh      # aus dem Checkout
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/deploy/uninstall.sh)"
+```
+
+Der Uninstaller zeigt erst, was er auf der Box gefunden hat, fragt dann per
+Menü (whiptail, sonst Text-Prompts) nach den Zusatz-Optionen und listet vor dem
+Start noch einmal auf, was entfernt und was behalten wird.
+
+**Immer entfernt:** systemd-Dienst, VPN-Drop-in und ein laufender Tunnel, alle
+`sudoers`-Regeln, die Kiosk-Konsole (inkl. wiederhergestelltem Boot-Ziel und
+Display-Manager), HTTPS (verwaltete Caddy-Konfiguration weg, ursprünglicher
+Hostname zurück), Netzwerk-Redundanz (Watchdog + Fallback-AP) sowie die
+App-Dateien unter `/opt/offgridcloud`.
+
+**Nur auf Nachfrage:**
+
+| Option | Flag | Wirkung |
+|--------|------|---------|
+| Daten löschen | `--purge` | Datenbank, Medien-Puffer und `.env` (mit `OGC_SECRET_KEY`). Vorher wird auf Wunsch eine Sicherung aus DB + `.env` nach `/root` geschrieben. |
+| WLAN-Profile | `--wifi` | Die von der Box angelegten `ogc-wifi-*`-Profile. Vorsicht: kann die Verbindung kappen, über die du gerade arbeitest. |
+| Dienst-Benutzer | `--remove-user` | Benutzer `offgrid` inkl. Home (und damit der rclone-Konfiguration). |
+| Pakete | `--packages` | caddy, rclone, ffmpeg, wireguard-tools, openvpn und `/usr/local/bin/speedtest`. NetworkManager, avahi, X/Chromium, Node und Python bleiben **immer** — sie können anderswo gebraucht werden. |
+| Trockenlauf | `--dry-run` | Zeigt jeden Schritt an, verändert nichts. |
+
+Ohne `--purge` bleiben `/opt/offgridcloud/data` und `/opt/offgridcloud/.env`
+liegen — eine spätere Neuinstallation findet Datenbank und Schlüssel wieder vor.
+Für Skripte gibt es zusätzlich `-y` (keine Rückfragen) und dieselben
+`OGC_*`-Variablen wie beim Installer (`sudo offgridcloud-uninstall --help`).
+
+Nur eine einzelne Funktion zurückbauen? HTTPS geht separat mit
+`sudo ./deploy/https/uninstall.sh` (siehe [§3](#3-https--reverse-proxy)), alle
+anderen Funktionen lassen sich im Installer-Menü abwählen.
+
+### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\uninstall.ps1
+powershell -ExecutionPolicy Bypass -File deploy\uninstall.ps1 -DryRun   # nur anzeigen
+powershell -ExecutionPolicy Bypass -File deploy\uninstall.ps1 -Purge    # inkl. Daten
+```
+
+Entfernt den Autostart-Task „OffgridCloud", beendet einen noch laufenden
+Server, löscht venv, gebautes Frontend und `node_modules` sowie die
+Benutzer-Variable `OGC_PORT`. `.env` und `data\` bleiben ohne `-Purge` erhalten
+(mit `-Purge` wird vorher eine Sicherung in *Dokumente* abgelegt). Das
+Repo-Verzeichnis selbst kann danach gelöscht werden. Das Abmelden des Tasks
+braucht eine Administrator-PowerShell.
+
+### Docker
+
+```bash
+docker rm -f offgridcloud
+docker rmi offgridcloud
+docker volume rm <volume>      # bzw. das gemountete Verzeichnis löschen — DESTRUKTIV
+```
+
+## 11. Troubleshooting
 
 | Symptom | Ursache / Lösung |
 |---------|------------------|

@@ -110,6 +110,14 @@ docker run -d --name offgridcloud -p 8000:8000 \
   -v /mnt/ssd/offgrid:/data --env-file .env --restart unless-stopped offgridcloud
 ```
 
+**Wieder loswerden.** Der Installer legt den Uninstaller mit auf der Box ab —
+er fragt, was mit weg soll, und behält Daten und `.env`, solange du nicht
+ausdrücklich das Gegenteil bestätigst:
+
+```bash
+sudo offgridcloud-uninstall           # --dry-run zeigt vorher, was passieren würde
+```
+
 > Weitere Wege (Windows/PowerShell, manuelle Optionen, Deinstallation, Updates) und
 > die **Produktiv-Checkliste** (TLS-Reverse-Proxy, Puffer auf USB-SSD, `OGC_SECRET_KEY`
 > sichern, Backups, Monitoring) stehen im **[Betriebshandbuch](docs/BETRIEB.md)**.
