@@ -219,7 +219,8 @@ läuft über den Admin-Login der API und funktioniert auch ohne root.
 
 ## Deinstallation
 
-`deploy/uninstall.sh` räumt die Konsole automatisch mit ab: der Dienst wird
+`sudo offgridcloud-uninstall` (bzw. `deploy/uninstall.sh`) räumt die Konsole
+automatisch mit ab: der Dienst wird
 gestoppt und entfernt, `getty@tty1` wieder **entmaskiert** und gestartet, und der
 vorherige Boot-Zustand (Desktop-Ziel + Display-Manager) aus
 `data/kiosk-boot.state` **wiederhergestellt** — die Box bootet danach wieder wie
