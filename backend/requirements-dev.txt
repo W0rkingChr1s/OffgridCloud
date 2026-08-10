@@ -2,5 +2,5 @@
 pytest==9.1.1
 httpx==0.28.1
 # starlette>=1.0's TestClient requires httpx2 (successor test-client backend).
-httpx2==2.9.1
+httpx2==2.10.0
 ruff==0.8.4
