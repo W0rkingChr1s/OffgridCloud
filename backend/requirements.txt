@@ -1,9 +1,10 @@
 fastapi==0.141.1
 # starlette is pulled in by fastapi; pin to >=1.3.1 to clear PYSEC-2026-161 and
 # related CVEs (all <0.47.2/<1.3.1 are vulnerable). fastapi 0.141.1 allows starlette>=0.46.0.
-starlette==1.3.1
-uvicorn[standard]==0.52.1
-sqlalchemy==2.0.51
+# Bumped to 1.6.0 (routine minor releases, no breaking changes per release notes).
+starlette==1.6.0
+uvicorn[standard]==0.52.3
+sqlalchemy==2.0.52
 pydantic==2.13.4
 pydantic-settings==2.14.2
 # python-multipart <0.0.22 is vulnerable to PYSEC-2026-3036/3037/3038/3039/3040/1852.
