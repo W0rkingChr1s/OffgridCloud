@@ -1,19 +1,37 @@
 fastapi==0.141.1
 # starlette is pulled in by fastapi; pin to >=1.3.1 to clear PYSEC-2026-161 and
 # related CVEs (all <0.47.2/<1.3.1 are vulnerable). fastapi 0.141.1 allows starlette>=0.46.0.
-starlette==1.3.1
-uvicorn[standard]==0.52.1
-sqlalchemy==2.0.51
+# Bumped 1.3.1 -> 1.6.0: no breaking changes, adds further Range-header hardening
+# (rejects inverted single-byte ranges, caps FileResponse to 100 ranges) on top of the
+# CVE-2025-62727 / GHSA-7f5h-v6xp-fcq8 O(n^2) Range-parsing DoS fix already covered by 1.3.1.
+starlette==1.6.0
+# Bumped from 0.52.1: routine patch release, no known CVEs against 0.52.1.
+uvicorn[standard]==0.52.4
+# Bumped from 2.0.51: routine patch release, no known CVEs against 2.0.51.
+sqlalchemy==2.0.52
 pydantic==2.13.4
-pydantic-settings==2.14.2
+# Bumped from 2.14.2: routine minor release, no known CVEs against 2.14.2.
+pydantic-settings==2.15.0
 # python-multipart <0.0.22 is vulnerable to PYSEC-2026-3036/3037/3038/3039/3040/1852.
+# Also clears CVE-2026-42561 (DoS via unbounded part headers, fixed 0.0.27) and
+# CVE-2026-53539/CVE-2026-53538 (querystring parsing, fixed 0.0.30). 0.0.32 is current latest.
 python-multipart==0.0.32
 # pyjwt <2.12.0 is vulnerable to PYSEC-2026-175/176/177/178/179.
+# Confirmed 2.13.0 is current latest and already clears all of the above.
 pyjwt==2.13.0
 bcrypt==5.0.0
 # Bumped from 44.0.0: webauthn requires cryptography>=45 (Fernet API unchanged).
 # cryptography <50.0.0 is vulnerable to CVE-2026-69247.
+# Confirmed 50.0.0 is current latest and also not affected by CVE-2026-39892 (45.0.0-46.0.6)
+# or CVE-2026-34073 (<46.0.6, DNS name constraint bypass).
 cryptography==50.0.0
 # pillow <12.1.1 is vulnerable to multiple PYSEC-2026 advisories (image parsing).
+# Confirmed 12.3.0 is current latest; also clears CVE-2026-55379 (BDF font decompression
+# bomb bypass), CVE-2026-59205 (ImageCmsTransform heap overflow), CVE-2026-59203 (EPS
+# parser infinite loop) — all fixed in 12.3.0.
 pillow==12.3.0
+# NOTE: webauthn 3.0.0 is now available (no known CVE against 2.5.2) but is a breaking
+# major release — it drops the Pydantic dependency entirely, so any code calling
+# Pydantic-specific methods on webauthn response objects would need refactoring.
+# Left pinned at 2.5.2 pending a dedicated migration; flagging for follow-up.
 webauthn==2.5.2
