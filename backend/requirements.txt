@@ -1,11 +1,11 @@
 fastapi==0.141.1
 # starlette is pulled in by fastapi; pin to >=1.3.1 to clear PYSEC-2026-161 and
 # related CVEs (all <0.47.2/<1.3.1 are vulnerable). fastapi 0.141.1 allows starlette>=0.46.0.
-starlette==1.3.1
-uvicorn[standard]==0.52.1
-sqlalchemy==2.0.51
+starlette==1.6.0
+uvicorn[standard]==0.52.4
+sqlalchemy==2.0.52
 pydantic==2.13.4
-pydantic-settings==2.14.2
+pydantic-settings==2.15.0
 # python-multipart <0.0.22 is vulnerable to PYSEC-2026-3036/3037/3038/3039/3040/1852.
 python-multipart==0.0.32
 # pyjwt <2.12.0 is vulnerable to PYSEC-2026-175/176/177/178/179.
@@ -16,4 +16,5 @@ bcrypt==5.0.0
 cryptography==50.0.0
 # pillow <12.1.1 is vulnerable to multiple PYSEC-2026 advisories (image parsing).
 pillow==12.3.0
-webauthn==2.5.2
+# webauthn 3.0.0 is a major bump with breaking API changes; deferred for manual review.
+webauthn==2.5.3
