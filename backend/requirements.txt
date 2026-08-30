@@ -4,7 +4,7 @@ fastapi==0.141.1
 starlette==1.6.0
 uvicorn[standard]==0.52.4
 sqlalchemy==2.0.52
-pydantic==2.13.4
+pydantic==2.13.5
 pydantic-settings==2.15.0
 # python-multipart <0.0.22 is vulnerable to PYSEC-2026-3036/3037/3038/3039/3040/1852.
 python-multipart==0.0.32
