@@ -16,4 +16,4 @@ bcrypt==5.0.0
 cryptography==50.0.1
 # pillow <12.1.1 is vulnerable to multiple PYSEC-2026 advisories (image parsing).
 pillow==12.3.0
-webauthn==2.5.3
+webauthn==2.8.0

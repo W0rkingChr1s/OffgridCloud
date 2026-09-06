@@ -4,6 +4,11 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# UP042 (str+Enum -> enum.StrEnum) is a new rule as of ruff 0.9; ruff itself
+# flags the autofix as unsafe. Switching app/models.py's (str, Enum) classes
+# to StrEnum is a real code change, not a dependency-bump concern, so it's
+# deferred rather than applied here.
+ignore = ["UP042"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI uses callables (Depends/Security/Query) as argument defaults by design.
