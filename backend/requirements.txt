@@ -16,4 +16,6 @@ bcrypt==5.0.0
 cryptography==50.0.1
 # pillow <12.1.1 is vulnerable to multiple PYSEC-2026 advisories (image parsing).
 pillow==12.3.0
-webauthn==2.8.0
+# webauthn 3.0.0: rejects malformed CBOR containing duplicate keys during
+# response verification. No breaking API changes vs 2.8.0.
+webauthn==3.0.0
