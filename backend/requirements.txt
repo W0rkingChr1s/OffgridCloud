@@ -3,7 +3,7 @@ fastapi==0.141.1
 # related CVEs (all <0.47.2/<1.3.1 are vulnerable). fastapi 0.141.1 allows starlette>=0.46.0.
 starlette==1.6.0
 uvicorn[standard]==0.53.0
-sqlalchemy==2.0.53
+sqlalchemy==2.0.54
 pydantic==2.13.5
 pydantic-settings==2.15.0
 # python-multipart <0.0.22 is vulnerable to PYSEC-2026-3036/3037/3038/3039/3040/1852.
