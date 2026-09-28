@@ -2,7 +2,7 @@ fastapi==0.141.1
 # starlette is pulled in by fastapi; pin to >=1.3.1 to clear PYSEC-2026-161 and
 # related CVEs (all <0.47.2/<1.3.1 are vulnerable). fastapi 0.141.1 allows starlette>=0.46.0.
 starlette==1.7.0
-uvicorn[standard]==0.53.0
+uvicorn[standard]==0.54.0
 sqlalchemy==2.0.54
 pydantic==2.13.5
 pydantic-settings==2.15.0
@@ -20,4 +20,6 @@ cryptography==50.0.1
 pillow==12.3.0
 # webauthn 3.0.0: rejects malformed CBOR containing duplicate keys during
 # response verification. No breaking API changes vs 2.8.0.
-webauthn==3.0.0
+# 3.0.1: verify_registration_response() also rejects attestation statement
+# formats that aren't strings. No breaking API changes.
+webauthn==3.0.1
