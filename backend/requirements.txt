@@ -20,4 +20,6 @@ cryptography==50.0.1
 pillow==12.3.0
 # webauthn 3.0.0: rejects malformed CBOR containing duplicate keys during
 # response verification. No breaking API changes vs 2.8.0.
+# 3.0.1: verify_registration_response() also rejects attestation statement
+# formats that aren't strings. No breaking API changes.
 webauthn==3.0.1
