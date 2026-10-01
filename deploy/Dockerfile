@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: runtime — single process, multi-arch (amd64/arm64)
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # rclone = universal transfer engine. Installed from Debian for multi-arch.
 # wireguard-tools/openvpn = optional built-in VPN client (needs the container to
