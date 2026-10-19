@@ -78,6 +78,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # WebAuthn user handle — added to an existing users table. Nullable (no
     # DEFAULT): filled on first passkey registration.
     ("users", "webauthn_user_handle", "BLOB"),
+    # Storage import: source file mtime for duplicate detection. Nullable.
+    ("media_items", "source_mtime", "FLOAT"),
 ]
 
 

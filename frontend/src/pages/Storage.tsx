@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
-  type Folder,
-  type StorageBrowse,
+  type StorageCache,
   type StorageDisk,
   type StorageImportJob,
   type StorageOverview,
   type StoragePartition,
 } from "../api";
 import Layout from "../components/Layout";
+import MediaBrowser from "../components/MediaBrowser";
 import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
@@ -56,6 +56,18 @@ function Badge({ tone, children }: { tone: "red" | "amber" | "teal" | "slate"; c
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${cls}`}>{children}</span>;
 }
 
+function ProgressBar({ done, total, failed }: { done: number; total: number; failed?: boolean }) {
+  const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  return (
+    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
+      <div
+        className={`h-full rounded-full transition-[width] ${failed ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
 function UsageBar({ used, total }: { used: number; total: number }) {
   const pct = total ? Math.round((used / total) * 100) : 0;
   return (
@@ -80,7 +92,11 @@ export default function Storage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [formatTarget, setFormatTarget] = useState<{ device: string; name: string; whole: boolean } | null>(null);
-  const [browsing, setBrowsing] = useState<StoragePartition | null>(null);
+  // What the media browser shows: a partition, optionally rooted at a cache snapshot.
+  const [browsing, setBrowsing] = useState<{ device: string; title: string; basePath: string } | null>(null);
+  const [caches, setCaches] = useState<StorageCache[]>([]);
+  const [backupFrom, setBackupFrom] = useState<StoragePartition | null>(null);
+  const browserRef = useRef<HTMLDivElement>(null);
 
   const report = useCallback((e: unknown) => {
     setError(e instanceof ApiError ? e.message : "Fehler");
@@ -92,27 +108,43 @@ export default function Storage() {
   const loadJobs = useCallback(() => {
     api<StorageImportJob[]>("/api/storage/imports").then(setJobs).catch(() => {});
   }, []);
+  const loadCaches = useCallback(() => {
+    api<StorageCache[]>("/api/storage/caches").then(setCaches).catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
     loadJobs();
+    loadCaches();
     // Poll so plugged-in / removed media show up without a reload.
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
-  }, [load, loadJobs]);
+  }, [load, loadJobs, loadCaches]);
 
   const active = jobs.some((j) => j.status === "pending" || j.status === "running");
   useEffect(() => {
     const t = setInterval(loadJobs, active ? 1500 : 6000);
     return () => clearInterval(t);
   }, [active, loadJobs]);
+  // Snapshot sizes change while a backup runs and when it ends.
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !active) loadCaches();
+    wasActive.current = active;
+  }, [active, loadCaches]);
 
   // Close the browser if its medium vanished or got unmounted.
   useEffect(() => {
     if (!browsing || !overview) return;
-    const still = overview.disks.flatMap((d) => d.partitions).find((p) => p.path === browsing.path);
+    const still = overview.disks.flatMap((d) => d.partitions).find((p) => p.path === browsing.device);
     if (!still || !still.browsable) setBrowsing(null);
   }, [overview, browsing]);
+
+  function open(device: string, title: string, basePath = "") {
+    setBrowsing({ device, title, basePath });
+    setTimeout(() => browserRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+  const cacheReady = caches.some((c) => c.device && c.mountpoint);
 
   async function act(path: string, device: string, okMsg: string) {
     setError(null);
@@ -188,6 +220,27 @@ export default function Storage() {
         />
       )}
 
+      {browsing && (
+        <div ref={browserRef} className="mb-6 scroll-mt-20">
+          <MediaBrowser
+            key={`${browsing.device}|${browsing.basePath}`}
+            device={browsing.device}
+            title={browsing.title}
+            basePath={browsing.basePath}
+            canCache={cacheReady && !caches.some((c) => c.device === browsing.device)}
+            onStarted={() => {
+              loadJobs();
+              load();
+            }}
+            onClose={() => setBrowsing(null)}
+          />
+        </div>
+      )}
+
+      {caches.length > 0 && (
+        <CachePanel caches={caches} onOpen={open} onChange={() => { loadCaches(); load(); }} onError={report} toast={toast} />
+      )}
+
       {overview && overview.disks.length === 0 && !overview.error && (
         <div className="rounded-2xl bg-slate-800/60 p-8 text-center text-slate-400 ring-1 ring-white/10">
           Keine Laufwerke gefunden. USB-Stick oder SD-Karte anschließen — die Liste aktualisiert sich selbst.
@@ -215,7 +268,8 @@ export default function Storage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     className={btn}
-                    disabled={!manage || busy !== null || d.read_only}
+                    disabled={!manage || busy !== null || d.read_only || d.partitions.some((p) => p.cache)}
+                    title={d.partitions.some((p) => p.cache) ? "Als Cache markiert — erst die Markierung entfernen" : undefined}
                     onClick={() => setFormatTarget({ device: d.path, name: d.name, whole: true })}
                   >
                     Komplett formatieren
@@ -250,7 +304,7 @@ export default function Storage() {
                 <div
                   key={p.path}
                   className={`rounded-xl bg-slate-900/50 px-4 py-3 ring-1 ${
-                    browsing?.path === p.path ? "ring-ogc-teal/50" : "ring-white/5"
+                    browsing?.device === p.path ? "ring-ogc-teal/50" : "ring-white/5"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -260,7 +314,8 @@ export default function Storage() {
                         <span className="text-xs text-slate-500">
                           {p.path} · {p.fstype || "kein Dateisystem"} · {formatBytes(p.size)}
                         </span>
-                        {p.busy && <Badge tone="teal">Import läuft</Badge>}
+                        {p.cache && <Badge tone="amber">Cache</Badge>}
+                        {p.busy && <Badge tone="teal">in Arbeit</Badge>}
                       </div>
                       {p.mountpoint ? (
                         <div className="mt-1 text-xs text-slate-400">
@@ -282,10 +337,38 @@ export default function Storage() {
                           <>
                             <button
                               className={btnPrimary}
-                              onClick={() => setBrowsing(browsing?.path === p.path ? null : p)}
+                              onClick={() =>
+                                browsing?.device === p.path && !browsing.basePath
+                                  ? setBrowsing(null)
+                                  : open(p.path, `${partTitle(p)} · ${diskTitle(d)}`)
+                              }
                             >
-                              {browsing?.path === p.path ? "Schließen" : "Durchsuchen"}
+                              {browsing?.device === p.path && !browsing.basePath ? "Schließen" : "Fotos & Dateien"}
                             </button>
+                            {!p.cache && cacheReady && (
+                              <button className={btn} disabled={p.busy} onClick={() => setBackupFrom(p)}>
+                                Auf Cache sichern
+                              </button>
+                            )}
+                            {!p.cache && !p.read_only && (
+                              <button
+                                className={btn}
+                                disabled={busy !== null}
+                                title="Dieses Laufwerk als Zwischenspeicher für Speicherkarten nutzen"
+                                onClick={async () => {
+                                  try {
+                                    await api("/api/storage/caches", { method: "POST", body: JSON.stringify({ device: p.path }) });
+                                    toast.success("Cache eingerichtet", `${partTitle(p)} nimmt jetzt Kartensicherungen auf.`);
+                                    loadCaches();
+                                    load();
+                                  } catch (e) {
+                                    report(e);
+                                  }
+                                }}
+                              >
+                                Als Cache nutzen
+                              </button>
+                            )}
                             <button
                               className={btn}
                               disabled={!manage || busy !== null || p.busy}
@@ -303,7 +386,7 @@ export default function Storage() {
                             {busy === p.path ? "…" : "Einhängen"}
                           </button>
                         )}
-                        {p.path !== d.path && (
+                        {p.path !== d.path && !p.cache && (
                           <button
                             className={btn}
                             disabled={!manage || busy !== null || p.busy || p.read_only}
@@ -315,21 +398,26 @@ export default function Storage() {
                       </div>
                     )}
                   </div>
-                  {browsing?.path === p.path && (
-                    <Browser
-                      partition={p}
-                      onStarted={() => {
-                        loadJobs();
-                        load();
-                      }}
-                    />
-                  )}
                 </div>
               ))}
             </div>
           </div>
         ))}
       </div>
+
+      {backupFrom && (
+        <BackupModal
+          partition={backupFrom}
+          caches={caches.filter((c) => c.device && c.mountpoint)}
+          onClose={() => setBackupFrom(null)}
+          onDone={(job) => {
+            setBackupFrom(null);
+            toast.success("Sicherung läuft", `${job.total_files} Datei(en), ${formatBytes(job.total_bytes)} → Cache`);
+            loadJobs();
+            load();
+          }}
+        />
+      )}
 
       {formatTarget && overview && (
         <FormatModal
@@ -447,237 +535,6 @@ function FormatModal({
   );
 }
 
-// --- File browser + import ---------------------------------------------------
-
-function Browser({ partition, onStarted }: { partition: StoragePartition; onStarted: () => void }) {
-  const toast = useToast();
-  const [path, setPath] = useState("");
-  const [listing, setListing] = useState<StorageBrowse | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  // Marked paths -> whether each is a directory (imported recursively).
-  const [selected, setSelected] = useState<Map<string, boolean>>(new Map());
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [folderId, setFolderId] = useState<number | "">("");
-  const [mediaOnly, setMediaOnly] = useState(true);
-  const [skipDupes, setSkipDupes] = useState(true);
-  const [tags, setTags] = useState("");
-  const [starting, setStarting] = useState(false);
-
-  useEffect(() => {
-    api<Folder[]>("/api/folders")
-      .then((f) => {
-        setFolders(f);
-        if (f.length === 1) setFolderId(f[0].id);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setErr(null);
-    api<StorageBrowse>(
-      `/api/storage/browse?device=${encodeURIComponent(partition.path)}&path=${encodeURIComponent(path)}`,
-    )
-      .then(setListing)
-      .catch((e) => setErr(e instanceof ApiError ? e.message : "Fehler"));
-  }, [partition.path, path]);
-
-  const entries = useMemo(
-    () => (listing?.entries ?? []).filter((e) => e.is_dir || !mediaOnly || e.is_media),
-    [listing, mediaOnly],
-  );
-  const allHere = entries.length > 0 && entries.every((e) => selected.has(e.path));
-
-  function toggle(p: string, isDir: boolean) {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(p)) next.delete(p);
-      else next.set(p, isDir);
-      return next;
-    });
-  }
-  function toggleAll() {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      for (const e of entries) {
-        if (allHere) next.delete(e.path);
-        else next.set(e.path, e.is_dir);
-      }
-      return next;
-    });
-  }
-
-  async function startImport() {
-    if (folderId === "") return;
-    setStarting(true);
-    setErr(null);
-    try {
-      const job = await api<StorageImportJob>("/api/storage/imports", {
-        method: "POST",
-        body: JSON.stringify({
-          device: partition.path,
-          paths: [...selected.keys()],
-          folder_id: folderId,
-          media_only: mediaOnly,
-          skip_duplicates: skipDupes,
-          tags: tags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-        }),
-      });
-      toast.success("Import gestartet", `${job.total_files} Datei(en), ${formatBytes(job.total_bytes)} → „${job.folder_name}“`);
-      setSelected(new Map());
-      onStarted();
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : "Fehler");
-    } finally {
-      setStarting(false);
-    }
-  }
-
-  const crumbs = path ? path.split("/") : [];
-  const selectedDirs = [...selected.values()].filter(Boolean).length;
-
-  return (
-    <div className="mt-4 border-t border-white/5 pt-4">
-      <div className="mb-3 flex flex-wrap items-center gap-1 text-sm">
-        <button className="text-ogc-teal hover:underline" onClick={() => setPath("")}>
-          {partTitle(partition)}
-        </button>
-        {crumbs.map((c, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <span className="text-slate-600">/</span>
-            <button
-              className="text-ogc-teal hover:underline"
-              onClick={() => setPath(crumbs.slice(0, i + 1).join("/"))}
-            >
-              {c}
-            </button>
-          </span>
-        ))}
-        <label className="ml-auto flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" checked={mediaOnly} onChange={(e) => setMediaOnly(e.target.checked)} />
-          Nur Fotos/Videos/Audio
-        </label>
-      </div>
-
-      {err && <div className="mb-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{err}</div>}
-
-      <div className="max-h-96 overflow-y-auto rounded-lg ring-1 ring-white/5">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-slate-900 text-left text-xs text-slate-400">
-            <tr>
-              <th className="w-8 px-3 py-2">
-                <input type="checkbox" checked={allHere} onChange={toggleAll} aria-label="Alle markieren" />
-              </th>
-              <th className="px-2 py-2">Name</th>
-              <th className="hidden px-2 py-2 text-right sm:table-cell">Größe</th>
-              <th className="hidden px-3 py-2 text-right sm:table-cell">Geändert</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listing?.parent !== null && listing?.parent !== undefined && (
-              <tr className="border-t border-white/5">
-                <td />
-                <td colSpan={3} className="px-2 py-1.5">
-                  <button className="text-slate-300 hover:text-white" onClick={() => setPath(listing.parent ?? "")}>
-                    ↑ ..
-                  </button>
-                </td>
-              </tr>
-            )}
-            {entries.map((e) => (
-              <tr key={e.path} className={`border-t border-white/5 ${selected.has(e.path) ? "bg-ogc-teal/10" : ""}`}>
-                <td className="px-3 py-1.5">
-                  <input type="checkbox" checked={selected.has(e.path)} onChange={() => toggle(e.path, e.is_dir)} />
-                </td>
-                <td className="max-w-0 truncate px-2 py-1.5">
-                  {e.is_dir ? (
-                    <button className="text-white hover:text-ogc-teal" onClick={() => setPath(e.path)}>
-                      📁 {e.name}
-                    </button>
-                  ) : (
-                    <span className={e.is_media ? "text-slate-200" : "text-slate-400"}>{e.name}</span>
-                  )}
-                </td>
-                <td className="hidden whitespace-nowrap px-2 py-1.5 text-right text-slate-400 sm:table-cell">
-                  {e.is_dir ? "" : formatBytes(e.size)}
-                </td>
-                <td className="hidden whitespace-nowrap px-3 py-1.5 text-right text-slate-500 sm:table-cell">
-                  {e.modified ? new Date(e.modified).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : ""}
-                </td>
-              </tr>
-            ))}
-            {listing && entries.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
-                  {mediaOnly ? "Keine Mediendateien in diesem Ordner." : "Ordner ist leer."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {listing?.truncated && (
-          <div className="px-3 py-2 text-xs text-amber-200">Nur die ersten 2000 Einträge angezeigt.</div>
-        )}
-      </div>
-
-      <div className="mt-4 grid gap-3 rounded-xl bg-slate-800/50 p-4 sm:grid-cols-2">
-        <div className="sm:col-span-2 text-sm text-slate-300">
-          {selected.size === 0 ? (
-            "Dateien oder Ordner markieren, um sie für den Upload zu übernehmen. Ordner werden komplett (inkl. Unterordner) übernommen."
-          ) : (
-            <>
-              <span className="font-semibold text-white">{selected.size}</span> markiert
-              {selectedDirs > 0 && ` (davon ${selectedDirs} Ordner)`}
-              <button className="ml-3 text-xs text-slate-400 hover:text-white" onClick={() => setSelected(new Map())}>
-                Auswahl aufheben
-              </button>
-            </>
-          )}
-        </div>
-        <label className="text-xs text-slate-400">
-          Ziel-Ordner
-          <select
-            value={folderId}
-            onChange={(e) => setFolderId(e.target.value ? Number(e.target.value) : "")}
-            className="mt-1 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white ring-1 ring-white/10"
-          >
-            <option value="">— wählen —</option>
-            {folders.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs text-slate-400">
-          Tags (optional, kommagetrennt)
-          <input
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="z. B. drohne, tag-2"
-            className="mt-1 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white ring-1 ring-white/10"
-          />
-        </label>
-        <label className="flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" checked={skipDupes} onChange={(e) => setSkipDupes(e.target.checked)} />
-          Bereits übernommene Dateien überspringen
-        </label>
-        <div className="flex justify-end">
-          <button
-            className={btnPrimary + " px-4 py-2 text-sm"}
-            disabled={selected.size === 0 || folderId === "" || starting}
-            onClick={startImport}
-          >
-            {starting ? "Starte …" : "Für Upload übernehmen"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // --- Import jobs ---------------------------------------------------------------
 
 function ImportJobs({
@@ -712,7 +569,7 @@ function ImportJobs({
   return (
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-medium text-slate-400">Importe</div>
+        <div className="text-sm font-medium text-slate-400">Vorgänge</div>
         {anyFinished && (
           <button className={btn} onClick={clear}>
             Erledigte ausblenden
@@ -727,8 +584,14 @@ function ImportJobs({
             <div key={j.id} className="rounded-xl bg-slate-900/50 px-4 py-3 ring-1 ring-white/5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <div>
+                  <span className="mr-2 text-xs uppercase tracking-wide text-slate-500">
+                    {j.kind === "cache" ? "Cache-Sicherung" : "Upload"}
+                  </span>
                   <span className="font-medium text-white">{j.device}</span>
-                  <span className="text-slate-400"> → „{j.folder_name}“</span>
+                  <span className="text-slate-400">
+                    {" "}→ {j.kind === "cache" ? j.target.split("::")[1] : `„${j.folder_name}“`}
+                    {j.kind === "cache" && j.eject_after && " · danach auswerfen"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge tone={j.status === "failed" ? "red" : j.status === "done" ? "teal" : "slate"}>
@@ -741,11 +604,11 @@ function ImportJobs({
                   )}
                 </div>
               </div>
-              <UsageBar used={j.done_bytes} total={j.total_bytes || 1} />
+              <ProgressBar done={j.status === "done" ? 1 : j.done_bytes} total={j.status === "done" ? 1 : j.total_bytes} failed={j.status === "failed"} />
               <div className="mt-1.5 text-xs text-slate-400">
                 {j.done_files}/{j.total_files} Dateien · {formatBytes(j.done_bytes)} / {formatBytes(j.total_bytes)} ({pct}%)
                 {" · "}
-                {j.imported} übernommen
+                {j.imported} {j.kind === "cache" ? "kopiert" : "übernommen"}
                 {j.skipped > 0 && `, ${j.skipped} übersprungen`}
                 {j.failed > 0 && <span className="text-red-300">, {j.failed} fehlgeschlagen</span>}
               </div>
@@ -764,6 +627,190 @@ function ImportJobs({
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// --- Cache -----------------------------------------------------------------------
+
+const snapFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" });
+
+function CachePanel({
+  caches,
+  onOpen,
+  onChange,
+  onError,
+  toast,
+}: {
+  caches: StorageCache[];
+  onOpen: (device: string, title: string, basePath: string) => void;
+  onChange: () => void;
+  onError: (e: unknown) => void;
+  toast: ReturnType<typeof useToast>;
+}) {
+  async function removeSnapshot(c: StorageCache, name: string) {
+    if (!confirm(`Sicherung „${name}“ vom Cache löschen? Bereits hochgeladene Dateien bleiben in der Cloud.`)) return;
+    try {
+      await api(`/api/storage/caches/${encodeURIComponent(c.uuid)}/snapshots/${encodeURIComponent(name)}`, { method: "DELETE" });
+      toast.success("Sicherung gelöscht", name);
+    } catch (e) {
+      onError(e);
+    } finally {
+      onChange();
+    }
+  }
+  async function unmark(c: StorageCache) {
+    if (!confirm(`„${c.label}“ nicht mehr als Cache nutzen? Die Sicherungen darauf bleiben erhalten.`)) return;
+    try {
+      await api(`/api/storage/caches/${encodeURIComponent(c.uuid)}`, { method: "DELETE" });
+    } catch (e) {
+      onError(e);
+    } finally {
+      onChange();
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-amber-500/20">
+      <div className="mb-1 text-sm font-medium text-slate-400">Cache — Kartensicherungen</div>
+      <p className="mb-4 text-xs text-slate-500">
+        Karte auf den Cache sichern, auswerfen, weiterfotografieren. Ausgewählt und hochgeladen wird später aus der Sicherung.
+      </p>
+      <div className="grid gap-4">
+        {caches.map((c) => (
+          <div key={c.uuid}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-white">{c.label}</span>
+                {c.device ? (
+                  <span className="text-xs text-slate-500">
+                    {c.device}
+                    {c.mountpoint ? ` · ${formatBytes(c.free)} frei von ${formatBytes(c.total)}` : ""}
+                  </span>
+                ) : null}
+                {c.error && <Badge tone="amber">{c.error}</Badge>}
+              </div>
+              <button className={btn} onClick={() => unmark(c)}>
+                Nicht mehr als Cache nutzen
+              </button>
+            </div>
+            {c.mountpoint && c.total > 0 && <UsageBar used={c.total - c.free} total={c.total} />}
+            {c.snapshots.length === 0 && c.mountpoint && (
+              <p className="mt-3 text-sm text-slate-500">Noch keine Sicherungen. Bei einer Karte auf „Auf Cache sichern“ tippen.</p>
+            )}
+            <div className="mt-3 grid gap-2">
+              {c.snapshots.map((s) => (
+                <div key={s.name} className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-900/50 px-4 py-2.5 ring-1 ring-white/5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-white">{s.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {s.files} Dateien · {formatBytes(s.size)}
+                      {s.modified && ` · zuletzt ${snapFmt.format(new Date(s.modified))}`}
+                    </div>
+                  </div>
+                  <button className={btnPrimary} disabled={!c.device} onClick={() => c.device && onOpen(c.device, `Cache · ${s.name}`, s.path)}>
+                    Öffnen
+                  </button>
+                  <button className={btn} onClick={() => removeSnapshot(c, s.name)}>
+                    Löschen
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BackupModal({
+  partition,
+  caches,
+  onClose,
+  onDone,
+}: {
+  partition: StoragePartition;
+  caches: StorageCache[];
+  onClose: () => void;
+  onDone: (job: StorageImportJob) => void;
+}) {
+  const [cacheUuid, setCacheUuid] = useState(caches[0]?.uuid ?? "");
+  const [onlyNew, setOnlyNew] = useState(true);
+  const [mediaOnly, setMediaOnly] = useState(true);
+  const [eject, setEject] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setRunning(true);
+    setErr(null);
+    try {
+      const job = await api<StorageImportJob>("/api/storage/caches/backup", {
+        method: "POST",
+        body: JSON.stringify({
+          device: partition.path,
+          cache_uuid: cacheUuid || null,
+          only_new: onlyNew,
+          media_only: mediaOnly,
+          eject_after: eject,
+        }),
+      });
+      onDone(job);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Fehler");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={running ? undefined : onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-slate-900 p-5 ring-1 ring-white/10" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-white">„{partTitle(partition)}“ auf Cache sichern</h3>
+        <p className="mt-1 text-sm text-slate-400">
+          Kopiert die Karte samt Ordnerstruktur und Aufnahmezeit auf den Cache. Danach kann sie sofort wieder in die Kamera.
+        </p>
+        {caches.length > 1 && (
+          <label className="mt-4 block text-sm text-slate-300">
+            Ziel
+            <select
+              value={cacheUuid}
+              onChange={(e) => setCacheUuid(e.target.value)}
+              className="mt-1 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white ring-1 ring-white/10"
+            >
+              {caches.map((c) => (
+                <option key={c.uuid} value={c.uuid}>
+                  {c.label} ({formatBytes(c.free)} frei)
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="mt-4 grid gap-2 text-sm text-slate-200">
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={mediaOnly} onChange={(e) => setMediaOnly(e.target.checked)} />
+            Nur Fotos, Videos und Audio
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} />
+            Nur Neues — schon hochgeladene Dateien nicht noch einmal sichern
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className="mt-1" checked={eject} onChange={(e) => setEject(e.target.checked)} />
+            Danach auswerfen (nur wenn alles fehlerfrei kopiert wurde)
+          </label>
+        </div>
+        {err && <div className="mt-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{err}</div>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button className={btn} onClick={onClose} disabled={running}>
+            Abbrechen
+          </button>
+          <button className={btnPrimary} onClick={submit} disabled={running}>
+            {running ? "Starte …" : "Sichern"}
+          </button>
+        </div>
       </div>
     </div>
   );

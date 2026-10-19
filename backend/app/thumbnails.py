@@ -6,9 +6,11 @@ Thumbnails are cached under ``<buffer>/.thumbs/<media_id>.jpg``.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 from .config import get_settings
@@ -75,3 +77,123 @@ def get_or_create_thumb(media_id: int, source_path: str, filename: str) -> Path 
     ext = Path(filename).suffix.lower()
     ok = _make_video_thumb(src, dst) if ext in VIDEO_EXTS else _make_image_thumb(src, dst)
     return dst if ok else None
+
+
+# --- Thumbnails for files on attached media ---------------------------------
+# The storage gallery shows hundreds of camera files at once. Generating them
+# must stay cheap on a Pi 3: JPEGs decode in draft mode (DCT scaling, ~1/8 the
+# work), RAW files use the preview JPEG every camera embeds, and at most two
+# thumbnails are computed at a time so a gallery scroll can't starve uploads.
+
+SOURCE_SIZES = (320, 1600)
+_SOURCE_LIMIT = threading.BoundedSemaphore(2)
+_SOURCE_CACHE_MAX = 6000  # files; oldest are pruned beyond this
+_RAW_SCAN_BYTES = 24 * 1024 * 1024
+
+
+def _source_dir() -> Path:
+    path = _thumbs_dir() / "src"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _prune_source_cache() -> None:
+    try:
+        files = sorted(_source_dir().glob("*.jpg"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return
+    for old in files[: max(0, len(files) - _SOURCE_CACHE_MAX)]:
+        old.unlink(missing_ok=True)
+
+
+def _render(im, dst: Path, size: int) -> None:
+    from PIL import ImageOps
+
+    im = ImageOps.exif_transpose(im)
+    im = im.convert("RGB")
+    im.thumbnail((size, size))
+    im.save(dst, "JPEG", quality=82)
+
+
+def _image_thumb(src: Path, dst: Path, size: int) -> bool:
+    try:
+        from PIL import Image
+
+        with Image.open(src) as im:
+            if im.format == "JPEG":
+                im.draft("RGB", (size, size))
+            _render(im, dst, size)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Source thumbnail failed for %s: %s", src, exc)
+        return False
+
+
+def _raw_thumb(src: Path, dst: Path, size: int) -> bool:
+    """Use the largest decodable JPEG preview embedded in a RAW file."""
+    import io
+
+    from PIL import Image
+
+    try:
+        with open(src, "rb") as fh:
+            data = fh.read(_RAW_SCAN_BYTES)
+    except OSError:
+        return False
+    best = None
+    pos = data.find(b"\xff\xd8\xff")
+    tried = 0
+    while pos != -1 and tried < 12:
+        tried += 1
+        try:
+            im = Image.open(io.BytesIO(data[pos:]))
+            im.draft("RGB", (size, size))
+            im.load()
+            if best is None or im.size[0] > best.size[0]:
+                best = im
+            if im.size[0] >= size:
+                break
+        except Exception:  # noqa: BLE001 - not a JPEG start, keep scanning
+            pass
+        pos = data.find(b"\xff\xd8\xff", pos + 3)
+    if best is None or best.size[0] < 160:
+        return False
+    try:
+        _render(best, dst, size)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def source_thumb(src: Path, kind: str, size: int, key: str) -> Path | None:
+    """Cached thumbnail for a file on an attached medium, or None.
+
+    ``key`` identifies the exact file version (device UUID, path, size, mtime)
+    so a re-shot card with recycled names never shows a stale picture.
+    """
+    size = min(SOURCE_SIZES, key=lambda s: abs(s - size))
+    digest = hashlib.sha1(f"{key}|{size}".encode()).hexdigest()
+    dst = _source_dir() / f"{digest}.jpg"
+    if dst.exists():
+        return dst
+    if kind not in {"photo", "raw", "video"}:
+        return None
+    with _SOURCE_LIMIT:
+        if dst.exists():
+            return dst
+        tmp = dst.with_suffix(".tmp.jpg")
+        if kind == "video":
+            ok = _make_video_thumb(src, tmp)
+            if ok and size != THUMB_MAX:
+                ok = _image_thumb(tmp, tmp, size)
+        elif kind == "raw":
+            ok = _raw_thumb(src, tmp, size) or _image_thumb(src, tmp, size)
+        else:
+            ok = _image_thumb(src, tmp, size)
+        if not ok:
+            tmp.unlink(missing_ok=True)
+            return None
+        tmp.replace(dst)
+    if hash(digest) % 50 == 0:
+        _prune_source_cache()
+    return dst

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     LargeBinary,
     String,
@@ -174,6 +175,11 @@ class MediaItem(Base):
     notified_failed: Mapped[bool] = mapped_column(Boolean, default=False)  # "failed" sent
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # Modification time of the source file when imported from an attached
+    # medium (camera card, cache). Together with name + size it recognises a
+    # photo that is already on the box without re-hashing the card. NULL for
+    # browser uploads, where the original mtime isn't known.
+    source_mtime: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     folder: Mapped[UploadFolder] = relationship(back_populates="media")
 
@@ -491,4 +497,19 @@ class UploadSession(Base):
     size: Mapped[int] = mapped_column(BigInteger, default=0)  # expected total, 0 = unknown
     received: Mapped[int] = mapped_column(BigInteger, default=0)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class StorageCache(Base):
+    """An attached partition marked as cache for offloading camera cards.
+
+    Identified by filesystem UUID so the mark survives re-plugging the drive
+    under a different device name (sdb today, sdc tomorrow).
+    """
+
+    __tablename__ = "storage_caches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

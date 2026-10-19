@@ -29,7 +29,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 📶 **Bandbreiten-bewusst** — Upload startet/drosselt je nach gemessener Leitung (parallele Messung, Ookla-Speedtest-Fallback auf restriktiven Netzen)
 - 🔁 **Resilient** — resumable Transfers, automatische Wiederholung, kein Datenverlust
 - 🔋 **Akku-fest** — geht die Box (z. B. an der Powerbank) mitten im Upload aus, werden angebrochene Uploads und lokale Kopien beim nächsten Start auf Konsistenz geprüft und torn/korrupte Reste bereinigt
-- 💾 **Speicher-Verwaltung** — angeschlossene USB-Sticks, SD-Karten und Platten sehen, ein-/aushängen, auswerfen und formatieren (exFAT/FAT32/ext4; System- und Puffer-Laufwerk gesperrt) — und Dateien direkt vom Medium **für den Upload übernehmen** (Ordner rekursiv, Medien-Filter, Tags, Duplikate werden übersprungen)
+- 💾 **Speicher-Verwaltung** — angeschlossene USB-Sticks, SD-Karten und Platten sehen, ein-/aushängen, auswerfen und formatieren (exFAT/FAT32/ext4; System- und Puffer-Laufwerk gesperrt) — und Kamerakarten als **Bildergalerie** mit Vorschaubildern (auch RAW) durchsehen, Fotos auswählen und **für den Upload übernehmen** — mit boxweiter **Duplikatprüfung** und einem **Cache-Laufwerk**, auf das Karten in einem Rutsch gesichert werden, damit sie sofort wieder in die Kamera können
 - 🗃️ **Komfortabler Datei-Browser** — Mehrfachauswahl, Löschen mehrerer Dateien auf einmal und Bulk-Download als ZIP
 - 👥 **User & Teams** — Admin verwaltet Provider/Ordner; Benutzer laden in freigegebene Ordner (auch per Team-Freigabe)
 - ☁️ **Viele Cloud-Ziele** — Amazon S3, MinIO, Azure Blob, OneDrive/SharePoint, Nextcloud, ownCloud, WebDAV, SFTP, SCP/SSH, FTP/FTPS, Hetzner Storage Box, Synology/QNAP/TrueNAS
