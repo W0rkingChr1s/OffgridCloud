@@ -166,6 +166,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("fehler", "Zuletzt fehlgeschlagene Übertragungen"),
     Command("retry", "Fehlgeschlagene Übertragungen neu anstoßen"),
     Command("netz", "Verbindung, IPs, VPN und Bandbreite"),
+    Command("speedtest", "Bandbreite jetzt messen"),
     Command("ping", "Lebenszeichen der Box"),
     Command("restart", "Nur den OffgridCloud-Dienst neu starten (mit Bestätigung)"),
     Command("reboot", "Box neu starten (mit Bestätigung)"),
@@ -542,6 +543,10 @@ HANDLERS: dict[str, Callable[[Session], str]] = {
 class Reply:
     text: str
     reply_markup: dict | None = field(default=None)
+    # Slow work (e.g. a speed test) runs after the reply is sent, in its own
+    # thread, so the poller keeps answering other commands meanwhile. It gets
+    # ``(token, chat_id)`` and sends its own result message.
+    followup: Callable[[str, str], None] | None = field(default=None)
 
 
 @dataclass(frozen=True)
@@ -716,10 +721,100 @@ def handle_callback(
     )
 
 
+# --- Speed test -------------------------------------------------------------
+
+_speedtest_lock = threading.Lock()  # one measurement at a time
+_speedtest_last_start: float | None = None  # monotonic time of the last run
+
+
+def _mbit(kbps: float) -> str:
+    return f"{kbps * 1024 * 8 / 1_000_000:.1f} Mbit/s"
+
+
+def run_speedtest(token: str, chat_id: str) -> None:
+    """Measure like the portal's "Jetzt messen", store the result for the
+    bandwidth gate and report it. Always releases the lock, even on errors."""
+    from .admin_ops import get_system_settings
+    from .announce import format_kbps
+    from .bandwidth import get_policy, measure_probe, record_measurement
+    from .config import get_settings
+    from .db import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            url = get_system_settings(db).probe_url.strip() or get_settings().default_probe_url
+        kbps, error = measure_probe(url)
+        if kbps <= 0:
+            text = "⚠️ <b>Speedtest fehlgeschlagen</b>"
+            if error:
+                text += f"\n<i>{html.escape(error[:300])}</i>"
+        else:
+            with SessionLocal() as db:
+                record_measurement(db, kbps)
+                policy = get_policy(db)
+                gate = ""
+                if policy.enabled and policy.min_bandwidth_kbps > 0:
+                    ok = kbps >= policy.min_bandwidth_kbps
+                    gate = (
+                        f"\n{'🟢' if ok else '🔴'} Mindestbandbreite "
+                        f"{format_kbps(policy.min_bandwidth_kbps)}: "
+                        + ("Senden erlaubt" if ok else "Senden pausiert")
+                    )
+            text = (
+                f"🚀 <b>Speedtest {html.escape(_box_name())}</b>\n"
+                f"⬇️ {format_kbps(kbps)} (≈ {_mbit(kbps)}){gate}"
+            )
+        send_message(token, chat_id, text)
+    except Exception as exc:  # noqa: BLE001 - report instead of dying silently
+        logger.warning("Telegram speedtest failed: %s", exc)
+        try:
+            send_message(token, chat_id, "⚠️ Speedtest ist gerade fehlgeschlagen.")
+        except Exception:  # noqa: BLE001
+            pass
+    finally:
+        _speedtest_lock.release()
+
+
+def _fmt_wait(seconds: float) -> str:
+    seconds = max(1, int(seconds + 0.999))
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes, rest = divmod(seconds, 60)
+    return f"{minutes} min {rest} s" if rest else f"{minutes} min"
+
+
+def request_speedtest(now: float | None = None) -> Reply:
+    """Start a measurement unless one runs or the cooldown hasn't elapsed."""
+    global _speedtest_last_start
+    from .config import get_settings
+
+    now = time.monotonic() if now is None else now
+    cooldown = max(0, get_settings().telegram_speedtest_cooldown)
+    if not _speedtest_lock.acquire(blocking=False):
+        return Reply("⏳ Es läuft schon ein Speedtest – Ergebnis kommt gleich.")
+    if cooldown and _speedtest_last_start is not None:
+        remaining = _speedtest_last_start + cooldown - now
+        if remaining > 0:
+            _speedtest_lock.release()
+            return Reply(
+                f"🧊 Speedtest-Sperre: nächste Messung in {_fmt_wait(remaining)} möglich "
+                f"(max. eine alle {_fmt_wait(cooldown)}, schont das Datenvolumen)."
+            )
+    _speedtest_last_start = now
+    return Reply(
+        "⏱ Messe die Bandbreite … (ca. 10 s, verbraucht etwas Datenvolumen)",
+        followup=run_speedtest,
+    )
+
+
 def reset_state() -> None:
-    """Forget pending power prompts (used by tests)."""
+    """Forget pending power prompts / speedtest lock + cooldown (used by tests)."""
+    global _speedtest_last_start
+    _speedtest_last_start = None
     with _pending_lock:
         _pending_power.clear()
+    if _speedtest_lock.locked():
+        _speedtest_lock.release()
 
 
 def parse_command(text: str) -> str | None:
@@ -748,6 +843,8 @@ def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | 
         )
     if command in POWER_ACTIONS:
         return request_power(command, (message.get("from") or {}).get("id", 0))
+    if command == "speedtest":
+        return request_speedtest()
     handler = HANDLERS.get(command)
     if handler is None:
         return Reply(f"🤷 Unbekannter Befehl /{html.escape(command)}. Siehe /hilfe.")
@@ -830,12 +927,18 @@ class BotPoller:
             with SessionLocal() as db:
                 reply = handle_message(db, message, chat_id)
             if reply:
+                reply_chat = str(message["chat"]["id"])
                 try:
-                    send_message(
-                        token, str(message["chat"]["id"]), reply.text, reply.reply_markup
-                    )
+                    send_message(token, reply_chat, reply.text, reply.reply_markup)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("Telegram reply failed: %s", exc)
+                if reply.followup:
+                    threading.Thread(
+                        target=reply.followup,
+                        args=(token, reply_chat),
+                        name="telegram-followup",
+                        daemon=True,
+                    ).start()
         return 0.0
 
     def _on_callback(self, token: str, chat_id: str, callback: dict, now: float) -> None:

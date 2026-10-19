@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # (see bandwidth.PROBE_SAMPLE_SECONDS), so a generous size just keeps a fast
     # link streaming for the full sample window; slow links stop at the cap.
     default_probe_url: str = "https://speed.cloudflare.com/__down?bytes=100000000"
+    # Minimum seconds between two Telegram /speedtest runs. Each run streams
+    # for several seconds over parallel connections, which can burn hundreds of
+    # MB on a fast metered (LTE) uplink — so a chat can't drain the data plan.
+    # 0 disables the cooldown.
+    telegram_speedtest_cooldown: int = 300
 
     # --- Updates -----------------------------------------------------------
     # GitHub repository (owner/name) used to check for new releases.

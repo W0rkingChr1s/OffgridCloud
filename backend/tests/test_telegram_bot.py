@@ -479,3 +479,82 @@ def test_multipart_body_contains_fields_and_file():
     assert ctype.startswith("multipart/form-data; boundary=")
     assert b'name="chat_id"' in body and b"-100" in body
     assert b'filename="a.png"' in body and b"BYTES" in body
+
+
+# --- Speedtest ------------------------------------------------------------
+
+
+def test_speedtest_replies_then_measures_and_records(client, calls, monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth, "measure_probe", lambda url: (2048.0, None))
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/speedtest"), "42")
+    assert "Messe" in reply.text
+    assert reply.followup is not None
+    # A second request while the first runs is refused, not doubled.
+    with SessionLocal() as db:
+        busy = telegram_bot.handle_message(db, _msg("/speedtest"), "42")
+    assert "läuft schon" in busy.text and busy.followup is None
+
+    reply.followup("tok", "42")
+    result = _sent(calls)[-1]["text"]
+    assert "Speedtest" in result and "2.0 MB/s" in result and "Mbit/s" in result
+    with SessionLocal() as db:
+        assert bandwidth.get_policy(db).last_kbps == 2048.0
+    # Lock released: the next request hits the cooldown, not "already running".
+    with SessionLocal() as db:
+        again = telegram_bot.handle_message(db, _msg("/speedtest"), "42")
+    assert "läuft schon" not in again.text
+    assert "Sperre" in again.text
+
+
+def test_speedtest_failure_is_reported_and_unlocks(client, calls, monkeypatch):
+    from app import bandwidth
+
+    monkeypatch.setattr(bandwidth, "measure_probe", lambda url: (0.0, "HTTP: Timeout"))
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/speedtest"), "42")
+    reply.followup("tok", "42")
+    assert "fehlgeschlagen" in _sent(calls)[-1]["text"]
+    assert "Timeout" in _sent(calls)[-1]["text"]
+    assert not telegram_bot._speedtest_lock.locked()
+
+
+def test_speedtest_needs_authorised_chat(client):
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/speedtest", chat_id=999), "42")
+    assert "nicht freigeschaltet" in reply.text
+    assert reply.followup is None
+    assert not telegram_bot._speedtest_lock.locked()
+
+
+def test_speedtest_cooldown_blocks_until_elapsed(client, calls, monkeypatch):
+    from app import bandwidth
+    from app.config import get_settings
+
+    monkeypatch.setattr(bandwidth, "measure_probe", lambda url: (1024.0, None))
+    monkeypatch.setattr(get_settings(), "telegram_speedtest_cooldown", 300)
+
+    first = telegram_bot.request_speedtest(now=1000.0)
+    assert first.followup is not None
+    first.followup("tok", "42")  # finishes and releases the lock
+
+    blocked = telegram_bot.request_speedtest(now=1000.0 + 61)
+    assert blocked.followup is None
+    assert "Sperre" in blocked.text and "3 min 59 s" in blocked.text
+    assert not telegram_bot._speedtest_lock.locked()  # refusal must not hold it
+
+    allowed = telegram_bot.request_speedtest(now=1000.0 + 300)
+    assert allowed.followup is not None
+
+
+def test_speedtest_cooldown_can_be_disabled(client, calls, monkeypatch):
+    from app import bandwidth
+    from app.config import get_settings
+
+    monkeypatch.setattr(bandwidth, "measure_probe", lambda url: (1024.0, None))
+    monkeypatch.setattr(get_settings(), "telegram_speedtest_cooldown", 0)
+    first = telegram_bot.request_speedtest(now=5.0)
+    first.followup("tok", "42")
+    assert telegram_bot.request_speedtest(now=6.0).followup is not None
