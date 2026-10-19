@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import NotifyToggle from "./NotifyToggle";
