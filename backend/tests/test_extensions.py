@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import select
 
 from app.bandwidth import active_probe
@@ -26,15 +27,37 @@ def test_active_probe_handles_errors():
     assert active_probe("http://x", fetcher=boom) == 0.0
 
 
-def test_http_measure_sums_parallel_streams():
+def test_http_measure_sums_parallel_streams(monkeypatch):
     # N concurrent streams must aggregate: a single stream reporting X bytes over
     # 4 streams should measure ~4x the throughput of one, approximating a real
     # multi-connection speed test instead of a single bandwidth-delay-limited TCP.
+    #
+    # Deterministic on purpose: the clock is faked (every measurement spans
+    # exactly 1 s), so CPU load can't skew the ratio. Concurrency is proven by a
+    # barrier all streams must reach together — sequential streams would time
+    # out on it and report an error instead of a measurement.
+    import threading
+    import types
+
     from app import bandwidth
 
-    one, _ = bandwidth._http_measure("http://x", fetcher=lambda url: 500 * 1024, streams=1)
-    four, _ = bandwidth._http_measure("http://x", fetcher=lambda url: 500 * 1024, streams=4)
-    assert four > one * 3  # ~4x, allowing for scheduling overhead
+    def measure(streams):
+        ticks = iter([0.0, 1.0])
+        clock = types.SimpleNamespace(monotonic=lambda: next(ticks))
+        monkeypatch.setattr(bandwidth, "_time", clock)
+        barrier = threading.Barrier(streams, timeout=5)
+
+        def fetch(url):
+            barrier.wait()
+            return 500 * 1024
+
+        return bandwidth._http_measure("http://x", fetcher=fetch, streams=streams)
+
+    one, err_one = measure(1)
+    four, err_four = measure(4)
+    assert err_one is None and err_four is None
+    assert one == pytest.approx(500.0)
+    assert four == pytest.approx(2000.0)
 
 
 def test_http_measure_partial_stream_failure_still_measures():
