@@ -589,7 +589,7 @@ function NotificationsCard({
                 konfiguriert
               </span>
             )}
-            <InfoTip text="Erstelle bei @BotFather einen Bot und trage hier den Bot-Token ein. Die Chat-ID bekommst du, indem du dem Bot /id schickst. Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin, benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Im freigeschalteten Chat versteht er u. a. /status, /queue, /speicher, /fehler, /retry, /netz, /ping und /reboot (nur nach Bestätigung per Button) – kein eigener Server und kein offener Port nötig." />
+            <InfoTip text="Erstelle bei @BotFather einen Bot und trage hier den Bot-Token ein. Die Chat-ID bekommst du, indem du dem Bot /id schickst. Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin, benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Im freigeschalteten Chat versteht er u. a. /status, /queue, /speicher, /fehler, /retry, /netz, /ping, /reboot und /shutdown (nur nach Bestätigung per Button) – kein eigener Server und kein offener Port nötig." />
           </div>
           <label className="mb-2 block text-sm">
             <span className="mb-1 block text-slate-400">Bot-Token</span>
@@ -624,7 +624,7 @@ function NotificationsCard({
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Befehle im Chat: /status, /queue, /speicher, /fehler, /retry, /netz, /ping, /reboot (mit Bestätigung), /hilfe. In Gruppen/Kanälen als Admin (Infos ändern, Anheften) passt der Bot Name, Beschreibung und Bild an.
+            Befehle im Chat: /status, /queue, /speicher, /fehler, /retry, /netz, /ping, /reboot und /shutdown (jeweils mit Bestätigung), /hilfe. In Gruppen/Kanälen als Admin (Infos ändern, Anheften) passt der Bot Name, Beschreibung und Bild an.
           </p>
         </div>
 

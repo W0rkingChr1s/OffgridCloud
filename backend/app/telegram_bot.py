@@ -16,10 +16,11 @@ talk back:
 * **Commands** — a long-polling loop (``getUpdates``; no inbound port or public
   URL needed, which matters behind CGNAT / LTE) answers ``/status``,
   ``/speicher``, ``/queue`` & co.
-* **Reboot with confirmation** — ``/reboot`` only *asks*: it posts inline
-  "Ja / Abbrechen" buttons bound to a one-time token that expires after a minute
-  and can only be pressed by the person who asked. Only then is the
-  operator-configured reboot command launched (same one the portal uses).
+* **Reboot / shutdown with confirmation** — ``/reboot`` and ``/shutdown`` only
+  *ask*: they post inline "Ja / Abbrechen" buttons bound to a one-time token
+  (tied to that action) that expires after a minute and can only be pressed by
+  the person who asked. Only then is the operator-configured command launched
+  (the same ones the portal uses).
 
 Only the configured chat may run commands. Anyone else only gets their chat ID
 back (handy during setup) and a "nicht freigeschaltet" note. Everything is
@@ -56,9 +57,9 @@ AUTH_BACKOFF = 300.0  # 401: token revoked/wrong -> don't hammer the API
 # Commands queued while the box was offline are still answered once it is back,
 # but only if they are reasonably fresh — a "/retry" from yesterday is noise.
 MAX_COMMAND_AGE = 15 * 60
-# A /reboot prompt's buttons stay valid this long; afterwards they are dead.
+# A /reboot or /shutdown prompt's buttons stay valid this long; then they're dead.
 REBOOT_CONFIRM_SECONDS = 60
-# Delay before the reboot command fires, so the poller can still acknowledge
+# Delay before the reboot/shutdown command fires, so the poller can still acknowledge
 # the button press to Telegram (otherwise it would be redelivered after boot).
 REBOOT_DELAY = 8.0
 
@@ -166,6 +167,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("netz", "Verbindung, IPs, VPN und Bandbreite"),
     Command("ping", "Lebenszeichen der Box"),
     Command("reboot", "Box neu starten (mit Bestätigung)"),
+    Command("shutdown", "Box herunterfahren (mit Bestätigung)"),
     Command("id", "Chat-ID dieses Chats anzeigen"),
     Command("hilfe", "Alle Befehle anzeigen"),
     Command("start", "Begrüßung", menu=False),
@@ -531,7 +533,7 @@ HANDLERS: dict[str, Callable[[Session], str]] = {
 }
 
 
-# --- Reboot with confirmation ---------------------------------------------
+# --- Power actions with confirmation --------------------------------------
 
 
 @dataclass
@@ -540,45 +542,93 @@ class Reply:
     reply_markup: dict | None = field(default=None)
 
 
+@dataclass(frozen=True)
+class PowerAction:
+    slug: str  # chat command and audit suffix
+    setting: str  # Settings attribute holding the operator-configured command
+    env: str  # its env var, for the "disabled" hint
+    noun: str  # "Neustart" / "Herunterfahren"
+    question: str
+    warning: str
+    confirm_label: str
+    done: str  # after confirming; may use {box} and {delay}
+
+
+POWER_ACTIONS: dict[str, PowerAction] = {
+    a.slug: a
+    for a in (
+        PowerAction(
+            slug="reboot",
+            setting="reboot_command",
+            env="OGC_REBOOT_COMMAND",
+            noun="Neustart",
+            question="wirklich neu starten?",
+            warning=(
+                "Laufende Übertragungen werden unterbrochen und danach automatisch "
+                "fortgesetzt. Die Box ist ein paar Minuten nicht erreichbar."
+            ),
+            confirm_label="✅ Ja, neu starten",
+            done="🔄 {box} startet in ~{delay} s neu und meldet sich danach wieder.",
+        ),
+        PowerAction(
+            slug="shutdown",
+            setting="shutdown_command",
+            env="OGC_SHUTDOWN_COMMAND",
+            noun="Herunterfahren",
+            question="wirklich herunterfahren?",
+            warning=(
+                "🔌 Die Box ist danach <b>aus</b> und lässt sich aus der Ferne nicht "
+                "wieder einschalten – nur vor Ort. Laufende Übertragungen werden "
+                "unterbrochen und beim nächsten Start fortgesetzt."
+            ),
+            confirm_label="⏻ Ja, ausschalten",
+            done="⏻ {box} fährt in ~{delay} s herunter. Bis zum nächsten Einschalten! 👋",
+        ),
+    )
+}
+
+
 @dataclass
-class _PendingReboot:
+class _PendingPower:
+    action: str
     user_id: int
     expires: float
 
 
 _pending_lock = threading.Lock()
-_pending_reboots: dict[str, _PendingReboot] = {}
+_pending_power: dict[str, _PendingPower] = {}
 
 
-def _reboot_command() -> str:
+def _power_command(action: PowerAction) -> str:
     from .config import get_settings
 
-    return get_settings().reboot_command.strip()
+    return getattr(get_settings(), action.setting).strip()
 
 
-def request_reboot(user_id: int, now: float | None = None) -> Reply:
-    """Answer ``/reboot`` with confirm/cancel buttons (nothing runs yet)."""
-    if not _reboot_command():
+def request_power(slug: str, user_id: int, now: float | None = None) -> Reply:
+    """Answer ``/reboot`` / ``/shutdown`` with confirm/cancel buttons — nothing
+    runs yet. The nonce is bound to the action and the requesting user."""
+    action = POWER_ACTIONS[slug]
+    if not _power_command(action):
         return Reply(
-            "🚫 Neustart ist deaktiviert (OGC_REBOOT_COMMAND leer). Installer mit "
-            "Power-Control erneut ausführen, um ihn freizuschalten."
+            f"🚫 {action.noun} ist deaktiviert ({action.env} leer). Installer mit "
+            "Power-Control erneut ausführen, um es freizuschalten."
         )
     now = time.time() if now is None else now
     nonce = secrets.token_urlsafe(8)
     with _pending_lock:
         # Drop expired prompts so the dict can't grow unbounded.
-        for key in [k for k, p in _pending_reboots.items() if p.expires < now]:
-            del _pending_reboots[key]
-        _pending_reboots[nonce] = _PendingReboot(user_id, now + REBOOT_CONFIRM_SECONDS)
+        for key in [k for k, p in _pending_power.items() if p.expires < now]:
+            del _pending_power[key]
+        _pending_power[nonce] = _PendingPower(slug, user_id, now + REBOOT_CONFIRM_SECONDS)
     return Reply(
-        f"⚠️ <b>{html.escape(_box_name())} wirklich neu starten?</b>\n"
-        "Laufende Übertragungen werden unterbrochen und danach automatisch "
-        f"fortgesetzt. Die Box ist ein paar Minuten nicht erreichbar.\n"
+        f"⚠️ <b>{html.escape(_box_name())} {action.question}</b>\n"
+        f"{action.warning}\n"
         f"<i>Bestätigung gilt {REBOOT_CONFIRM_SECONDS} s.</i>",
         {
             "inline_keyboard": [
                 [
-                    {"text": "✅ Ja, neu starten", "callback_data": f"reboot:{nonce}"},
+                    {"text": action.confirm_label, "callback_data": f"confirm:{nonce}"},
                     {"text": "✖️ Abbrechen", "callback_data": f"cancel:{nonce}"},
                 ]
             ]
@@ -600,7 +650,7 @@ def handle_callback(
     now: float | None = None,
     run: Callable[..., None] | None = None,
 ) -> CallbackResult:
-    """Resolve a button press on a ``/reboot`` prompt."""
+    """Resolve a button press on a ``/reboot`` or ``/shutdown`` prompt."""
     from .admin_ops import audit
     from .power import run_power_command
 
@@ -611,47 +661,49 @@ def handle_callback(
     if not allowed_chat_id or chat_id != allowed_chat_id.strip():
         return CallbackResult("🔒 Nicht freigeschaltet.")
 
-    action, _, nonce = (callback.get("data") or "").partition(":")
+    choice, _, nonce = (callback.get("data") or "").partition(":")
     sender = callback.get("from") or {}
     who = sender.get("username") or sender.get("first_name") or str(sender.get("id", "?"))
     with _pending_lock:
-        pending = _pending_reboots.get(nonce)
+        pending = _pending_power.get(nonce)
         if pending is None or pending.expires < now:
-            _pending_reboots.pop(nonce, None)
-            return CallbackResult("⌛ Abgelaufen.", "⌛ Neustart-Anfrage abgelaufen.")
+            _pending_power.pop(nonce, None)
+            return CallbackResult("⌛ Abgelaufen.", "⌛ Anfrage abgelaufen – nichts passiert.")
+        action = POWER_ACTIONS[pending.action]
         if pending.user_id != sender.get("id"):
-            return CallbackResult("🙅 Nur wer /reboot geschickt hat, kann bestätigen.")
-        del _pending_reboots[nonce]  # one-time: a second press does nothing
+            return CallbackResult(f"🙅 Nur wer /{action.slug} geschickt hat, kann bestätigen.")
+        del _pending_power[nonce]  # one-time: a second press does nothing
 
-    if action == "cancel":
-        return CallbackResult("Abgebrochen.", "✖️ Neustart abgebrochen.")
-    if action != "reboot":
+    if choice == "cancel":
+        return CallbackResult("Abgebrochen.", f"✖️ {action.noun} abgebrochen.")
+    if choice != "confirm":
         return CallbackResult("🤷 Unbekannte Aktion.")
 
-    command = _reboot_command()
+    command = _power_command(action)
     if not command:
-        return CallbackResult("🚫 Neustart deaktiviert.", "🚫 Neustart ist deaktiviert.")
-    audit(db, None, "telegram.reboot", f"bestätigt von {who} (Chat {chat_id})")
+        return CallbackResult(
+            f"🚫 {action.noun} deaktiviert.", f"🚫 {action.noun} ist deaktiviert."
+        )
+    audit(db, None, f"telegram.{action.slug}", f"bestätigt von {who} (Chat {chat_id})")
     try:
         run(command, delay=REBOOT_DELAY)
     except Exception as exc:  # noqa: BLE001 - report the launch failure in the chat
-        logger.warning("Telegram reboot failed to start: %s", exc)
+        logger.warning("Telegram %s failed to start: %s", action.slug, exc)
         return CallbackResult(
             "⚠️ Start fehlgeschlagen.",
-            f"⚠️ Neustart konnte nicht gestartet werden: {html.escape(str(exc))}",
+            f"⚠️ {action.noun} konnte nicht gestartet werden: {html.escape(str(exc))}",
         )
     return CallbackResult(
-        "🔄 Neustart läuft …",
-        f"🔄 <b>Neustart bestätigt</b> von {html.escape(who)}.\n"
-        f"{html.escape(_box_name())} startet in ~{REBOOT_DELAY:.0f} s neu und meldet "
-        "sich danach wieder.",
+        f"{action.noun} läuft …",
+        f"<b>{action.noun} bestätigt</b> von {html.escape(who)}.\n"
+        + action.done.format(box=html.escape(_box_name()), delay=f"{REBOOT_DELAY:.0f}"),
     )
 
 
 def reset_state() -> None:
-    """Forget pending reboot prompts (used by tests)."""
+    """Forget pending power prompts (used by tests)."""
     with _pending_lock:
-        _pending_reboots.clear()
+        _pending_power.clear()
 
 
 def parse_command(text: str) -> str | None:
@@ -678,8 +730,8 @@ def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | 
             f"Chat-ID: <code>{html.escape(chat_id)}</code> – im OffgridCloud-Portal "
             "unter System → Benachrichtigungen eintragen."
         )
-    if command == "reboot":
-        return request_reboot((message.get("from") or {}).get("id", 0))
+    if command in POWER_ACTIONS:
+        return request_power(command, (message.get("from") or {}).get("id", 0))
     handler = HANDLERS.get(command)
     if handler is None:
         return Reply(f"🤷 Unbekannter Befehl /{html.escape(command)}. Siehe /hilfe.")

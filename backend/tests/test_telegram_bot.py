@@ -270,10 +270,56 @@ def test_reboot_cancel_expiry_and_foreign_user(client):
 
 
 def test_reboot_disabled_without_command(client, monkeypatch):
-    monkeypatch.setattr(telegram_bot, "_reboot_command", lambda: "")
+    monkeypatch.setattr(telegram_bot, "_power_command", lambda action: "")
     with SessionLocal() as db:
         reply = telegram_bot.handle_message(db, _msg("/reboot"), "42")
     assert "deaktiviert" in reply.text
+    assert reply.reply_markup is None
+
+
+def test_shutdown_asks_with_strong_warning_then_runs(client):
+    runs = []
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/shutdown"), "42")
+        assert "herunterfahren" in reply.text
+        assert "nur vor Ort" in reply.text
+        assert not runs
+        confirm = reply.reply_markup["inline_keyboard"][0][0]
+        assert "ausschalten" in confirm["text"]
+        result = _press(
+            db, confirm["callback_data"], run=lambda cmd, delay: runs.append(cmd)
+        )
+    assert runs and "poweroff" in runs[0]
+    assert "Herunterfahren bestätigt" in result.new_text
+
+    with SessionLocal() as db:
+        from sqlalchemy import select
+
+        from app.models import AuditEvent
+
+        actions = list(db.scalars(select(AuditEvent.action)))
+    assert "telegram.shutdown" in actions
+
+
+def test_confirm_runs_the_action_it_was_issued_for(client):
+    runs = []
+    with SessionLocal() as db:
+        _, reboot_confirm, _ = _reboot_prompt(db)
+        shutdown = telegram_bot.handle_message(db, _msg("/shutdown"), "42")
+        shutdown_cancel = shutdown.reply_markup["inline_keyboard"][0][1]["callback_data"]
+        _press(db, shutdown_cancel, run=lambda cmd, delay: runs.append(cmd))
+        _press(db, reboot_confirm, run=lambda cmd, delay: runs.append(cmd))
+    # Cancelling the shutdown ran nothing; the reboot button ran the reboot.
+    assert len(runs) == 1 and "reboot" in runs[0]
+
+
+def test_shutdown_disabled_without_command(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "shutdown_command", "")
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/shutdown"), "42")
+    assert "OGC_SHUTDOWN_COMMAND" in reply.text
     assert reply.reply_markup is None
 
 
