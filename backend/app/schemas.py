@@ -727,3 +727,109 @@ class PasskeyOut(BaseModel):
 
 class PasskeyRename(BaseModel):
     name: str
+
+
+# --- Attached storage media ------------------------------------------------
+
+
+class StoragePartitionOut(BaseModel):
+    name: str
+    path: str
+    size: int
+    fstype: str
+    label: str
+    uuid: str
+    mountpoint: str
+    read_only: bool
+    total: int
+    used: int
+    free: int
+    system: bool
+    buffer: bool
+    protected: bool
+    browsable: bool
+    busy: bool
+
+
+class StorageDiskOut(BaseModel):
+    name: str
+    path: str
+    size: int
+    model: str
+    vendor: str
+    transport: str
+    removable: bool
+    read_only: bool
+    system: bool
+    buffer: bool
+    protected: bool
+    partitions: list[StoragePartitionOut]
+
+
+class StorageOverviewOut(BaseModel):
+    manage_enabled: bool
+    filesystems: list[str]
+    label_max: dict[str, int]
+    disks: list[StorageDiskOut]
+    buffer: DiskUsageOut
+    error: str = ""
+
+
+class StorageDeviceRequest(BaseModel):
+    device: str
+
+
+class StorageFormatRequest(BaseModel):
+    device: str
+    fstype: str = "exfat"
+    label: str = ""
+    # Must repeat the device name (e.g. "sda") — guards against a mis-click.
+    confirm: str
+
+
+class StorageEntryOut(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    size: int
+    modified: datetime | None
+    is_media: bool
+
+
+class StorageBrowseOut(BaseModel):
+    device: str
+    mountpoint: str
+    path: str
+    parent: str | None
+    entries: list[StorageEntryOut]
+    truncated: bool = False
+
+
+class StorageImportRequest(BaseModel):
+    device: str
+    paths: list[str] = Field(min_length=1, max_length=5000)
+    folder_id: int
+    media_only: bool = False
+    skip_duplicates: bool = True
+    tags: list[str] = Field(default_factory=list, max_length=20)
+
+
+class StorageImportJobOut(BaseModel):
+    id: str
+    device: str
+    folder_id: int
+    folder_name: str
+    user_id: int
+    status: str
+    total_files: int
+    total_bytes: int
+    done_files: int
+    done_bytes: int
+    imported: int
+    skipped: int
+    failed: int
+    current: str
+    error: str
+    errors: list[str]
+    created_at: str
+    finished_at: str | None

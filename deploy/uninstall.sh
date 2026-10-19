@@ -368,7 +368,8 @@ run rm -f /etc/modules-load.d/offgridcloud-tun.conf
 run rm -f /etc/sudoers.d/offgridcloud \
           /etc/sudoers.d/offgridcloud-power \
           /etc/sudoers.d/offgridcloud-https \
-          /etc/sudoers.d/offgridcloud-network
+          /etc/sudoers.d/offgridcloud-network \
+          /etc/sudoers.d/offgridcloud-storage
 run systemctl daemon-reload 2>/dev/null || true
 
 # --- 3. Network-redundancy layer --------------------------------------------

@@ -84,6 +84,14 @@ class Settings(BaseSettings):
     reboot_command: str = "sudo /usr/bin/systemctl reboot"
     shutdown_command: str = "sudo /usr/bin/systemctl poweroff"
 
+    # --- Attached storage media ----------------------------------------------
+    # Privileged helper behind the "Speicher" page: mount / unmount / eject /
+    # format USB sticks, SD cards and external disks. The installer copies it to
+    # a root-owned path and adds the NOPASSWD sudoers rule; the helper refuses
+    # the system and buffer disks on its own. Empty disables the actions (the
+    # page still lists drives and can import from media mounted by other means).
+    storage_command: str = "sudo /opt/offgridcloud/deploy/storage/storage.sh"
+
     # --- Network redundancy / AP fallback ----------------------------------
     # Where the desired network config is exported for the privileged apply
     # helper + root watchdog to consume. Contains Wi-Fi passphrases in the

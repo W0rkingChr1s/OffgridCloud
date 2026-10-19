@@ -236,6 +236,90 @@ export interface SystemStatus {
   power_shutdown_enabled: boolean;
 }
 
+export interface StoragePartition {
+  name: string;
+  path: string;
+  size: number;
+  fstype: string;
+  label: string;
+  uuid: string;
+  mountpoint: string;
+  read_only: boolean;
+  total: number;
+  used: number;
+  free: number;
+  system: boolean; // holds the OS (or is mounted outside /media, /mnt)
+  buffer: boolean; // holds the OffgridCloud media buffer / data dir
+  protected: boolean;
+  browsable: boolean;
+  busy: boolean; // an import from it is running
+}
+
+export interface StorageDisk {
+  name: string;
+  path: string;
+  size: number;
+  model: string;
+  vendor: string;
+  transport: string;
+  removable: boolean;
+  read_only: boolean;
+  system: boolean;
+  buffer: boolean;
+  protected: boolean;
+  partitions: StoragePartition[];
+}
+
+export interface StorageOverview {
+  manage_enabled: boolean;
+  filesystems: string[];
+  label_max: Record<string, number>;
+  disks: StorageDisk[];
+  buffer: DiskUsage;
+  error: string;
+}
+
+export interface StorageEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  modified: string | null;
+  is_media: boolean;
+}
+
+export interface StorageBrowse {
+  device: string;
+  mountpoint: string;
+  path: string;
+  parent: string | null;
+  entries: StorageEntry[];
+  truncated: boolean;
+}
+
+export type StorageImportStatus = "pending" | "running" | "done" | "failed" | "cancelled";
+
+export interface StorageImportJob {
+  id: string;
+  device: string;
+  folder_id: number;
+  folder_name: string;
+  user_id: number;
+  status: StorageImportStatus;
+  total_files: number;
+  total_bytes: number;
+  done_files: number;
+  done_bytes: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  current: string;
+  error: string;
+  errors: string[];
+  created_at: string;
+  finished_at: string | null;
+}
+
 export interface HttpsStatus {
   enabled: boolean; // HTTPS is actually serving (Caddy up / config applied)
   manageable: boolean; // the UI can change the domain (apply command wired up)

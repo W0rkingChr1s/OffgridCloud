@@ -229,6 +229,49 @@ Unter **System**:
   Pufferdatei entfernt, sobald **alle** Zielprovider eines Mediums erfolgreich
   bestätigt sind (rclone verifiziert Größe/Hash). Spart Platz auf dem Mini-Server.
 
+### 5.1 Angeschlossene Speichermedien (Admin → Speicher)
+
+Die Seite **Speicher** listet alle angeschlossenen Laufwerke (USB-Sticks, SD-Karten,
+externe Platten) samt Partitionen, Dateisystem, Belegung und Einhängepunkt. Die
+Liste aktualisiert sich alle paar Sekunden — Medium einstecken genügt.
+
+- **Einhängen / Aushängen / Auswerfen** — Medien werden unter
+  `/media/offgridcloud/<Bezeichnung>` eingehängt (`nosuid,nodev,noexec`; FAT/exFAT/NTFS
+  gehören dem Dienstkonto). „Auswerfen“ hängt alle Partitionen aus und schaltet
+  USB-Geräte ab — danach kann das Medium gefahrlos gezogen werden.
+- **Formatieren** — eine Partition oder das **komplette Laufwerk** (neue
+  Partitionstabelle, eine Partition) als **exFAT** (empfohlen, Kameras/Windows/macOS),
+  **FAT32** (max. 4 GB je Datei) oder **ext4**. Zur Sicherheit muss der Gerätename
+  (z. B. `sdb`) eingetippt werden.
+- **Durchsuchen & für den Upload übernehmen** — Dateien und Ordner auf einem
+  eingehängten Medium markieren, Ziel-Ordner wählen, optional Tags vergeben. Die
+  Dateien werden in den Puffer **kopiert** (gestreamt, SHA-256, fsync) und wie ein
+  normaler Upload an alle verknüpften Cloud-Ziele eingereiht — die Karte kann danach
+  sofort zurück in die Kamera. Ordner werden rekursiv übernommen; Systemmüll
+  (`.Trashes`, `System Volume Information`, versteckte Dateien) wird ignoriert.
+  „Nur Fotos/Videos/Audio“ filtert auf Mediendateien (inkl. gängiger RAW-Formate).
+  Bereits übernommene Dateien (gleicher Name + Größe oder gleicher Hash im Ordner)
+  werden übersprungen; gleichnamige, aber verschiedene Dateien (z. B.
+  `IMG_0001.JPG` aus `100CANON` und `101CANON`) bekommen ein Suffix ` (2)`.
+  Vor dem Start wird geprüft, ob der Puffer genug Platz hat (+ 512 MB Reserve).
+
+**Schutz:** Laufwerke mit einem Dateisystem außerhalb von `/media`, `/mnt` oder
+`/run/media` (also die System-SD/-SSD) und das Laufwerk mit dem OffgridCloud-Puffer
+werden als **System** bzw. **Puffer** markiert und lassen sich weder aushängen noch
+formatieren noch durchsuchen. Diese Prüfung macht sowohl die API als auch — unabhängig
+davon — der Root-Helfer `deploy/storage/storage.sh`.
+
+**Einrichtung:** `install.sh` (auch beim Update) installiert `exfatprogs`,
+`dosfstools`, `e2fsprogs` und `fdisk`, legt den Helfer root-eigen unter
+`/opt/offgridcloud/deploy/storage/storage.sh` ab und erlaubt ihn per
+`/etc/sudoers.d/offgridcloud-storage`. Ohne Helfer (z. B. Docker,
+`OGC_STORAGE_COMMAND=` leer) ist die Seite schreibgeschützt: Anzeigen, Durchsuchen und
+Importieren von anderweitig eingehängten Medien funktioniert weiterhin.
+
+Importe laufen im Hintergrund mit Fortschrittsanzeige und lassen sich abbrechen.
+Der Job-Status lebt nur im Speicher — nach einem Neustart den Import einfach erneut
+starten, schon Übernommenes wird übersprungen.
+
 ## 6. Audit-Log
 
 Unter **System → Aktivität** sind sicherheitsrelevante Admin-Aktionen

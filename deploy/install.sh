@@ -388,6 +388,9 @@ step "Installing system dependencies..."
 if command -v apt-get >/dev/null 2>&1; then
   apt-get update
   apt-get install -y --no-install-recommends python3-venv curl ca-certificates
+  # Speicher page: format/mount USB sticks, SD cards and external disks.
+  apt-get install -y --no-install-recommends exfatprogs dosfstools e2fsprogs fdisk \
+    || echo "   Storage tools (exfatprogs/dosfstools) not installed — formatting limited." >&2
   [[ $WITH_FFMPEG -eq 1 ]] && apt-get install -y --no-install-recommends ffmpeg
 elif command -v dnf >/dev/null 2>&1; then
   dnf install -y python3-virtualenv curl || dnf install -y python3 curl
@@ -612,6 +615,29 @@ if ln -sfn "$PREFIX/deploy/uninstall.sh" /usr/local/bin/offgridcloud-uninstall 2
   echo "   Remove OffgridCloud later with: sudo offgridcloud-uninstall"
 else
   echo "   Remove OffgridCloud later with: sudo $PREFIX/deploy/uninstall.sh"
+fi
+
+# --- Storage media management (sudoers) -------------------------------------
+# The "Speicher" page mounts / unmounts / ejects / formats attached media via a
+# root helper. Copied to the root-owned $PREFIX/deploy (never run from a path the
+# service account can write) and allowed via one NOPASSWD rule; the helper
+# validates every argument and refuses the system and buffer disks itself.
+step "Wiring up storage media management (Speicher page)..."
+mkdir -p "$PREFIX/deploy/storage"
+install -m 755 -o root -g root "$REPO_ROOT/deploy/storage/storage.sh" "$PREFIX/deploy/storage/storage.sh"
+STORAGE_HELPER="$PREFIX/deploy/storage/storage.sh"
+SUDOERS_STORAGE=/etc/sudoers.d/offgridcloud-storage
+echo "$SERVICE_USER ALL=(root) NOPASSWD: $STORAGE_HELPER" > "$SUDOERS_STORAGE.tmp"
+if visudo -cf "$SUDOERS_STORAGE.tmp" >/dev/null 2>&1; then
+  install -m 440 "$SUDOERS_STORAGE.tmp" "$SUDOERS_STORAGE"; rm -f "$SUDOERS_STORAGE.tmp"
+  grep -q '^OGC_STORAGE_COMMAND=' "$PREFIX/.env" || \
+    echo "OGC_STORAGE_COMMAND=sudo $STORAGE_HELPER" >> "$PREFIX/.env"
+  chown "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
+  mkdir -p /media/offgridcloud
+  echo "   Storage management ready (Admin → Speicher)."
+else
+  rm -f "$SUDOERS_STORAGE.tmp"
+  echo "   Could not validate sudoers rule — storage page will be read-only." >&2
 fi
 
 # --- Optional: network-redundancy layer (AP fallback) ----------------------
