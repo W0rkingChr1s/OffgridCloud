@@ -6,12 +6,20 @@ talk back:
 * **Connect greeting** — when an admin stores a bot token / chat ID, the box
   posts a short "OffgridCloud verbunden" message into that chat, so the setup is
   confirmed where it matters instead of only in the portal.
+* **Group / channel branding** — if the target is a group or channel and the
+  bot is admin there, the chat gets an OffgridCloud title, description and
+  photo, and the greeting is pinned, so the field team recognises it at once.
+  Without admin rights the bot says which right it is missing instead.
 * **Bot profile** — command menu (``setMyCommands``), description texts and the
   chat's menu button are set up once per token, so the chat feels like an
   OffgridCloud console rather than a bare bot.
 * **Commands** — a long-polling loop (``getUpdates``; no inbound port or public
   URL needed, which matters behind CGNAT / LTE) answers ``/status``,
   ``/speicher``, ``/queue`` & co.
+* **Reboot with confirmation** — ``/reboot`` only *asks*: it posts inline
+  "Ja / Abbrechen" buttons bound to a one-time token that expires after a minute
+  and can only be pressed by the person who asked. Only then is the
+  operator-configured reboot command launched (same one the portal uses).
 
 Only the configured chat may run commands. Anyone else only gets their chat ID
 back (handy during setup) and a "nicht freigeschaltet" note. Everything is
@@ -24,11 +32,13 @@ from __future__ import annotations
 import html
 import json
 import logging
+import secrets
 import socket
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -46,6 +56,11 @@ AUTH_BACKOFF = 300.0  # 401: token revoked/wrong -> don't hammer the API
 # Commands queued while the box was offline are still answered once it is back,
 # but only if they are reasonably fresh — a "/retry" from yesterday is noise.
 MAX_COMMAND_AGE = 15 * 60
+# A /reboot prompt's buttons stay valid this long; afterwards they are dead.
+REBOOT_CONFIRM_SECONDS = 60
+# Delay before the reboot command fires, so the poller can still acknowledge
+# the button press to Telegram (otherwise it would be redelivered after boot).
+REBOOT_DELAY = 8.0
 
 
 class TelegramError(Exception):
@@ -59,15 +74,43 @@ class TelegramError(Exception):
 # --- Bot API transport ----------------------------------------------------
 
 
-def _api_call(token: str, method: str, params: dict | None = None, timeout: float = 15) -> object:
+def _multipart(params: dict, files: dict[str, tuple[str, bytes, str]]) -> tuple[bytes, str]:
+    boundary = f"ogc{secrets.token_hex(12)}"
+    parts: list[bytes] = []
+    for name, value in params.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n".encode()
+        )
+    for name, (filename, content, mime) in files.items():
+        parts.append(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+            f'filename="{filename}"\r\nContent-Type: {mime}\r\n\r\n'.encode()
+            + content
+            + b"\r\n"
+        )
+    parts.append(f"--{boundary}--\r\n".encode())
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def _api_call(
+    token: str,
+    method: str,
+    params: dict | None = None,
+    timeout: float = 15,
+    files: dict[str, tuple[str, bytes, str]] | None = None,
+) -> object:
     import urllib.error
     import urllib.request
 
-    data = json.dumps(params or {}).encode("utf-8")
+    if files:
+        data, content_type = _multipart(params or {}, files)
+    else:
+        data, content_type = json.dumps(params or {}).encode("utf-8"), "application/json"
     req = urllib.request.Request(
         f"{API_BASE}/bot{token}/{method}",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": content_type},
         method="POST",
     )
     try:
@@ -89,17 +132,18 @@ def _api_call(token: str, method: str, params: dict | None = None, timeout: floa
 api_call: Callable[..., object] = _api_call
 
 
-def send_message(token: str, chat_id: str, text: str) -> None:
-    api_call(
-        token,
-        "sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        },
-    )
+def send_message(
+    token: str, chat_id: str, text: str, reply_markup: dict | None = None
+) -> object:
+    params: dict = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if reply_markup:
+        params["reply_markup"] = reply_markup
+    return api_call(token, "sendMessage", params)
 
 
 # --- Bot profile ----------------------------------------------------------
@@ -121,6 +165,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("retry", "Fehlgeschlagene Übertragungen neu anstoßen"),
     Command("netz", "Verbindung, IPs, VPN und Bandbreite"),
     Command("ping", "Lebenszeichen der Box"),
+    Command("reboot", "Box neu starten (mit Bestätigung)"),
     Command("id", "Chat-ID dieses Chats anzeigen"),
     Command("hilfe", "Alle Befehle anzeigen"),
     Command("start", "Begrüßung", menu=False),
@@ -185,11 +230,117 @@ def connected_message() -> str:
     )
 
 
+# Shipped next to the SPA (frontend/public -> app/static) in every deployment.
+CHAT_PHOTO = Path(__file__).resolve().parent / "static" / "icon-512.png"
+
+
+def chat_title() -> str:
+    return f"OffgridCloud · {_box_name()}"[:128]
+
+
+def chat_description() -> str:
+    return (
+        f"Statusmeldungen der OffgridCloud-Box {_box_name()}: Uploads, Übertragungen, "
+        "Speicher und Verbindung. Befehle: /status /queue /speicher /hilfe"
+    )[:255]
+
+
+@dataclass
+class ChatBranding:
+    is_group: bool = False
+    pin: bool = False  # bot may pin the greeting
+    hints: list[str] = field(default_factory=list)  # missing rights, for the chat
+
+
+def brand_chat(token: str, chat_id: str) -> ChatBranding:
+    """Make a group/channel recognisable: title, description, photo.
+
+    Private chats are left alone. Needs the bot to be admin with "change info";
+    otherwise nothing is touched and a hint says which right to grant. Title and
+    photo are only (re)set when the title isn't ours yet, so pressing the test
+    button twice doesn't spam the chat with "photo changed" service messages.
+    """
+    result = ChatBranding()
+    chat = api_call(token, "getChat", {"chat_id": chat_id}) or {}
+    if chat.get("type") not in ("group", "supergroup", "channel"):
+        return result
+    result.is_group = True
+    is_channel = chat.get("type") == "channel"
+
+    me = api_call(token, "getMe") or {}
+    member = api_call(token, "getChatMember", {"chat_id": chat_id, "user_id": me.get("id")}) or {}
+    status = member.get("status")
+    if status not in ("administrator", "creator"):
+        result.hints.append(
+            "Mach mich zum Admin (Rechte: <i>Infos ändern</i>, <i>Nachrichten anheften</i>), "
+            "dann passe ich Name, Beschreibung und Bild an – einfach danach im Portal "
+            "„Testnachricht“ drücken."
+        )
+        return result
+    can_change = status == "creator" or member.get("can_change_info", False)
+    result.pin = status == "creator" or member.get(
+        "can_edit_messages" if is_channel else "can_pin_messages", False
+    )
+    if not can_change:
+        result.hints.append("Mir fehlt das Admin-Recht <i>Infos ändern</i> für Name und Bild.")
+        return result
+
+    title = chat_title()
+    steps: list[tuple[str, dict, dict | None]] = []
+    if chat.get("title") != title:
+        steps.append(("setChatTitle", {"chat_id": chat_id, "title": title}, None))
+        if CHAT_PHOTO.is_file():
+            steps.append(
+                (
+                    "setChatPhoto",
+                    {"chat_id": chat_id},
+                    {"photo": ("offgridcloud.png", CHAT_PHOTO.read_bytes(), "image/png")},
+                )
+            )
+    if chat.get("description") != chat_description():
+        steps.append(
+            ("setChatDescription", {"chat_id": chat_id, "description": chat_description()}, None)
+        )
+    for method, params, files in steps:
+        try:
+            if files:
+                api_call(token, method, params, files=files)
+            else:
+                api_call(token, method, params)
+        except Exception as exc:  # noqa: BLE001 - cosmetic, keep going
+            logger.debug("Telegram %s failed: %s", method, exc)
+    return result
+
+
 def announce_connected(token: str, chat_id: str) -> None:
-    """Set up the bot profile and greet the chat. Raises on send failure so a
-    synchronous caller (the portal's test button) can show the error."""
+    """Set up the bot profile, brand a group/channel and greet the chat.
+    Raises on send failure so a synchronous caller (the portal's test button)
+    can show the error."""
     setup_profile(token, chat_id)
-    send_message(token, chat_id, connected_message())
+    try:
+        branding = brand_chat(token, chat_id)
+    except Exception as exc:  # noqa: BLE001 - branding is optional; still greet
+        logger.debug("Telegram chat branding failed: %s", exc)
+        branding = ChatBranding()
+    sent = send_message(token, chat_id, connected_message())
+    if branding.pin and isinstance(sent, dict) and sent.get("message_id"):
+        try:
+            api_call(
+                token,
+                "pinChatMessage",
+                {
+                    "chat_id": chat_id,
+                    "message_id": sent["message_id"],
+                    "disable_notification": True,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Telegram pin failed: %s", exc)
+    for hint in branding.hints:
+        try:
+            send_message(token, chat_id, f"💡 {hint}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Telegram hint failed: %s", exc)
 
 
 def announce_connected_async(token: str, chat_id: str) -> None:
@@ -380,6 +531,129 @@ HANDLERS: dict[str, Callable[[Session], str]] = {
 }
 
 
+# --- Reboot with confirmation ---------------------------------------------
+
+
+@dataclass
+class Reply:
+    text: str
+    reply_markup: dict | None = field(default=None)
+
+
+@dataclass
+class _PendingReboot:
+    user_id: int
+    expires: float
+
+
+_pending_lock = threading.Lock()
+_pending_reboots: dict[str, _PendingReboot] = {}
+
+
+def _reboot_command() -> str:
+    from .config import get_settings
+
+    return get_settings().reboot_command.strip()
+
+
+def request_reboot(user_id: int, now: float | None = None) -> Reply:
+    """Answer ``/reboot`` with confirm/cancel buttons (nothing runs yet)."""
+    if not _reboot_command():
+        return Reply(
+            "🚫 Neustart ist deaktiviert (OGC_REBOOT_COMMAND leer). Installer mit "
+            "Power-Control erneut ausführen, um ihn freizuschalten."
+        )
+    now = time.time() if now is None else now
+    nonce = secrets.token_urlsafe(8)
+    with _pending_lock:
+        # Drop expired prompts so the dict can't grow unbounded.
+        for key in [k for k, p in _pending_reboots.items() if p.expires < now]:
+            del _pending_reboots[key]
+        _pending_reboots[nonce] = _PendingReboot(user_id, now + REBOOT_CONFIRM_SECONDS)
+    return Reply(
+        f"⚠️ <b>{html.escape(_box_name())} wirklich neu starten?</b>\n"
+        "Laufende Übertragungen werden unterbrochen und danach automatisch "
+        f"fortgesetzt. Die Box ist ein paar Minuten nicht erreichbar.\n"
+        f"<i>Bestätigung gilt {REBOOT_CONFIRM_SECONDS} s.</i>",
+        {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ Ja, neu starten", "callback_data": f"reboot:{nonce}"},
+                    {"text": "✖️ Abbrechen", "callback_data": f"cancel:{nonce}"},
+                ]
+            ]
+        },
+    )
+
+
+@dataclass
+class CallbackResult:
+    toast: str  # short popup via answerCallbackQuery
+    new_text: str | None = None  # replaces the prompt (and removes its buttons)
+
+
+def handle_callback(
+    db: Session,
+    callback: dict,
+    allowed_chat_id: str,
+    *,
+    now: float | None = None,
+    run: Callable[..., None] | None = None,
+) -> CallbackResult:
+    """Resolve a button press on a ``/reboot`` prompt."""
+    from .admin_ops import audit
+    from .power import run_power_command
+
+    now = time.time() if now is None else now
+    run = run or run_power_command
+    message = callback.get("message") or {}
+    chat_id = str((message.get("chat") or {}).get("id", ""))
+    if not allowed_chat_id or chat_id != allowed_chat_id.strip():
+        return CallbackResult("🔒 Nicht freigeschaltet.")
+
+    action, _, nonce = (callback.get("data") or "").partition(":")
+    sender = callback.get("from") or {}
+    who = sender.get("username") or sender.get("first_name") or str(sender.get("id", "?"))
+    with _pending_lock:
+        pending = _pending_reboots.get(nonce)
+        if pending is None or pending.expires < now:
+            _pending_reboots.pop(nonce, None)
+            return CallbackResult("⌛ Abgelaufen.", "⌛ Neustart-Anfrage abgelaufen.")
+        if pending.user_id != sender.get("id"):
+            return CallbackResult("🙅 Nur wer /reboot geschickt hat, kann bestätigen.")
+        del _pending_reboots[nonce]  # one-time: a second press does nothing
+
+    if action == "cancel":
+        return CallbackResult("Abgebrochen.", "✖️ Neustart abgebrochen.")
+    if action != "reboot":
+        return CallbackResult("🤷 Unbekannte Aktion.")
+
+    command = _reboot_command()
+    if not command:
+        return CallbackResult("🚫 Neustart deaktiviert.", "🚫 Neustart ist deaktiviert.")
+    audit(db, None, "telegram.reboot", f"bestätigt von {who} (Chat {chat_id})")
+    try:
+        run(command, delay=REBOOT_DELAY)
+    except Exception as exc:  # noqa: BLE001 - report the launch failure in the chat
+        logger.warning("Telegram reboot failed to start: %s", exc)
+        return CallbackResult(
+            "⚠️ Start fehlgeschlagen.",
+            f"⚠️ Neustart konnte nicht gestartet werden: {html.escape(str(exc))}",
+        )
+    return CallbackResult(
+        "🔄 Neustart läuft …",
+        f"🔄 <b>Neustart bestätigt</b> von {html.escape(who)}.\n"
+        f"{html.escape(_box_name())} startet in ~{REBOOT_DELAY:.0f} s neu und meldet "
+        "sich danach wieder.",
+    )
+
+
+def reset_state() -> None:
+    """Forget pending reboot prompts (used by tests)."""
+    with _pending_lock:
+        _pending_reboots.clear()
+
+
 def parse_command(text: str) -> str | None:
     """``"/Status@MyBot extra"`` -> ``"status"``; non-commands -> ``None``."""
     text = (text or "").strip()
@@ -389,29 +663,31 @@ def parse_command(text: str) -> str | None:
     return word.split("@", 1)[0].lower() or None
 
 
-def handle_message(db: Session, message: dict, allowed_chat_id: str) -> str | None:
-    """Return the reply text for one incoming message (``None`` = stay silent)."""
+def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | None:
+    """Return the reply for one incoming message (``None`` = stay silent)."""
     command = parse_command(message.get("text", ""))
     if command is None:
         return None
     chat_id = str((message.get("chat") or {}).get("id", ""))
     if command == "id":
-        return f"🆔 Chat-ID: <code>{html.escape(chat_id)}</code>"
+        return Reply(f"🆔 Chat-ID: <code>{html.escape(chat_id)}</code>")
     if not allowed_chat_id or chat_id != allowed_chat_id.strip():
         # Strangers learn nothing about the box — just how to get unlocked.
-        return (
+        return Reply(
             "🔒 Dieser Chat ist nicht freigeschaltet.\n"
             f"Chat-ID: <code>{html.escape(chat_id)}</code> – im OffgridCloud-Portal "
             "unter System → Benachrichtigungen eintragen."
         )
+    if command == "reboot":
+        return request_reboot((message.get("from") or {}).get("id", 0))
     handler = HANDLERS.get(command)
     if handler is None:
-        return f"🤷 Unbekannter Befehl /{html.escape(command)}. Siehe /hilfe."
+        return Reply(f"🤷 Unbekannter Befehl /{html.escape(command)}. Siehe /hilfe.")
     try:
-        return handler(db)
+        return Reply(handler(db))
     except Exception:  # noqa: BLE001 - one broken command must not kill the bot
         logger.exception("Telegram command /%s failed", command)
-        return f"⚠️ /{html.escape(command)} ist gerade fehlgeschlagen."
+        return Reply(f"⚠️ /{html.escape(command)} ist gerade fehlgeschlagen.")
 
 
 # --- Polling loop ---------------------------------------------------------
@@ -447,7 +723,10 @@ class BotPoller:
             self._token, self._offset = token, None
             setup_profile(token, chat_id)
 
-        params: dict = {"timeout": POLL_TIMEOUT, "allowed_updates": ["message"]}
+        params: dict = {
+            "timeout": POLL_TIMEOUT,
+            "allowed_updates": ["message", "callback_query"],
+        }
         if self._offset is not None:
             params["offset"] = self._offset
         try:
@@ -474,6 +753,9 @@ class BotPoller:
         now = time.time() if now is None else now
         for update in updates or []:
             self._offset = int(update["update_id"]) + 1
+            if "callback_query" in update:
+                self._on_callback(token, chat_id, update["callback_query"], now)
+                continue
             message = update.get("message")
             if not message or now - message.get("date", now) > MAX_COMMAND_AGE:
                 continue
@@ -481,10 +763,38 @@ class BotPoller:
                 reply = handle_message(db, message, chat_id)
             if reply:
                 try:
-                    send_message(token, str(message["chat"]["id"]), reply)
+                    send_message(
+                        token, str(message["chat"]["id"]), reply.text, reply.reply_markup
+                    )
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("Telegram reply failed: %s", exc)
         return 0.0
+
+    def _on_callback(self, token: str, chat_id: str, callback: dict, now: float) -> None:
+        from .db import SessionLocal
+
+        with SessionLocal() as db:
+            result = handle_callback(db, callback, chat_id, now=now)
+        try:
+            api_call(
+                token,
+                "answerCallbackQuery",
+                {"callback_query_id": callback.get("id"), "text": result.toast},
+            )
+            message = callback.get("message") or {}
+            if result.new_text and message:
+                api_call(
+                    token,
+                    "editMessageText",
+                    {
+                        "chat_id": message["chat"]["id"],
+                        "message_id": message["message_id"],
+                        "text": result.new_text,
+                        "parse_mode": "HTML",
+                    },
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Telegram callback answer failed: %s", exc)
 
 
 def run_bot(stop: threading.Event) -> None:
