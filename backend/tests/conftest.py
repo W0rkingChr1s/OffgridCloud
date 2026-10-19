@@ -38,3 +38,15 @@ def _token(client: TestClient, email: str, password: str) -> str:
 def admin_auth(client):
     token = _token(client, ADMIN_EMAIL, ADMIN_PASSWORD)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def _no_telegram_network(monkeypatch):
+    """Saving a bot token greets the chat in a background thread; keep the test
+    suite off the real Bot API. Tests that care install their own fake."""
+    from app import telegram_bot
+
+    def offline(*_args, **_kwargs):
+        raise telegram_bot.TelegramError("offline in tests")
+
+    monkeypatch.setattr(telegram_bot, "api_call", offline)

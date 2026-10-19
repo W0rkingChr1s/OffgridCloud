@@ -407,6 +407,11 @@ class PowerActionResult(BaseModel):
     message: str
 
 
+class TelegramTestResult(BaseModel):
+    sent: bool
+    message: str
+
+
 class SystemSettingsUpdate(BaseModel):
     delete_local_after_upload: bool | None = None
     delete_remote_on_local_delete: bool | None = None

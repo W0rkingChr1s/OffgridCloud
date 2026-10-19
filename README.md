@@ -40,6 +40,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 🖥️ **OffgridCloud OS** — hängt ein Bildschirm an der Box, startet sie in ein **getabbtes Dashboard** (Live-Status, Provider, Netz/Bandbreite/VPN, Pool, Benutzer & Gruppen, System mit Version/Updates/Speicher) — die **komplette Verwaltung ohne Web-UI**, direkt an der Box oder per SSH. Ins darunterliegende Raspberry Pi OS geht es erst per **Admin-PIN**; optionaler Vollbild-Browser-Kiosk für Pi 4/5
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)
 - 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail**: Speicher-knapp-Warnung, ausführliche **Start-Meldung** (Zeit, Speicher, verbundene Cloud-Ziele, VPN, externe/interne IP, Warteschlange, Bandbreite, Pool-Geräte), **Wieder-online-Ping** nach Verbindungsabbruch und **Senden pausiert/fortgesetzt** bei Bandbreiten-Drosselung
+- 🤖 **Telegram-Bot mit Befehlen** — nach dem Hinterlegen meldet sich der Bot mit „OffgridCloud verbunden“, richtet Befehlsmenü & Beschreibung ein und beantwortet im freigeschalteten Chat `/status`, `/queue`, `/speicher`, `/fehler`, `/retry`, `/netz`, `/ping` (Long-Polling – kein offener Port, funktioniert hinter CGNAT/LTE; fremde Chats bekommen nur ihre Chat-ID via `/id`)
 - 🧩 **Modernes Kachel-Dashboard** — Live-Status, Fortschritt, Dark-Mode
 
 ---

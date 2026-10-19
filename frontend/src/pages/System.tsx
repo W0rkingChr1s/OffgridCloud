@@ -491,8 +491,10 @@ function NotificationsCard({
   status: SystemStatus;
   save: (patch: Record<string, unknown>) => Promise<void>;
 }) {
+  const toast = useToast();
   const [chatId, setChatId] = useState(status.telegram_chat_id);
   const [token, setToken] = useState("");
+  const [testing, setTesting] = useState(false);
   const [smtp, setSmtp] = useState({
     smtp_host: status.smtp_host,
     smtp_port: status.smtp_port,
@@ -520,6 +522,20 @@ function NotificationsCard({
     if (token) patch.telegram_bot_token = token; // only overwrite when newly entered
     await save(patch);
     setToken("");
+  }
+  async function testTelegram() {
+    setTesting(true);
+    try {
+      const res = await api<{ sent: boolean; message: string }>("/api/system/telegram/test", {
+        method: "POST",
+      });
+      if (res.sent) toast.success("Telegram", res.message);
+      else toast.error("Telegram", res.message);
+    } catch (e) {
+      toast.error("Telegram", e instanceof ApiError ? e.message : "Test fehlgeschlagen");
+    } finally {
+      setTesting(false);
+    }
   }
   async function saveEmail() {
     const patch: Record<string, unknown> = { ...smtp };
@@ -573,7 +589,7 @@ function NotificationsCard({
                 konfiguriert
               </span>
             )}
-            <InfoTip text="Erstelle bei @BotFather einen Bot, trage hier den Bot-Token ein und die Chat-ID des Empfängers (z. B. via @userinfobot). Die Box sendet Statusmeldungen dann per Bot-API – kein eigener Server nötig." />
+            <InfoTip text="Erstelle bei @BotFather einen Bot und trage hier den Bot-Token ein. Die Chat-ID bekommst du, indem du dem Bot /id schickst. Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Im freigeschalteten Chat versteht er u. a. /status, /queue, /speicher, /fehler, /retry, /netz und /ping – kein eigener Server und kein offener Port nötig." />
           </div>
           <label className="mb-2 block text-sm">
             <span className="mb-1 block text-slate-400">Bot-Token</span>
@@ -594,9 +610,22 @@ function NotificationsCard({
               onChange={(e) => setChatId(e.target.value)}
             />
           </label>
-          <button type="button" onClick={saveTelegram} className={btnCls}>
-            Telegram speichern
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={saveTelegram} className={btnCls}>
+              Telegram speichern
+            </button>
+            <button
+              type="button"
+              onClick={testTelegram}
+              disabled={!status.telegram_configured || !status.telegram_chat_id || testing}
+              className="rounded-lg px-3 py-2 text-sm text-slate-300 ring-1 ring-white/10 hover:bg-white/5 disabled:opacity-40"
+            >
+              {testing ? "Sende …" : "Testnachricht"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Befehle im Chat: /status, /queue, /speicher, /fehler, /retry, /netz, /ping, /hilfe
+          </p>
         </div>
 
         {/* E-Mail (SMTP) */}

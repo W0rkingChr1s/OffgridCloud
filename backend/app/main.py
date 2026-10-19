@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, announce
+from . import __version__, announce, telegram_bot
 from .admin_ops import disk_usage, ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI):
     autostart_vpn()
 
     stop = asyncio.Event()
+    bot_stop = threading.Event()
     tasks: list[asyncio.Task] = []
     if settings.worker_enabled:
         tasks.append(asyncio.create_task(worker_loop(stop)))
@@ -79,10 +80,16 @@ async def lifespan(app: FastAPI):
         # Comprehensive "server up" summary. Off the event loop (it probes the
         # external IP and pools peers), so serving traffic is never delayed.
         threading.Thread(target=announce.announce_startup, daemon=True).start()
+        # Interactive Telegram bot (/status, /queue …). A daemon thread rather
+        # than a task: its long-poll must never hold up shutdown.
+        threading.Thread(
+            target=telegram_bot.run_bot, args=(bot_stop,), name="telegram-bot", daemon=True
+        ).start()
     try:
         yield
     finally:
         stop.set()
+        bot_stop.set()
         for task in tasks:
             await task
 
