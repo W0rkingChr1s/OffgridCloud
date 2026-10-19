@@ -1568,6 +1568,8 @@ class Console:
             self.message = f"Konnte Update-Info nicht laden: {exc.detail}"
             return
         cur = info.get("current", "?")
+        if info.get("channel") == "main":
+            cur += " (main)"
         latest = info.get("latest") or "—"
         avail = info.get("update_available")
         hint = f"Installiert {cur} · verfügbar {latest} · " + \

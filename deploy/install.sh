@@ -489,6 +489,34 @@ if [[ -n "$VERSION_STR" ]]; then
   echo "   Deployed version: $VERSION_STR"
 fi
 
+# Stamp the commit and the update channel next to it, so the portal's update
+# check knows what to compare against: "release" follows tags, "main" follows
+# the branch commit by commit. OGC_CHANNEL (set by update.sh) wins; otherwise a
+# checkout sitting exactly on a tag is a release, anything else (e.g. the
+# bootstrap's main clone, 0.4.10-44-g…) follows main — so a later one-click
+# update never "downgrades" it to an older release.
+COMMIT_STR=""
+CHANNEL_STR="${OGC_CHANNEL:-}"
+if git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  COMMIT_STR="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
+  if [[ -z "$CHANNEL_STR" ]]; then
+    if [[ -n "${OGC_STAMP_VERSION:-}" ]] ||
+       git -C "$REPO_ROOT" describe --tags --exact-match HEAD >/dev/null 2>&1; then
+      CHANNEL_STR="release"
+    else
+      CHANNEL_STR="main"
+    fi
+  fi
+fi
+CHANNEL_STR="${CHANNEL_STR:-release}"
+if [[ -n "$COMMIT_STR" ]]; then
+  printf '%s\n' "$COMMIT_STR" > "$PREFIX/backend/app/COMMIT"
+else
+  rm -f "$PREFIX/backend/app/COMMIT"
+fi
+printf '%s\n' "$CHANNEL_STR" > "$PREFIX/backend/app/CHANNEL"
+echo "   Update channel:   $CHANNEL_STR"
+
 # --- Python virtualenv ------------------------------------------------------
 step "Setting up Python virtualenv..."
 python3 -m venv "$PREFIX/backend/.venv"

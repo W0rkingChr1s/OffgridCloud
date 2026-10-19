@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 import app as app_pkg
-from app import __version__, _read_version
+from app import __version__, _read_channel, _read_commit, _read_version
 from app.updater import (
     PHASE_FAILED,
     PHASE_RUNNING,
@@ -38,6 +38,44 @@ def test_read_version_prefers_stamped_file_then_falls_back():
     finally:
         if existed:
             vf.write_text(backup)
+
+
+def _with_stamps(stamps: dict[str, str | None], fn):
+    """Run ``fn`` with the given stamp files (None = absent), restoring afterwards."""
+    pkg = Path(app_pkg.__file__).parent
+    saved = {n: (pkg / n).read_text() if (pkg / n).exists() else None for n in stamps}
+    try:
+        for name, value in stamps.items():
+            if value is None:
+                (pkg / name).unlink(missing_ok=True)
+            else:
+                (pkg / name).write_text(value + "\n")
+        return fn()
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                (pkg / name).unlink(missing_ok=True)
+            else:
+                (pkg / name).write_text(value)
+
+
+def test_channel_and_commit_from_stamps():
+    assert _with_stamps(
+        {"VERSION": "0.4.10", "CHANNEL": "main", "COMMIT": "abc1234def"},
+        lambda: (_read_channel(), _read_commit()),
+    ) == ("main", "abc1234def")
+
+
+def test_channel_inferred_from_describe_version_without_stamps():
+    # Installs from before the CHANNEL stamp: a describe version past a tag is main.
+    assert _with_stamps(
+        {"VERSION": "0.4.10-44-g97b8eb0", "CHANNEL": None, "COMMIT": None},
+        lambda: (_read_channel(), _read_commit()),
+    ) == ("main", "97b8eb0")
+    assert _with_stamps(
+        {"VERSION": "0.4.10", "CHANNEL": None, "COMMIT": None},
+        lambda: (_read_channel(), _read_commit()),
+    ) == ("release", "")
 
 
 def test_parse_version_handles_prefixes_and_junk():
@@ -101,6 +139,74 @@ def test_check_for_update_is_offline_safe():
     assert info.latest is None
 
 
+def _compare(behind: int) -> dict:
+    commits = [
+        {
+            "sha": f"c{i}".ljust(40, "0"),
+            "commit": {"message": f"change {i}\n\nbody", "committer": {"date": "2026-10-19"}},
+        }
+        for i in range(1, behind + 1)
+    ]
+    return {"ahead_by": behind, "commits": commits, "html_url": "https://example/compare"}
+
+
+def test_check_for_update_main_channel_flags_new_commits():
+    clear_cache()
+    seen = {}
+
+    def compare(repo, base, head):
+        seen.update(repo=repo, base=base, head=head)
+        return _compare(3)
+
+    info = check_for_update(
+        "0.4.10-44-g97b8eb0",
+        "owner/repo",
+        channel="main",
+        commit="97b8eb0",
+        fetcher=lambda repo: {"tag_name": "v0.4.10"},  # must not be consulted
+        compare_fetcher=compare,
+        use_cache=False,
+    )
+    assert seen == {"repo": "owner/repo", "base": "97b8eb0", "head": "main"}
+    assert info.update_available is True
+    assert info.behind_by == 3
+    assert info.latest == "main @ c300000"
+    assert info.notes.splitlines()[0] == "* change 3"  # newest first, subject only
+    assert info.release_url == "https://example/compare"
+
+
+def test_check_for_update_main_channel_up_to_date_ignores_releases():
+    # A main install ahead of the last release is current once it matches main.
+    clear_cache()
+    info = check_for_update(
+        "0.4.10-44-g97b8eb0",
+        "owner/repo",
+        channel="main",
+        commit="97b8eb0",
+        fetcher=lambda repo: {"tag_name": "v9.9.9"},
+        compare_fetcher=lambda repo, base, head: _compare(0),
+        use_cache=False,
+    )
+    assert info.update_available is False
+    assert info.behind_by == 0
+    assert not info.error
+
+
+def test_check_for_update_main_channel_without_commit_or_network():
+    clear_cache()
+    info = check_for_update("0.1.0", "owner/repo", channel="main", use_cache=False)
+    assert info.update_available is False and info.error
+
+    def boom(repo, base, head):
+        raise OSError("no network")
+
+    info = check_for_update(
+        "0.1.0", "owner/repo", channel="main", commit="abc1234", compare_fetcher=boom,
+        use_cache=False,
+    )
+    assert info.update_available is False and info.error
+
+
 def test_updates_endpoint_returns_current_version(client, admin_auth, monkeypatch):
     clear_cache()
     # Avoid a real network call: inject an offline-safe fetcher result.
@@ -110,7 +216,7 @@ def test_updates_endpoint_returns_current_version(client, admin_auth, monkeypatc
     monkeypatch.setattr(
         up,
         "check_for_update",
-        lambda current, repo, use_cache=True: UpdateInfo(current=current, error="offline"),
+        lambda current, repo, use_cache=True, **kw: UpdateInfo(current=current, error="offline"),
     )
     r = client.get("/api/updates", headers=admin_auth)
     assert r.status_code == 200

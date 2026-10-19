@@ -309,6 +309,20 @@ die beiden Speicher-Kanäle — Status und rclone bleiben erhalten.
 Instanzen prüfen automatisch gegen die **GitHub-Releases** des Projekts
 (System-Seite zeigt aktuelle vs. neueste Version).
 
+**Update-Kanal:** Jede Installation folgt einem Kanal, den der Installer neben
+der Version ablegt (`backend/app/CHANNEL`):
+
+- **`release`** — prüft gegen die GitHub-Releases, `update.sh` holt das neueste
+  Release-Tag. Standard, wenn die Quelle genau auf einem Tag steht.
+- **`main`** — prüft Commit für Commit gegen den `main`-Branch (System-Seite
+  zeigt „main @ <commit>" und „N neue Commits auf main"). Gilt für Installationen
+  vom `main`-Branch, etwa per One-Liner zwischen zwei Releases — erkennbar an
+  einer Version wie `0.4.10-44-g97b8eb0` (44 Commits nach `v0.4.10`).
+
+`update.sh` (und damit der One-Click-Knopf) bleibt auf dem installierten Kanal,
+eine `main`-Installation fällt also nicht auf ein älteres Release zurück.
+Wechseln mit `sudo …/update.sh --channel release` bzw. `--channel main`.
+
 **Release schneiden — ohne Terminal (empfohlen):** auf GitHub unter
 **Actions → „Release" → „Run workflow"** die Version eintippen (z. B. `0.2.0`)
 und starten. Der Workflow `release.yml` setzt den Tag, baut die UI und
