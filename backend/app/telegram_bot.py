@@ -724,6 +724,7 @@ def handle_callback(
 # --- Speed test -------------------------------------------------------------
 
 _speedtest_lock = threading.Lock()  # one measurement at a time
+_speedtest_last_start: float | None = None  # monotonic time of the last run
 
 
 def _mbit(kbps: float) -> str:
@@ -774,9 +775,32 @@ def run_speedtest(token: str, chat_id: str) -> None:
         _speedtest_lock.release()
 
 
-def request_speedtest() -> Reply:
+def _fmt_wait(seconds: float) -> str:
+    seconds = max(1, int(seconds + 0.999))
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes, rest = divmod(seconds, 60)
+    return f"{minutes} min {rest} s" if rest else f"{minutes} min"
+
+
+def request_speedtest(now: float | None = None) -> Reply:
+    """Start a measurement unless one runs or the cooldown hasn't elapsed."""
+    global _speedtest_last_start
+    from .config import get_settings
+
+    now = time.monotonic() if now is None else now
+    cooldown = max(0, get_settings().telegram_speedtest_cooldown)
     if not _speedtest_lock.acquire(blocking=False):
         return Reply("⏳ Es läuft schon ein Speedtest – Ergebnis kommt gleich.")
+    if cooldown and _speedtest_last_start is not None:
+        remaining = _speedtest_last_start + cooldown - now
+        if remaining > 0:
+            _speedtest_lock.release()
+            return Reply(
+                f"🧊 Speedtest-Sperre: nächste Messung in {_fmt_wait(remaining)} möglich "
+                f"(max. eine alle {_fmt_wait(cooldown)}, schont das Datenvolumen)."
+            )
+    _speedtest_last_start = now
     return Reply(
         "⏱ Messe die Bandbreite … (ca. 10 s, verbraucht etwas Datenvolumen)",
         followup=run_speedtest,
@@ -784,7 +808,9 @@ def request_speedtest() -> Reply:
 
 
 def reset_state() -> None:
-    """Forget pending power prompts / a stuck speedtest lock (used by tests)."""
+    """Forget pending power prompts / speedtest lock + cooldown (used by tests)."""
+    global _speedtest_last_start
+    _speedtest_last_start = None
     with _pending_lock:
         _pending_power.clear()
     if _speedtest_lock.locked():
