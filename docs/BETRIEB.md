@@ -386,6 +386,13 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
   Der Knopf ruft dieselbe `update.sh` auf, aktualisiert also auch das Kiosk-Menü.
   Abschalten (z. B. bei Docker) mit `OGC_SELF_UPDATE=false` in der `.env` — dann
   zeigt die UI stattdessen den obigen Befehl an.
+  **Rechte:** Weil `update.sh` per sudo als root läuft und dabei Git, npm und
+  `install.sh` aus `/opt/offgridcloud/src` ausführt, gehören Quell-Checkout,
+  `backend/` (inkl. venv) und `deploy/` **root** und sind für das Dienstkonto
+  nur lesbar. Das Dienstkonto besitzt ausschließlich `data/` und `.env`. So kann
+  ein kompromittierter Dienst keinen Code ablegen, den sudo später als root
+  ausführt. Ältere Installationen werden beim nächsten Update automatisch
+  umgestellt.
 - **Installer erneut ausführen** (One-Liner/`install.sh`): ebenfalls ein
   vollwertiges Update. Der Installer erkennt die bestehende Installation, wählt
   jede aktive Funktion als Vorgabe vor und aktualisiert sie beim Durchbestätigen

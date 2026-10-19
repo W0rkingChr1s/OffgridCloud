@@ -68,7 +68,8 @@ latest_tag() {
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1
 }
 
-# The source tree is owned by the service user, but we run git as root here —
+# install.sh keeps the source tree root-owned. Installs from before that layout
+# still have it owned by the service user until this update re-runs install.sh —
 # tell git that's fine (avoids "detected dubious ownership"). Idempotent.
 git config --global --add safe.directory "$SRC" 2>/dev/null || true
 

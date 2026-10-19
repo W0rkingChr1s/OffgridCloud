@@ -468,6 +468,12 @@ id -u "$SERVICE_USER" >/dev/null 2>&1 || \
 # --- Copy application -------------------------------------------------------
 step "Copying files to $PREFIX..."
 mkdir -p "$PREFIX"
+# Lock the prefix itself first: on installs from before the root-owned layout
+# the service account owned it and could have swapped paths below it.
+chown root:root "$PREFIX"; chmod 755 "$PREFIX"
+# Replace, don't merge: copying into an existing tree would follow any symlink
+# planted there (and keep modules deleted upstream around).
+rm -rf "$PREFIX/backend"
 cp -r "$REPO_ROOT/backend" "$PREFIX/"
 rm -rf "$PREFIX/backend/.venv" "$PREFIX/backend/app/static" \
        "$PREFIX/backend/tests" "$PREFIX/backend/.pytest_cache"
@@ -483,7 +489,7 @@ if [[ -z "$VERSION_STR" ]] && git config --global --add safe.directory "$REPO_RO
    git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   # No --always: if no tag is reachable, prefer the app's fallback constant over
   # a bare commit hash (which reads oddly as a "version" in the UI).
-  VERSION_STR="$(git -C "$REPO_ROOT" describe --tags 2>/dev/null | sed -E 's/^v\.?//')"
+  VERSION_STR="$( (git -C "$REPO_ROOT" describe --tags 2>/dev/null || true) | sed -E 's/^v\.?//')"
 elif [[ -z "$VERSION_STR" && -f "$REPO_ROOT/VERSION" ]]; then
   VERSION_STR="$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
 fi
@@ -525,9 +531,16 @@ step "Setting up Python virtualenv..."
 python3 -m venv "$PREFIX/backend/.venv"
 "$PREFIX/backend/.venv/bin/pip" install --upgrade pip
 "$PREFIX/backend/.venv/bin/pip" install -r "$PREFIX/backend/requirements.txt"
+# The code tree is read-only for the service account (see ownership below), so
+# Python can't write __pycache__ at runtime — compile it once here instead.
+"$PREFIX/backend/.venv/bin/python" -m compileall -q "$PREFIX/backend/app" >/dev/null || true
 
 # --- Configuration ----------------------------------------------------------
 GENERATED_PASSWORD=""
+if [[ -L "$PREFIX/.env" || -L "$PREFIX/data" ]]; then
+  echo "Refusing to continue: $PREFIX/.env or $PREFIX/data is a symlink." >&2
+  exit 1
+fi
 if [[ ! -f "$PREFIX/.env" ]]; then
   step "Creating $PREFIX/.env with generated secret + admin password..."
   SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
@@ -547,7 +560,15 @@ else
 fi
 
 mkdir -p "$PREFIX/data/buffer"
-chown -R "$SERVICE_USER:$SERVICE_USER" "$PREFIX"
+# Ownership: everything root executes — the source checkout (git, npm and this
+# installer run from it during one-click updates via sudo), the backend code +
+# venv and deploy/ helpers — stays root-owned and read-only for the service
+# account. It only owns what the app writes: data/ (DB, buffer, state) and .env.
+# Otherwise a compromised service could edit code that sudo later runs as root.
+chown -R root:root "$PREFIX/backend"
+if [[ -d "$PREFIX/src" ]]; then chown -R root:root "$PREFIX/src"; fi
+chown -hR "$SERVICE_USER:$SERVICE_USER" "$PREFIX/data"
+chown -h "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
 
 # --- systemd service --------------------------------------------------------
 if [[ $INSTALL_SERVICE -eq 1 ]]; then
@@ -605,7 +626,7 @@ fi
 # --- Uninstaller (available on the box, without the source checkout) --------
 step "Installing the uninstaller (sudo offgridcloud-uninstall)..."
 mkdir -p "$PREFIX/deploy"
-# Root-owned: the chown above hands all of $PREFIX to the service user, but
+# Root-owned: the service user only owns data/ and .env (see above), and
 # everything in deploy/ is run by root (this uninstaller via sudo, apply.sh via
 # the NOPASSWD rules) — it must not be writable by the account it runs for.
 chown -R root:root "$PREFIX/deploy" 2>/dev/null || true
