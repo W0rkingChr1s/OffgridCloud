@@ -16,7 +16,8 @@ talk back:
 * **Commands** — a long-polling loop (``getUpdates``; no inbound port or public
   URL needed, which matters behind CGNAT / LTE) answers ``/status``,
   ``/speicher``, ``/queue`` & co.
-* **Reboot / shutdown with confirmation** — ``/reboot`` and ``/shutdown`` only
+* **Restart / reboot / shutdown with confirmation** — ``/restart`` (service
+  only), ``/reboot`` and ``/shutdown`` only
   *ask*: they post inline "Ja / Abbrechen" buttons bound to a one-time token
   (tied to that action) that expires after a minute and can only be pressed by
   the person who asked. Only then is the operator-configured command launched
@@ -166,6 +167,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("retry", "Fehlgeschlagene Übertragungen neu anstoßen"),
     Command("netz", "Verbindung, IPs, VPN und Bandbreite"),
     Command("ping", "Lebenszeichen der Box"),
+    Command("restart", "Nur den OffgridCloud-Dienst neu starten (mit Bestätigung)"),
     Command("reboot", "Box neu starten (mit Bestätigung)"),
     Command("shutdown", "Box herunterfahren (mit Bestätigung)"),
     Command("id", "Chat-ID dieses Chats anzeigen"),
@@ -557,6 +559,20 @@ class PowerAction:
 POWER_ACTIONS: dict[str, PowerAction] = {
     a.slug: a
     for a in (
+        PowerAction(
+            slug="restart",
+            setting="restart_service_command",
+            env="OGC_RESTART_SERVICE_COMMAND",
+            noun="Dienst-Neustart",
+            question="Dienst neu starten?",
+            warning=(
+                "Nur der OffgridCloud-Dienst startet neu, nicht die ganze Box. Laufende "
+                "Übertragungen werden kurz unterbrochen und danach fortgesetzt; Portal "
+                "und Bot sind ein paar Sekunden weg."
+            ),
+            confirm_label="✅ Ja, Dienst neu starten",
+            done="🔁 Der Dienst auf {box} startet in ~{delay} s neu und meldet sich gleich wieder.",
+        ),
         PowerAction(
             slug="reboot",
             setting="reboot_command",
