@@ -323,6 +323,37 @@ def test_shutdown_disabled_without_command(client, monkeypatch):
     assert reply.reply_markup is None
 
 
+def test_service_restart_asks_then_runs(client):
+    runs = []
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/restart"), "42")
+        assert "Dienst neu starten" in reply.text
+        assert "nicht die ganze Box" in reply.text
+        assert not runs
+        confirm = reply.reply_markup["inline_keyboard"][0][0]["callback_data"]
+        result = _press(db, confirm, run=lambda cmd, delay: runs.append(cmd))
+    assert runs and "restart offgridcloud" in runs[0]
+    assert "Dienst-Neustart bestätigt" in result.new_text
+
+    with SessionLocal() as db:
+        from sqlalchemy import select
+
+        from app.models import AuditEvent
+
+        actions = list(db.scalars(select(AuditEvent.action)))
+    assert "telegram.restart" in actions
+
+
+def test_service_restart_disabled_without_command(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "restart_service_command", "")
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/restart"), "42")
+    assert "OGC_RESTART_SERVICE_COMMAND" in reply.text
+    assert reply.reply_markup is None
+
+
 def test_poller_answers_reboot_button(client, admin_auth, calls, monkeypatch):
     from app import power
 
