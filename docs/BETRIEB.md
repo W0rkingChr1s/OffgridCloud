@@ -243,17 +243,45 @@ Liste aktualisiert sich alle paar Sekunden — Medium einstecken genügt.
   Partitionstabelle, eine Partition) als **exFAT** (empfohlen, Kameras/Windows/macOS),
   **FAT32** (max. 4 GB je Datei) oder **ext4**. Zur Sicherheit muss der Gerätename
   (z. B. `sdb`) eingetippt werden.
-- **Durchsuchen & für den Upload übernehmen** — Dateien und Ordner auf einem
-  eingehängten Medium markieren, Ziel-Ordner wählen, optional Tags vergeben. Die
-  Dateien werden in den Puffer **kopiert** (gestreamt, SHA-256, fsync) und wie ein
-  normaler Upload an alle verknüpften Cloud-Ziele eingereiht — die Karte kann danach
-  sofort zurück in die Kamera. Ordner werden rekursiv übernommen; Systemmüll
-  (`.Trashes`, `System Volume Information`, versteckte Dateien) wird ignoriert.
-  „Nur Fotos/Videos/Audio“ filtert auf Mediendateien (inkl. gängiger RAW-Formate).
-  Bereits übernommene Dateien (gleicher Name + Größe oder gleicher Hash im Ordner)
-  werden übersprungen; gleichnamige, aber verschiedene Dateien (z. B.
-  `IMG_0001.JPG` aus `100CANON` und `101CANON`) bekommen ein Suffix ` (2)`.
-  Vor dem Start wird geprüft, ob der Puffer genug Platz hat (+ 512 MB Reserve).
+- **Fotos & Dateien — Galerie für Kamerakarten** — öffnet ein eingehängtes Medium als
+  Bildergalerie: alle Fotos, RAWs, Videos und Audiodateien über sämtliche
+  `DCIM/100XXX`-Ordner hinweg, nach Aufnahmetag gruppiert, mit Vorschaubildern. Antippen
+  wählt aus, **Shift-Klick** wählt einen Bereich, „Tag auswählen“ / „Alle neuen auswählen“
+  nehmen gleich ganze Blöcke; die Lupe öffnet eine Großansicht (← → blättern,
+  Leertaste wählt). Filter nach Fotos/RAW/Videos. Die Ansicht „Ordner“ zeigt den
+  normalen Dateibaum für alles andere (Dokumente-Sticks …).
+  Vorschaubilder entstehen auf der Box und werden zwischengespeichert: JPEGs im
+  schnellen Draft-Modus, RAWs über das eingebettete Vorschau-JPEG, Videos per
+  ffmpeg (falls installiert). Höchstens zwei werden gleichzeitig berechnet, damit
+  Uploads auf dem Pi 3 nicht ausgebremst werden.
+- **Für den Upload übernehmen** — Ziel-Ordner wählen, optional Tags, „N hochladen“.
+  Die Dateien werden in den Puffer **kopiert** (gestreamt, SHA-256, fsync) und wie ein
+  normaler Upload an alle verknüpften Cloud-Ziele eingereiht. Gleichnamige, aber
+  verschiedene Dateien (z. B. `IMG_0001.JPG` aus `100CANON` und `101CANON`) bekommen
+  ein Suffix ` (2)`. Vor dem Start wird geprüft, ob der Puffer genug Platz hat.
+- **Duplikatprüfung** — jede Kachel zeigt, ob die Datei schon auf der Box ist
+  („✓ übernommen“) oder bereits in der Cloud („☁ gesichert“), und in welchem Ordner.
+  Geprüft wird **boxweit**, nicht nur im Ziel-Ordner. Erkennung: Name + Größe +
+  Aufnahmezeit (mtime) aus einem früheren Import gelten als identisch und werden ohne
+  Lesen übersprungen; alles andere wird kopiert und per **SHA-256** verglichen — der
+  Hash entscheidet. Name + Größe allein reichen bewusst nicht: manche Kameras schreiben
+  RAWs fester Größe, das würde neue Fotos verschlucken. Bei per Browser hochgeladenen
+  Dateien ist die Aufnahmezeit unbekannt, sie erscheinen als „≈ evtl. vorhanden“ und
+  der Hash entscheidet beim Import.
+
+#### Cache — Karte schnell wieder freibekommen
+
+Ein angeschlossenes Laufwerk (z. B. eine USB-SSD) lässt sich mit **„Als Cache nutzen“**
+markieren (per Dateisystem-UUID — die Markierung überlebt Umstecken). Danach hat jede
+Karte den Knopf **„Auf Cache sichern“**: die Karte wird samt Ordnerstruktur und
+Aufnahmezeit nach `OffgridCloud-Cache/<Kartenname>_<Datum>/` auf den Cache kopiert,
+optional nur Neues und optional mit **automatischem Auswerfen**, wenn alles fehlerfrei
+kopiert wurde. Die Karte kann sofort zurück in die Kamera.
+Im Bereich **„Cache — Kartensicherungen“** lassen sich die Sicherungen öffnen (gleiche
+Galerie, gleiche Duplikat-Badges) und in Ruhe auswählen und hochladen; erledigte
+Sicherungen werden dort gelöscht. Ein Cache-Laufwerk lässt sich nicht formatieren,
+solange es markiert ist. Wiederholtes Sichern derselben Karte am selben Tag ergänzt die
+Sicherung und kopiert nichts doppelt.
 
 **Schutz:** Laufwerke mit einem Dateisystem außerhalb von `/media`, `/mnt` oder
 `/run/media` (also die System-SD/-SSD) und das Laufwerk mit dem OffgridCloud-Puffer
@@ -268,7 +296,8 @@ davon — der Root-Helfer `deploy/storage/storage.sh`.
 `OGC_STORAGE_COMMAND=` leer) ist die Seite schreibgeschützt: Anzeigen, Durchsuchen und
 Importieren von anderweitig eingehängten Medien funktioniert weiterhin.
 
-Importe laufen im Hintergrund mit Fortschrittsanzeige und lassen sich abbrechen.
+Importe und Cache-Sicherungen laufen im Hintergrund mit Fortschrittsanzeige und lassen
+sich abbrechen.
 Der Job-Status lebt nur im Speicher — nach einem Neustart den Import einfach erneut
 starten, schon Übernommenes wird übersprungen.
 

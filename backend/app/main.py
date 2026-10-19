@@ -116,6 +116,7 @@ app.include_router(updates.router)
 app.include_router(network.router)
 app.include_router(vpn.router)
 app.include_router(storage.router)
+app.include_router(storage.public_router)
 
 
 @app.get("/api/health")

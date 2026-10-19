@@ -3,30 +3,45 @@
 from __future__ import annotations
 
 import os
+import re
+import shutil
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import drives, storage_import
+from .. import drives, storage_import, thumbnails
 from ..admin_ops import audit, disk_usage
-from ..db import get_db
-from ..deps import require_admin
-from ..models import UploadFolder, User
+from ..db import SessionLocal, get_db
+from ..deps import require_admin, user_from_query_token
+from ..models import Role, StorageCache, UploadFolder, User
 from ..schemas import (
     DiskUsageOut,
     StorageBrowseOut,
+    StorageCacheBackupRequest,
+    StorageCacheOut,
+    StorageCacheSnapshotOut,
     StorageDeviceRequest,
     StorageDiskOut,
     StorageEntryOut,
     StorageFormatRequest,
+    StorageGalleryItem,
+    StorageGalleryOut,
     StorageImportJobOut,
     StorageImportRequest,
+    StorageKnownOut,
     StorageOverviewOut,
     StoragePartitionOut,
 )
+from ..storage import safe_filename
 
 router = APIRouter(prefix="/api/storage", tags=["storage"], dependencies=[Depends(require_admin)])
+# Thumbnails are loaded by <img src>, which can't send a bearer header — they
+# authenticate with ?token= instead (see thumb()).
+public_router = APIRouter(prefix="/api/storage", tags=["storage"])
 
 MAX_ENTRIES = 2000
 
@@ -66,6 +81,7 @@ def _disk_out(disk: drives.Disk) -> StorageDiskOut:
                 protected=p.protected,
                 browsable=p.browsable,
                 busy=storage_import.is_busy(p.path),
+                cache=p.cache,
             )
             for p in disk.partitions
         ],
@@ -190,6 +206,17 @@ def browse(device: str, path: str = Query("", max_length=4096)) -> StorageBrowse
             )
         )
 
+    files = [e for e in entries if not e.is_dir]
+    if files:
+        with SessionLocal() as db:
+            known = storage_import.known_files(
+                db, [(e.name, e.size, e.modified.timestamp()) for e in files if e.modified]
+            )
+        for e in files:
+            hit = known.get((safe_filename(e.name), e.size))
+            if hit:
+                e.known = StorageKnownOut(**hit)
+
     rel_here = os.path.relpath(target, root)
     rel_here = "" if rel_here == "." else rel_here
     parent = None
@@ -278,4 +305,270 @@ def cancel_import(job_id: str) -> Response:
 @router.delete("/imports", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def clear_imports() -> Response:
     storage_import.clear_finished()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Gallery ---------------------------------------------------------------------
+
+
+@router.get("/gallery", response_model=StorageGalleryOut)
+def gallery(device: str, path: str = Query("", max_length=4096)) -> StorageGalleryOut:
+    """Every media file below ``path`` (recursively), for the photo grid.
+
+    Camera cards spread one shoot over DCIM/100CANON, 101CANON …; the gallery
+    flattens that and the UI groups by capture day instead.
+    """
+    try:
+        root = drives.browsable_root(device)
+        target = drives.resolve_inside(root, path)
+        files = storage_import.walk_files(target, media_only=True)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    base = drives.resolve_inside(root, "")
+    items: list[StorageGalleryItem] = []
+    triples = []
+    for f in files:
+        size, mtime = storage_import._stat(f)
+        rel = str(f.relative_to(base))
+        items.append(
+            StorageGalleryItem(
+                path=rel,
+                name=f.name,
+                dir=os.path.dirname(rel),
+                size=size,
+                mtime=mtime,
+                kind=storage_import.media_kind(f.name),
+            )
+        )
+        triples.append((f.name, size, mtime))
+    with SessionLocal() as db:
+        known = storage_import.known_files(db, triples)
+    for it in items:
+        hit = known.get((safe_filename(it.name), it.size))
+        if hit:
+            it.known = StorageKnownOut(**hit)
+    items.sort(key=lambda i: (i.mtime, i.name))
+    rel_here = os.path.relpath(target, base)
+    return StorageGalleryOut(
+        device=device, mountpoint=root, path="" if rel_here == "." else rel_here, items=items
+    )
+
+
+@public_router.get("/thumb")
+def thumb(
+    device: str,
+    path: str = Query(..., max_length=4096),
+    token: str = Query(...),
+    size: int = Query(320, ge=64, le=2048),
+) -> FileResponse:
+    with SessionLocal() as db:
+        user = user_from_query_token(db, token)
+        if user.role != Role.ADMIN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    try:
+        part = next(
+            (p for d in drives.list_disks_cached() for p in d.partitions if p.path == device),
+            None,
+        )
+        if part is None or not part.browsable:
+            raise drives.StorageError("Medium ist nicht eingehängt oder geschützt.")
+        src = drives.resolve_inside(part.mountpoint, path)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    if not src.is_file() or src.is_symlink():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    fsize, mtime = storage_import._stat(src)
+    key = f"{part.uuid or device}|{path}|{fsize}|{int(mtime)}"
+    out = thumbnails.source_thumb(src, storage_import.media_kind(src.name), size, key)
+    if out is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
+    return FileResponse(
+        out, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"}
+    )
+
+
+# --- Cache drives ----------------------------------------------------------------
+
+
+def _partitions_by_uuid() -> dict[str, drives.Partition]:
+    try:
+        disks = drives.list_disks()
+    except (drives.StorageError, OSError, ValueError):
+        return {}
+    return {p.uuid: p for d in disks for p in d.partitions if p.uuid}
+
+
+def _snapshots(root: Path, mountpoint: str) -> list[StorageCacheSnapshotOut]:
+    out: list[StorageCacheSnapshotOut] = []
+    try:
+        dirs = sorted((d for d in root.iterdir() if d.is_dir() and not d.is_symlink()),
+                      key=lambda d: d.name, reverse=True)
+    except OSError:
+        return out
+    for d in dirs:
+        files = size = 0
+        for dirpath, _dirs, names in os.walk(d):
+            for n in names:
+                if n.startswith("."):
+                    continue
+                try:
+                    size += os.stat(os.path.join(dirpath, n)).st_size
+                    files += 1
+                except OSError:
+                    pass
+        try:
+            modified = datetime.fromtimestamp(d.stat().st_mtime, UTC)
+        except OSError:
+            modified = None
+        out.append(StorageCacheSnapshotOut(
+            name=d.name, path=os.path.relpath(d, mountpoint), files=files, size=size,
+            modified=modified,
+        ))
+    return out
+
+
+@router.get("/caches", response_model=list[StorageCacheOut])
+def list_caches(db: Session = Depends(get_db)) -> list[StorageCacheOut]:
+    parts = _partitions_by_uuid()
+    result: list[StorageCacheOut] = []
+    for row in db.scalars(select(StorageCache).order_by(StorageCache.created_at)):
+        part = parts.get(row.uuid)
+        entry = StorageCacheOut(
+            uuid=row.uuid, label=row.label, device=part.path if part else None,
+            mountpoint=part.mountpoint if part else "", total=part.total if part else 0,
+            free=part.free if part else 0, snapshots=[],
+        )
+        if part and part.mountpoint:
+            root = Path(part.mountpoint) / storage_import.CACHE_DIRNAME
+            if root.is_dir():
+                entry.snapshots = _snapshots(root, part.mountpoint)
+        elif part:
+            entry.error = "nicht eingehängt"
+        else:
+            entry.error = "nicht angeschlossen"
+        result.append(entry)
+    return result
+
+
+@router.post("/caches", response_model=StorageCacheOut, status_code=status.HTTP_201_CREATED)
+def mark_cache(
+    payload: StorageDeviceRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> StorageCacheOut:
+    try:
+        _disk, part = drives.find_partition(payload.device)
+        if part.protected:
+            raise drives.StorageError("System- oder Pufferlaufwerk kann kein Cache sein.")
+        if not part.uuid:
+            raise drives.StorageError("Partition hat keine UUID — erst formatieren.")
+        if part.read_only:
+            raise drives.StorageError("Laufwerk ist schreibgeschützt.")
+        drives.cache_root(part)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    if db.scalar(select(StorageCache).where(StorageCache.uuid == part.uuid)) is None:
+        db.add(StorageCache(uuid=part.uuid, label=part.label or part.name))
+        db.commit()
+    audit(db, admin, "storage.cache.mark", f"{part.path} ({part.uuid})")
+    return StorageCacheOut(
+        uuid=part.uuid, label=part.label or part.name, device=part.path,
+        mountpoint=part.mountpoint, total=part.total, free=part.free, snapshots=[],
+    )
+
+
+@router.delete("/caches/{cache_uuid}", status_code=status.HTTP_204_NO_CONTENT,
+               response_class=Response)
+def unmark_cache(
+    cache_uuid: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> Response:
+    row = db.scalar(select(StorageCache).where(StorageCache.uuid == cache_uuid))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kein Cache")
+    db.delete(row)
+    db.commit()
+    audit(db, admin, "storage.cache.unmark", cache_uuid)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _cache_root_for(uuid: str | None, db: Session) -> tuple[drives.Partition, Path]:
+    rows = list(db.scalars(select(StorageCache)))
+    if not rows:
+        raise drives.StorageError("Kein Laufwerk als Cache markiert.")
+    parts = _partitions_by_uuid()
+    candidates = [r for r in rows if (uuid is None or r.uuid == uuid) and r.uuid in parts]
+    if not candidates:
+        raise drives.StorageError("Cache-Laufwerk ist nicht angeschlossen.")
+    part = parts[candidates[0].uuid]
+    return part, drives.cache_root(part)
+
+
+_SNAPSHOT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+@router.post("/caches/backup", response_model=StorageImportJobOut,
+             status_code=status.HTTP_202_ACCEPTED)
+def backup_to_cache(
+    payload: StorageCacheBackupRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        _disk, src_part = drives.find_partition(payload.device)
+        if src_part.cache:
+            raise drives.StorageError("Das ist selbst das Cache-Laufwerk.")
+        root = drives.browsable_root(payload.device)
+        base = drives.resolve_inside(root, "")
+        if payload.paths:
+            targets = [drives.resolve_inside(root, p) for p in payload.paths]
+            files = storage_import.collect_files(base, targets, payload.media_only)
+        else:
+            files = storage_import.walk_files(base, media_only=payload.media_only)
+        cache_part, cache_root = _cache_root_for(payload.cache_uuid, db)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    if not files:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Keine passenden Dateien auf dem Medium.")
+    needed = sum(storage_import._size(f) for f in files)
+    if needed + storage_import.SPACE_RESERVE > cache_part.free:
+        raise HTTPException(
+            status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+            detail=(f"Zu wenig Platz im Cache: {needed // 2**20} MiB benötigt, "
+                    f"{max(cache_part.free - storage_import.SPACE_RESERVE, 0) // 2**20} MiB frei."),
+        )
+    name = _SNAPSHOT_RE.sub("_", src_part.label or src_part.name).strip("_") or "medium"
+    snapshot = cache_root / f"{name}_{datetime.now().strftime('%Y-%m-%d')}"
+    job = storage_import.start_cache(
+        device=payload.device, root=str(base), files=files, cache_device=cache_part.path,
+        snapshot_dir=snapshot, user_id=admin.id, only_new=payload.only_new,
+        eject_after=payload.eject_after,
+    )
+    audit(db, admin, "storage.cache.backup",
+          f"{len(files)} file(s) from {payload.device} to {cache_part.path}:{snapshot.name}")
+    return job.to_dict()
+
+
+@router.delete("/caches/{cache_uuid}/snapshots/{name}", status_code=status.HTTP_204_NO_CONTENT,
+               response_class=Response)
+def delete_snapshot(
+    cache_uuid: str, name: str, admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    try:
+        part, root = _cache_root_for(cache_uuid, db)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    target = (root / name).resolve()
+    if target.parent != root.resolve() or not target.is_dir() or (root / name).is_symlink():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nicht gefunden")
+    if storage_import.is_busy(part.path):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Auf dem Cache läuft gerade ein Vorgang.")
+    shutil.rmtree(target, ignore_errors=True)
+    audit(db, admin, "storage.cache.delete", f"{part.path}:{name}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -19,8 +19,11 @@ import os
 import re
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from sqlalchemy import select
 
 from .config import get_settings
 
@@ -63,6 +66,7 @@ class Partition:
     free: int = 0
     system: bool = False
     buffer: bool = False
+    cache: bool = False  # marked as cache for offloading cards (by UUID)
 
     @property
     def protected(self) -> bool:
@@ -203,9 +207,44 @@ def parse_lsblk(data: dict, buffer_paths: list[Path] | None = None) -> list[Disk
     return disks
 
 
+def cache_uuids() -> set[str]:
+    from .db import SessionLocal
+    from .models import StorageCache
+
+    with SessionLocal() as db:
+        return set(db.scalars(select(StorageCache.uuid)))
+
+
 def list_disks() -> list[Disk]:
     settings = get_settings()
-    return parse_lsblk(_run_lsblk(), [settings.buffer_dir, settings.data_dir])
+    disks = parse_lsblk(_run_lsblk(), [settings.buffer_dir, settings.data_dir])
+    caches = cache_uuids()
+    for disk in disks:
+        for part in disk.partitions:
+            part.cache = bool(part.uuid) and part.uuid in caches and not part.protected
+    return disks
+
+
+_cached: tuple[float, list[Disk]] | None = None
+_CACHE_TTL = 3.0
+
+
+def list_disks_cached() -> list[Disk]:
+    """``list_disks`` memoised for a few seconds.
+
+    The gallery fires hundreds of thumbnail requests at once; re-running lsblk
+    and a DB query for each would cost more than the thumbnails themselves.
+    """
+    global _cached
+    now = time.monotonic()
+    if _cached is None or now - _cached[0] > _CACHE_TTL:
+        _cached = (now, list_disks())
+    return _cached[1]
+
+
+def clear_cache() -> None:
+    global _cached
+    _cached = None
 
 
 def find_disk(device: str) -> Disk:
@@ -303,6 +342,8 @@ def format_device(device: str, fstype: str, label: str) -> None:
         disk, _part = find_partition(device)
     if disk.protected:
         raise StorageError("System- oder Pufferlaufwerk kann nicht formatiert werden.")
+    if any(p.cache for p in disk.partitions):
+        raise StorageError("Laufwerk ist als Cache markiert — erst die Markierung entfernen.")
     if disk.read_only:
         raise StorageError("Laufwerk ist schreibgeschützt.")
     from . import storage_import
@@ -329,3 +370,31 @@ def browsable_root(device: str) -> str:
     if not part.browsable:
         raise StorageError("Medium ist nicht eingehängt oder geschützt.")
     return part.mountpoint
+
+
+# --- Cache drives ---------------------------------------------------------------
+
+
+def cache_root(part: Partition) -> Path:
+    """The card-copy directory on a cache partition, created if missing.
+
+    Media mounted by our helper as exFAT/FAT already belong to the service; an
+    ext4 drive formatted elsewhere is root-owned, so the helper creates the
+    directory and hands it over. Without the helper we try directly.
+    """
+    from .storage_import import CACHE_DIRNAME
+
+    if not part.mountpoint:
+        raise StorageError("Cache-Laufwerk ist nicht eingehängt.")
+    root = Path(part.mountpoint) / CACHE_DIRNAME
+    if not root.is_dir() or not os.access(root, os.W_OK):
+        if manage_enabled():
+            _helper("prepare-cache", part.path)
+        else:
+            try:
+                root.mkdir(exist_ok=True)
+            except OSError as exc:
+                raise StorageError(f"Cache-Ordner nicht anlegbar: {exc.strerror}") from None
+    if not os.access(root, os.W_OK):
+        raise StorageError("Cache-Ordner ist nicht beschreibbar.")
+    return root

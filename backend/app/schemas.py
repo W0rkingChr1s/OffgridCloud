@@ -749,6 +749,7 @@ class StoragePartitionOut(BaseModel):
     protected: bool
     browsable: bool
     busy: bool
+    cache: bool = False
 
 
 class StorageDiskOut(BaseModel):
@@ -787,6 +788,16 @@ class StorageFormatRequest(BaseModel):
     confirm: str
 
 
+class StorageKnownOut(BaseModel):
+    """Where an identical file already lives on the box."""
+
+    match: str  # exact | likely
+    media_id: int
+    status: str
+    folder_id: int
+    folder_name: str
+
+
 class StorageEntryOut(BaseModel):
     name: str
     path: str
@@ -794,6 +805,7 @@ class StorageEntryOut(BaseModel):
     size: int
     modified: datetime | None
     is_media: bool
+    known: StorageKnownOut | None = None
 
 
 class StorageBrowseOut(BaseModel):
@@ -816,9 +828,12 @@ class StorageImportRequest(BaseModel):
 
 class StorageImportJobOut(BaseModel):
     id: str
+    kind: str
     device: str
-    folder_id: int
+    folder_id: int | None
     folder_name: str
+    target: str
+    eject_after: bool
     user_id: int
     status: str
     total_files: int
@@ -833,3 +848,49 @@ class StorageImportJobOut(BaseModel):
     errors: list[str]
     created_at: str
     finished_at: str | None
+
+
+class StorageGalleryItem(BaseModel):
+    path: str
+    name: str
+    dir: str
+    size: int
+    mtime: float
+    kind: str  # photo | raw | video | audio
+    known: StorageKnownOut | None = None
+
+
+class StorageGalleryOut(BaseModel):
+    device: str
+    mountpoint: str
+    path: str
+    items: list[StorageGalleryItem]
+
+
+class StorageCacheSnapshotOut(BaseModel):
+    name: str
+    path: str  # relative to the cache partition's mountpoint
+    files: int
+    size: int
+    modified: datetime | None
+
+
+class StorageCacheOut(BaseModel):
+    uuid: str
+    label: str
+    device: str | None  # None while the drive is unplugged
+    mountpoint: str
+    total: int
+    free: int
+    snapshots: list[StorageCacheSnapshotOut]
+    error: str = ""
+
+
+class StorageCacheBackupRequest(BaseModel):
+    device: str
+    # Empty = the whole medium.
+    paths: list[str] = Field(default_factory=list, max_length=5000)
+    cache_uuid: str | None = None
+    media_only: bool = True
+    only_new: bool = True
+    eject_after: bool = False

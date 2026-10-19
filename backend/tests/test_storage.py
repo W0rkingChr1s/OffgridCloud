@@ -267,3 +267,197 @@ def test_helper_disabled_returns_conflict(client, admin_auth, card, monkeypatch)
     assert client.get("/api/storage", headers=admin_auth).json()["manage_enabled"] is False
     r = client.post("/api/storage/eject", headers=admin_auth, json={"device": "/dev/sdb"})
     assert r.status_code == 409
+
+
+# --- Gallery, thumbnails, duplicate detection, cache --------------------------
+
+import io  # noqa: E402
+import os  # noqa: E402
+
+from PIL import Image  # noqa: E402
+
+
+def _jpeg(color=(200, 30, 30), size=(1200, 800)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, "JPEG")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def rig(tmp_path, monkeypatch):
+    """Camera card (sdb1, unmarked) + an SSD (sdd1) that can become the cache."""
+    # The test DB is shared, so give every rig its own capture times — the
+    # duplicate check would otherwise (correctly) recognise earlier tests' files.
+    # Stay well inside every filesystem's timestamp range (ext4/tmpfs clamp far-future
+    # mtimes, which would make two different files look identical).
+    t0 = 1_600_000_000 + int.from_bytes(os.urandom(3), "big") * 10
+    card = tmp_path / "media" / "CANON"
+    (card / "DCIM" / "100CANON").mkdir(parents=True)
+    photo = card / "DCIM" / "100CANON" / "IMG_0001.JPG"
+    photo.write_bytes(_jpeg(tuple(os.urandom(3))))
+    os.utime(photo, (t0, t0))
+    # Fake RAW: junk header + embedded preview JPEG, like real CR2/NEF files.
+    raw = card / "DCIM" / "100CANON" / "IMG_0002.CR2"
+    raw.write_bytes(b"II*\x00" + os.urandom(4000) + _jpeg((20, 160, 40)) + os.urandom(2000))
+    os.utime(raw, (t0 + 100, t0 + 100))
+    (card / "DCIM" / "100CANON" / "notes.txt").write_text("x")
+    ssd = tmp_path / "media" / "SSD"
+    ssd.mkdir(parents=True)
+
+    data = _lsblk(media_mount=str(card))
+    data["blockdevices"][2]["children"][0]["uuid"] = "CARD-UUID"
+    data["blockdevices"].append({
+        "name": "sdd", "path": "/dev/sdd", "type": "disk", "size": 500 * 2**30, "tran": "usb",
+        "children": [{"name": "sdd1", "path": "/dev/sdd1", "type": "part", "size": 500 * 2**30,
+                      "fstype": "ext4", "label": "SSD", "uuid": "CACHE-UUID",
+                      "mountpoint": str(ssd)}],
+    })
+    monkeypatch.setattr(drives, "_run_lsblk", lambda: data)
+    monkeypatch.setattr(drives, "_MEDIA_ROOTS", (str(tmp_path) + "/",))
+    drives.clear_cache()
+    # No root helper in tests: the cache dir is created directly.
+    monkeypatch.setattr(get_settings(), "storage_command", "")
+    monkeypatch.setattr(storage_import, "SPACE_RESERVE", 0)
+    original = storage_import.start
+    original_cache = storage_import.start_cache
+    monkeypatch.setattr(storage_import, "start", lambda **k: original(**k, run_async=False))
+    monkeypatch.setattr(storage_import, "start_cache",
+                        lambda **k: original_cache(**k, run_async=False))
+    from app.db import SessionLocal
+    from app.models import StorageCache
+
+    with SessionLocal() as db:
+        db.query(StorageCache).delete()
+        db.commit()
+    return {"card": card, "ssd": ssd, "t0": t0}
+
+
+def _token_of(auth):
+    return auth["Authorization"].split(" ", 1)[1]
+
+
+def test_gallery_flattens_media_and_flags_known(client, admin_auth, rig):
+    r = client.get("/api/storage/gallery", params={"device": "/dev/sdb1"}, headers=admin_auth)
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert [(i["name"], i["kind"], i["dir"]) for i in items] == [
+        ("IMG_0001.JPG", "photo", "DCIM/100CANON"),
+        ("IMG_0002.CR2", "raw", "DCIM/100CANON"),
+    ]
+    assert all(i["known"] is None for i in items)
+
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "G"}).json()
+    client.post("/api/storage/imports", headers=admin_auth, json={
+        "device": "/dev/sdb1", "paths": ["DCIM/100CANON/IMG_0001.JPG"], "folder_id": folder["id"]})
+    items = client.get("/api/storage/gallery", params={"device": "/dev/sdb1"},
+                       headers=admin_auth).json()["items"]
+    known = {i["name"]: i["known"] for i in items}
+    assert known["IMG_0001.JPG"]["match"] == "exact"
+    assert known["IMG_0001.JPG"]["folder_name"] == "G"
+    assert known["IMG_0002.CR2"] is None
+
+
+def test_constant_size_raw_with_new_mtime_is_not_skipped(client, admin_auth, rig):
+    """Same name + size but a different shot (new mtime, new bytes) must import."""
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "RAW"}).json()
+    raw = rig["card"] / "DCIM" / "100CANON" / "IMG_0002.CR2"
+    body = {"device": "/dev/sdb1", "paths": ["DCIM/100CANON/IMG_0002.CR2"],
+            "folder_id": folder["id"]}
+    client.post("/api/storage/imports", headers=admin_auth, json=body)
+    # Card reformatted, counter reset: same name, same size, different photo.
+    size = raw.stat().st_size
+    raw.write_bytes(os.urandom(size))
+    os.utime(raw, (rig["t0"] + 5000, rig["t0"] + 5000))
+    job = client.post("/api/storage/imports", headers=admin_auth, json=body).json()
+    job = next(j for j in client.get("/api/storage/imports", headers=admin_auth).json()
+               if j["id"] == job["id"])
+    assert job["imported"] == 1 and job["skipped"] == 0
+    names = sorted(m["filename"] for m in
+                   client.get(f"/api/folders/{folder['id']}/media", headers=admin_auth).json())
+    assert names == ["IMG_0002 (2).CR2", "IMG_0002.CR2"]
+
+
+def test_duplicate_in_other_folder_is_skipped_box_wide(client, admin_auth, rig):
+    a = client.post("/api/folders", headers=admin_auth, json={"name": "A"}).json()
+    b = client.post("/api/folders", headers=admin_auth, json={"name": "B"}).json()
+    body = {"device": "/dev/sdb1", "paths": ["DCIM"], "media_only": True}
+    client.post("/api/storage/imports", headers=admin_auth, json={**body, "folder_id": a["id"]})
+    job = client.post("/api/storage/imports", headers=admin_auth,
+                      json={**body, "folder_id": b["id"]}).json()
+    job = next(j for j in client.get("/api/storage/imports", headers=admin_auth).json()
+               if j["id"] == job["id"])
+    assert job["imported"] == 0 and job["skipped"] == 2
+
+
+def test_thumbnails_for_photo_and_raw(client, admin_auth, rig):
+    tok = _token_of(admin_auth)
+    for path in ("DCIM/100CANON/IMG_0001.JPG", "DCIM/100CANON/IMG_0002.CR2"):
+        r = client.get("/api/storage/thumb",
+                       params={"device": "/dev/sdb1", "path": path, "token": tok})
+        assert r.status_code == 200, (path, r.text)
+        im = Image.open(io.BytesIO(r.content))
+        assert im.format == "JPEG" and max(im.size) <= 320
+    r = client.get("/api/storage/thumb",
+                   params={"device": "/dev/sdb1", "path": "DCIM/100CANON/notes.txt", "token": tok})
+    assert r.status_code == 404
+    r = client.get("/api/storage/thumb",
+                   params={"device": "/dev/sdb1", "path": "../../etc/passwd", "token": tok})
+    assert r.status_code == 409
+    r = client.get("/api/storage/thumb", params={"device": "/dev/sdb1",
+                   "path": "DCIM/100CANON/IMG_0001.JPG", "token": "bogus"})
+    assert r.status_code == 401
+
+
+def test_cache_backup_browse_and_import(client, admin_auth, rig):
+    r = client.post("/api/storage/caches", headers=admin_auth, json={"device": "/dev/sdd1"})
+    assert r.status_code == 201, r.text
+    overview = client.get("/api/storage", headers=admin_auth).json()
+    ssd = next(d for d in overview["disks"] if d["name"] == "sdd")
+    assert ssd["partitions"][0]["cache"] is True
+
+    # A cache drive can't be formatted by accident.
+    r = client.post("/api/storage/format", headers=admin_auth,
+                    json={"device": "/dev/sdd", "fstype": "exfat", "confirm": "sdd"})
+    assert r.status_code == 409
+
+    r = client.post("/api/storage/caches/backup", headers=admin_auth,
+                    json={"device": "/dev/sdb1"})
+    assert r.status_code == 202, r.text
+    job = next(j for j in client.get("/api/storage/imports", headers=admin_auth).json()
+               if j["id"] == r.json()["id"])
+    assert job["kind"] == "cache" and job["status"] == "done" and job["imported"] == 2
+
+    caches = client.get("/api/storage/caches", headers=admin_auth).json()
+    snap = caches[0]["snapshots"][0]
+    assert snap["files"] == 2 and snap["name"].startswith("CANON_")
+    copied = rig["ssd"] / snap["path"] / "DCIM" / "100CANON" / "IMG_0001.JPG"
+    assert int(copied.stat().st_mtime) == rig["t0"]  # capture time kept
+
+    # Second run copies nothing.
+    r = client.post("/api/storage/caches/backup", headers=admin_auth,
+                    json={"device": "/dev/sdb1"})
+    job = next(j for j in client.get("/api/storage/imports", headers=admin_auth).json()
+               if j["id"] == r.json()["id"])
+    assert job["imported"] == 0 and job["skipped"] == 2
+
+    # Upload from the cache copy; then the *card* shows the files as known.
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "C"}).json()
+    r = client.post("/api/storage/imports", headers=admin_auth, json={
+        "device": "/dev/sdd1", "paths": [snap["path"]], "folder_id": folder["id"]})
+    assert r.status_code == 202, r.text
+    items = client.get("/api/storage/gallery", params={"device": "/dev/sdb1"},
+                       headers=admin_auth).json()["items"]
+    assert all(i["known"] and i["known"]["match"] == "exact" for i in items)
+
+    r = client.delete(f"/api/storage/caches/CACHE-UUID/snapshots/{snap['name']}",
+                      headers=admin_auth)
+    assert r.status_code == 204
+    assert client.get("/api/storage/caches", headers=admin_auth).json()[0]["snapshots"] == []
+    r = client.delete("/api/storage/caches/CACHE-UUID/snapshots/%2E%2E", headers=admin_auth)
+    assert r.status_code == 404
+    assert client.delete("/api/storage/caches/CACHE-UUID", headers=admin_auth).status_code == 204
+
+
+def test_cache_backup_needs_a_cache(client, admin_auth, rig):
+    r = client.post("/api/storage/caches/backup", headers=admin_auth, json={"device": "/dev/sdb1"})
+    assert r.status_code == 409

@@ -253,6 +253,7 @@ export interface StoragePartition {
   protected: boolean;
   browsable: boolean;
   busy: boolean; // an import from it is running
+  cache: boolean; // marked as cache for offloading cards
 }
 
 export interface StorageDisk {
@@ -279,6 +280,15 @@ export interface StorageOverview {
   error: string;
 }
 
+/** Where an identical file already lives on the box (duplicate check). */
+export interface StorageKnown {
+  match: "exact" | "likely";
+  media_id: number;
+  status: MediaStatus;
+  folder_id: number;
+  folder_name: string;
+}
+
 export interface StorageEntry {
   name: string;
   path: string;
@@ -286,6 +296,45 @@ export interface StorageEntry {
   size: number;
   modified: string | null;
   is_media: boolean;
+  known: StorageKnown | null;
+}
+
+export type StorageMediaKind = "photo" | "raw" | "video" | "audio";
+
+export interface StorageGalleryItem {
+  path: string;
+  name: string;
+  dir: string;
+  size: number;
+  mtime: number; // epoch seconds
+  kind: StorageMediaKind;
+  known: StorageKnown | null;
+}
+
+export interface StorageGallery {
+  device: string;
+  mountpoint: string;
+  path: string;
+  items: StorageGalleryItem[];
+}
+
+export interface StorageCacheSnapshot {
+  name: string;
+  path: string;
+  files: number;
+  size: number;
+  modified: string | null;
+}
+
+export interface StorageCache {
+  uuid: string;
+  label: string;
+  device: string | null;
+  mountpoint: string;
+  total: number;
+  free: number;
+  snapshots: StorageCacheSnapshot[];
+  error: string;
 }
 
 export interface StorageBrowse {
@@ -301,9 +350,12 @@ export type StorageImportStatus = "pending" | "running" | "done" | "failed" | "c
 
 export interface StorageImportJob {
   id: string;
+  kind: "import" | "cache";
   device: string;
-  folder_id: number;
+  folder_id: number | null;
   folder_name: string;
+  target: string; // cache: "<device>::<snapshot>"
+  eject_after: boolean;
   user_id: number;
   status: StorageImportStatus;
   total_files: number;
