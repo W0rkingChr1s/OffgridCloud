@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fetchVersion } from "./console-banner";
 
 const KEY = "ogc_retro";
 const KONAMI = [
@@ -25,6 +26,12 @@ function apply(on: boolean) {
 export function RetroEasterEgg() {
   const [on, setOn] = useState(() => localStorage.getItem(KEY) === "1");
   const [toast, setToast] = useState(false);
+  // Real deployed version from the backend — not a hard-coded build constant.
+  const [version, setVersion] = useState("…");
+
+  useEffect(() => {
+    void fetchVersion().then(setVersion);
+  }, []);
 
   useEffect(() => {
     apply(on);
@@ -63,7 +70,7 @@ export function RetroEasterEgg() {
 
   return (
     <>
-      {toast && <div className="retro-toast">&gt; RETRO MODE ENGAGED -- OFFGRIDCLOUD v0.0.1</div>}
+      {toast && <div className="retro-toast">&gt; RETRO MODE ENGAGED -- OFFGRIDCLOUD v{version}</div>}
       {on && (
         <div className="retro-badge" onClick={disable} title="Klicken zum Beenden">
           RETRO
