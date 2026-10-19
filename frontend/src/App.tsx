@@ -16,6 +16,7 @@ import Passkeys from "./pages/Passkeys";
 import Pool from "./pages/Pool";
 import Providers from "./pages/Providers";
 import Search from "./pages/Search";
+import Storage from "./pages/Storage";
 import System from "./pages/System";
 import Transfers from "./pages/Transfers";
 import Users from "./pages/Users";
@@ -123,6 +124,14 @@ export default function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <Pool />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/storage"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Storage />
               </ProtectedRoute>
             }
           />

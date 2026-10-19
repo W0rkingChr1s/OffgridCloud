@@ -39,6 +39,7 @@ from .routers import (
     network,
     pool,
     providers,
+    storage,
     system,
     transfers,
     updates,
@@ -114,6 +115,7 @@ app.include_router(pool.router)
 app.include_router(updates.router)
 app.include_router(network.router)
 app.include_router(vpn.router)
+app.include_router(storage.router)
 
 
 @app.get("/api/health")
