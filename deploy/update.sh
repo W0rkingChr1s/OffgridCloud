@@ -36,6 +36,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 SRC="$PREFIX/src"
+# Don't run from $PREFIX/backend (the service's WorkingDirectory, inherited by
+# the one-click update): install.sh replaces that directory.
+cd /
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
 if [[ $EUID -ne 0 ]]; then echo "Please run as root (sudo)." >&2; exit 1; fi

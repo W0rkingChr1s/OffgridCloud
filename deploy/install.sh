@@ -39,6 +39,10 @@ SERVICE_USER="${OGC_SERVICE_USER:-offgrid}"
 SPEEDTEST_VER="1.2.0"
 NONINTERACTIVE="${OGC_NONINTERACTIVE:-0}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Run from a directory we never delete. One-click updates inherit the service's
+# WorkingDirectory ($PREFIX/backend), which the copy step below replaces — pip
+# (os.getcwd) then dies with "No such file or directory" in a vanished cwd.
+cd /
 
 # Detect what's already installed so a plain re-run pre-selects it: re-running
 # the installer IS the update path — Enter through the questions to update every
