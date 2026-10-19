@@ -16,7 +16,7 @@ talk back:
 * **Commands** — a long-polling loop (``getUpdates``; no inbound port or public
   URL needed, which matters behind CGNAT / LTE) answers ``/status``,
   ``/speicher``, ``/queue`` & co.
-* **Restart / reboot / shutdown with confirmation** — ``/restart`` (service
+* **Restart / reboot / shutdown / update with confirmation** — ``/restart`` (service
   only), ``/reboot`` and ``/shutdown`` only
   *ask*: they post inline "Ja / Abbrechen" buttons bound to a one-time token
   (tied to that action) that expires after a minute and can only be pressed by
@@ -171,6 +171,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("restart", "Nur den OffgridCloud-Dienst neu starten (mit Bestätigung)"),
     Command("reboot", "Box neu starten (mit Bestätigung)"),
     Command("shutdown", "Box herunterfahren (mit Bestätigung)"),
+    Command("update", "Nach Updates suchen und installieren (mit Bestätigung)"),
     Command("id", "Chat-ID dieses Chats anzeigen"),
     Command("hilfe", "Alle Befehle anzeigen"),
     Command("start", "Begrüßung", menu=False),
@@ -605,6 +606,19 @@ POWER_ACTIONS: dict[str, PowerAction] = {
             confirm_label="⏻ Ja, ausschalten",
             done="⏻ {box} fährt in ~{delay} s herunter. Bis zum nächsten Einschalten! 👋",
         ),
+        PowerAction(
+            slug="update",
+            setting="update_command",
+            env="OGC_UPDATE_COMMAND / OGC_SELF_UPDATE",
+            noun="Update",
+            question="jetzt aktualisieren?",  # built dynamically by request_update
+            warning="",
+            confirm_label="⬆️ Ja, aktualisieren",
+            done=(
+                "⬆️ Update auf {box} läuft. Der Dienst startet danach neu – das Ergebnis "
+                "melde ich hier im Chat."
+            ),
+        ),
     )
 }
 
@@ -623,7 +637,31 @@ _pending_power: dict[str, _PendingPower] = {}
 def _power_command(action: PowerAction) -> str:
     from .config import get_settings
 
-    return getattr(get_settings(), action.setting).strip()
+    settings = get_settings()
+    if action.slug == "update" and not settings.self_update:
+        return ""
+    return getattr(settings, action.setting).strip()
+
+
+def _register_pending(slug: str, user_id: int, now: float) -> str:
+    nonce = secrets.token_urlsafe(8)
+    with _pending_lock:
+        # Drop expired prompts so the dict can't grow unbounded.
+        for key in [k for k, p in _pending_power.items() if p.expires < now]:
+            del _pending_power[key]
+        _pending_power[nonce] = _PendingPower(slug, user_id, now + REBOOT_CONFIRM_SECONDS)
+    return nonce
+
+
+def _confirm_keyboard(label: str, nonce: str) -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": label, "callback_data": f"confirm:{nonce}"},
+                {"text": "✖️ Abbrechen", "callback_data": f"cancel:{nonce}"},
+            ]
+        ]
+    }
 
 
 def request_power(slug: str, user_id: int, now: float | None = None) -> Reply:
@@ -636,25 +674,145 @@ def request_power(slug: str, user_id: int, now: float | None = None) -> Reply:
             "Power-Control erneut ausführen, um es freizuschalten."
         )
     now = time.time() if now is None else now
-    nonce = secrets.token_urlsafe(8)
-    with _pending_lock:
-        # Drop expired prompts so the dict can't grow unbounded.
-        for key in [k for k, p in _pending_power.items() if p.expires < now]:
-            del _pending_power[key]
-        _pending_power[nonce] = _PendingPower(slug, user_id, now + REBOOT_CONFIRM_SECONDS)
+    nonce = _register_pending(slug, user_id, now)
     return Reply(
         f"⚠️ <b>{html.escape(_box_name())} {action.question}</b>\n"
         f"{action.warning}\n"
         f"<i>Bestätigung gilt {REBOOT_CONFIRM_SECONDS} s.</i>",
-        {
-            "inline_keyboard": [
-                [
-                    {"text": action.confirm_label, "callback_data": f"confirm:{nonce}"},
-                    {"text": "✖️ Abbrechen", "callback_data": f"cancel:{nonce}"},
-                ]
-            ]
-        },
+        _confirm_keyboard(action.confirm_label, nonce),
     )
+
+
+# --- Self-update -------------------------------------------------------------
+
+# Remembers which chat asked for an update, so the result can be posted even
+# though the update restarts the service (and this very poller) midway.
+_UPDATE_NOTIFY_FILE = "telegram-update-notify.json"
+
+
+def _update_notify_path():
+    from .config import get_settings
+
+    return get_settings().data_dir / _UPDATE_NOTIFY_FILE
+
+
+def _short_notes(notes: str, limit: int = 600) -> str:
+    text = (notes or "").strip()
+    if len(text) > limit:
+        text = text[:limit].rsplit("\n", 1)[0] + "\n…"
+    return text
+
+
+def request_update(user_id: int, now: float | None = None, *, checker=None) -> Reply:
+    """Answer ``/update``: check for a new version and, if there is one, ask
+    for confirmation. Nothing is installed before the button is pressed."""
+    from . import __version__, _read_channel, _read_commit
+    from .config import get_settings
+    from .updater import check_for_update, is_running
+
+    action = POWER_ACTIONS["update"]
+    settings = get_settings()
+    if not _power_command(action):
+        return Reply(
+            "🚫 Update per Bot ist deaktiviert (OGC_SELF_UPDATE=false oder "
+            "OGC_UPDATE_COMMAND leer). Auf dem Server: "
+            "<code>sudo /opt/offgridcloud/src/deploy/update.sh</code>"
+        )
+    if is_running(settings.data_dir):
+        return Reply("⏳ Es läuft bereits ein Update – das Ergebnis kommt hier im Chat.")
+
+    checker = checker or check_for_update
+    info = checker(
+        __version__,
+        settings.github_repo,
+        channel=_read_channel(),
+        commit=_read_commit(),
+        use_cache=False,
+    )
+    if info.error:
+        return Reply(f"⚠️ {html.escape(info.error)}")
+    if not info.update_available:
+        return Reply(
+            f"✅ {html.escape(_box_name())} ist aktuell "
+            f"(v{html.escape(info.current)}). Kein Update nötig."
+        )
+
+    target = info.latest or "main"
+    if info.channel == "main" and info.behind_by:
+        target = f"main (+{info.behind_by} Commits)"
+    notes = _short_notes(info.notes)
+    now = time.time() if now is None else now
+    nonce = _register_pending("update", user_id, now)
+    return Reply(
+        f"⬆️ <b>Update für {html.escape(_box_name())} verfügbar</b>\n"
+        f"v{html.escape(info.current)} → <b>{html.escape(target)}</b>\n"
+        + (f"\n<i>{html.escape(notes)}</i>\n" if notes else "")
+        + "\nDie Box baut neu und startet den Dienst neu; Uploads pausieren ein paar "
+        "Minuten und laufen danach weiter.\n"
+        f"<i>Bestätigung gilt {REBOOT_CONFIRM_SECONDS} s.</i>",
+        _confirm_keyboard(action.confirm_label, nonce),
+    )
+
+
+def _start_update(chat_id: str) -> None:
+    """Launch the portal's one-click update and remember the chat for the result."""
+    from . import __version__, _read_version
+    from .config import get_settings
+    from .updater import start_update
+
+    settings = get_settings()
+    start_update(
+        settings.data_dir,
+        settings.update_command,
+        __version__,
+        current_version=_read_version,
+    )
+    try:
+        _update_notify_path().write_text(json.dumps({"chat_id": chat_id}))
+    except OSError as exc:  # the update still runs; we just can't report back
+        logger.warning("Could not remember update chat: %s", exc)
+
+
+def report_update_result(token: str) -> None:
+    """If a Telegram-triggered update has finished, post its outcome once.
+
+    Called every poll round: covers both a failed build (no restart) and a
+    successful one (we are the restarted process, after ``resolve_pending``).
+    """
+    from .config import get_settings
+    from .updater import PHASE_RUNNING, PHASE_SUCCESS, read_state
+
+    path = _update_notify_path()
+    if not path.is_file():
+        return
+    state = read_state(get_settings().data_dir)
+    if state.phase == PHASE_RUNNING:
+        return
+    try:
+        chat_id = str(json.loads(path.read_text()).get("chat_id", ""))
+    except (OSError, ValueError):
+        chat_id = ""
+    if chat_id:
+        ok = state.phase == PHASE_SUCCESS
+        versions = ""
+        if state.from_version or state.to_version:
+            versions = (
+                f"\nv{html.escape(state.from_version or '?')} → "
+                f"v{html.escape(state.to_version or '?')}"
+            )
+        text = (
+            f"{'✅' if ok else '⚠️'} <b>Update {'abgeschlossen' if ok else 'fehlgeschlagen'}"
+            f"</b> auf {html.escape(_box_name())}{versions}\n"
+            f"{html.escape(state.message or '')}"
+        )
+        if not ok:
+            text += "\nDetails: Portal → System → Update-Protokoll."
+        try:
+            send_message(token, chat_id, text)
+        except Exception as exc:  # noqa: BLE001 - offline: keep the marker, retry later
+            logger.debug("Update result not sent yet: %s", exc)
+            return
+    path.unlink(missing_ok=True)
 
 
 @dataclass
@@ -707,7 +865,10 @@ def handle_callback(
         )
     audit(db, None, f"telegram.{action.slug}", f"bestätigt von {who} (Chat {chat_id})")
     try:
-        run(command, delay=REBOOT_DELAY)
+        if action.slug == "update":
+            _start_update(chat_id)
+        else:
+            run(command, delay=REBOOT_DELAY)
     except Exception as exc:  # noqa: BLE001 - report the launch failure in the chat
         logger.warning("Telegram %s failed to start: %s", action.slug, exc)
         return CallbackResult(
@@ -841,6 +1002,8 @@ def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | 
             f"Chat-ID: <code>{html.escape(chat_id)}</code> – im OffgridCloud-Portal "
             "unter System → Benachrichtigungen eintragen."
         )
+    if command == "update":
+        return request_update((message.get("from") or {}).get("id", 0))
     if command in POWER_ACTIONS:
         return request_power(command, (message.get("from") or {}).get("id", 0))
     if command == "speedtest":
@@ -887,6 +1050,10 @@ class BotPoller:
             # existing installs get the command menu after an update too.
             self._token, self._offset = token, None
             setup_profile(token, chat_id)
+        try:
+            report_update_result(token)
+        except Exception:  # noqa: BLE001 - never let reporting stop the poller
+            logger.debug("Update result check failed", exc_info=True)
 
         params: dict = {
             "timeout": POLL_TIMEOUT,

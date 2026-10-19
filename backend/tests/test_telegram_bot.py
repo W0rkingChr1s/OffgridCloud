@@ -558,3 +558,124 @@ def test_speedtest_cooldown_can_be_disabled(client, calls, monkeypatch):
     first = telegram_bot.request_speedtest(now=5.0)
     first.followup("tok", "42")
     assert telegram_bot.request_speedtest(now=6.0).followup is not None
+
+
+# --- Self-update ----------------------------------------------------------
+
+
+def _fake_check(**fields):
+    from app.updater import UpdateInfo
+
+    def checker(current, repo, **_kw):
+        return UpdateInfo(current=current, **fields)
+
+    return checker
+
+
+@pytest.fixture
+def clean_update_state():
+    from app.config import get_settings
+    from app.updater import clear_state
+
+    data_dir = get_settings().data_dir
+    clear_state(data_dir)
+    telegram_bot._update_notify_path().unlink(missing_ok=True)
+    yield data_dir
+    clear_state(data_dir)
+    telegram_bot._update_notify_path().unlink(missing_ok=True)
+
+
+def test_update_none_available(client, clean_update_state):
+    reply = telegram_bot.request_update(1, checker=_fake_check(update_available=False))
+    assert "aktuell" in reply.text
+    assert reply.reply_markup is None
+
+
+def test_update_check_error_is_reported(client, clean_update_state):
+    reply = telegram_bot.request_update(
+        1, checker=_fake_check(error="Kein Update-Check möglich (offline?).")
+    )
+    assert "offline" in reply.text and reply.reply_markup is None
+
+
+def test_update_asks_then_starts_and_remembers_chat(client, clean_update_state, monkeypatch):
+    from app import updater
+
+    started = []
+    monkeypatch.setattr(
+        updater, "start_update", lambda *a, **kw: started.append(a[1])
+    )
+    reply = telegram_bot.request_update(
+        1,
+        checker=_fake_check(
+            update_available=True, latest="v9.9.9", notes="- Telegram-Bot\n- Fixes"
+        ),
+    )
+    assert "v9.9.9" in reply.text and "Telegram-Bot" in reply.text
+    assert not started  # asking alone must not update
+    confirm = reply.reply_markup["inline_keyboard"][0][0]["callback_data"]
+    with SessionLocal() as db:
+        result = _press(db, confirm, run=lambda *a, **k: None)
+    assert started and "update.sh" in started[0]
+    assert "Update bestätigt" in result.new_text
+    assert telegram_bot._update_notify_path().is_file()
+
+    with SessionLocal() as db:
+        from sqlalchemy import select
+
+        from app.models import AuditEvent
+
+        assert "telegram.update" in list(db.scalars(select(AuditEvent.action)))
+
+
+def test_update_disabled(client, clean_update_state, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "self_update", False)
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/update"), "42")
+    assert "deaktiviert" in reply.text and reply.reply_markup is None
+
+
+def test_update_already_running(client, clean_update_state):
+    from app.updater import PHASE_RUNNING, UpdateState, write_state
+
+    write_state(clean_update_state, UpdateState(phase=PHASE_RUNNING, started_at=time.time()))
+    reply = telegram_bot.request_update(1, checker=_fake_check(update_available=True))
+    assert "läuft bereits" in reply.text
+
+
+def test_update_result_reported_once_after_finish(client, clean_update_state, calls):
+    from app.updater import PHASE_RUNNING, PHASE_SUCCESS, UpdateState, write_state
+
+    telegram_bot._update_notify_path().write_text('{"chat_id": "42"}')
+    write_state(clean_update_state, UpdateState(phase=PHASE_RUNNING, from_version="1.0"))
+    telegram_bot.report_update_result("tok")
+    assert not _sent(calls)  # still running: wait
+
+    write_state(
+        clean_update_state,
+        UpdateState(
+            phase=PHASE_SUCCESS, from_version="1.0", to_version="1.1",
+            message="Aktualisiert auf 1.1.",
+        ),
+    )
+    telegram_bot.report_update_result("tok")
+    text = _sent(calls)[-1]["text"]
+    assert "Update abgeschlossen" in text and "v1.0 → v1.1" in text
+    assert not telegram_bot._update_notify_path().exists()
+    telegram_bot.report_update_result("tok")
+    assert len(_sent(calls)) == 1  # reported exactly once
+
+
+def test_update_failure_is_reported(client, clean_update_state, calls):
+    from app.updater import PHASE_FAILED, UpdateState, write_state
+
+    telegram_bot._update_notify_path().write_text('{"chat_id": "42"}')
+    write_state(
+        clean_update_state,
+        UpdateState(phase=PHASE_FAILED, from_version="1.0", message="Build kaputt"),
+    )
+    telegram_bot.report_update_result("tok")
+    text = _sent(calls)[-1]["text"]
+    assert "fehlgeschlagen" in text and "Build kaputt" in text and "Protokoll" in text
