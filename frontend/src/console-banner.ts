@@ -14,7 +14,7 @@ const REPO = "https://github.com/W0rkingChr1s/OffgridCloud";
  * constant, so we ask the backend instead. Falls back to "dev" when the
  * backend isn't reachable (plain frontend dev server, offline, etc.).
  */
-async function fetchVersion(): Promise<string> {
+export async function fetchVersion(): Promise<string> {
   try {
     const res = await fetch("/api/health");
     if (!res.ok) return "dev";
