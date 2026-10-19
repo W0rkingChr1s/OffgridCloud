@@ -834,6 +834,7 @@ function UpdateCard() {
   }
 
   const available = info?.update_available;
+  const onMain = info?.channel === "main";
   const phase = progress?.phase;
   const running = applying || phase === "running";
   const busyOrRunning = busy || running;
@@ -846,9 +847,20 @@ function UpdateCard() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-sm font-medium text-slate-400">Version</span>
         <span className="text-lg font-bold text-white">{info?.current ?? "…"}</span>
+        {onMain && (
+          <span
+            className="rounded-full bg-white/5 px-2 py-0.5 font-mono text-xs text-slate-300 ring-1 ring-white/10"
+            title="Folgt dem main-Branch (Commit für Commit) statt Releases"
+          >
+            main{info.commit ? ` @ ${info.commit.slice(0, 7)}` : ""}
+          </span>
+        )}
         {available && !running && info?.latest && (
           <span className="rounded-full bg-ogc-teal/20 px-2 py-0.5 text-xs font-semibold text-ogc-teal">
-            Update verfügbar: {info.latest}
+            Update verfügbar:{" "}
+            {onMain
+              ? `${info.behind_by} ${info.behind_by === 1 ? "neuer Commit" : "neue Commits"} auf main`
+              : info.latest}
           </span>
         )}
         {info && !available && !info.error && !running && (
@@ -875,7 +887,7 @@ function UpdateCard() {
               rel="noreferrer"
               className="text-sm text-ogc-teal hover:underline"
             >
-              Release-Notes ansehen ↗
+              {onMain ? "Änderungen ansehen ↗" : "Release-Notes ansehen ↗"}
             </a>
           )}
           {info?.self_update_enabled ? (

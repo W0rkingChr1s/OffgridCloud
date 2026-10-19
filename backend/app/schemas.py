@@ -542,7 +542,10 @@ class WifiScanOut(BaseModel):
 
 class UpdateInfoOut(BaseModel):
     current: str
+    channel: str = "release"  # release | main
+    commit: str = ""
     latest: str | None = None
+    behind_by: int = 0  # main channel: commits on main not yet installed
     update_available: bool = False
     release_url: str = ""
     release_name: str = ""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import __version__
+from .. import __version__, _read_channel, _read_commit
 from ..admin_ops import audit
 from ..config import get_settings
 from ..db import get_db
@@ -35,12 +35,24 @@ def _current_version() -> str:
 def get_update_status(
     force: bool = False, _: User = Depends(require_admin)
 ) -> UpdateInfoOut:
-    """Current version vs. latest GitHub release. Never fails hard (offline-safe)."""
+    """Current version vs. latest GitHub release (or main, on the main channel).
+
+    Never fails hard (offline-safe).
+    """
     settings = get_settings()
-    info = check_for_update(__version__, settings.github_repo, use_cache=not force)
+    info = check_for_update(
+        __version__,
+        settings.github_repo,
+        channel=_read_channel(),
+        commit=_read_commit(),
+        use_cache=not force,
+    )
     return UpdateInfoOut(
         current=info.current,
+        channel=info.channel,
+        commit=info.commit,
         latest=info.latest,
+        behind_by=info.behind_by,
         update_available=info.update_available,
         release_url=info.release_url,
         release_name=info.release_name,

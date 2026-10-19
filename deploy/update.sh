@@ -10,7 +10,8 @@
 #
 # Options:
 #   --check          Only report current vs. latest version, then exit.
-#   --channel C      "release" (default, newest tag) or "main" (bleeding edge).
+#   --channel C      "release" (newest tag) or "main" (bleeding edge). Default:
+#                    the channel the install already follows (release if unknown).
 #   --prefix DIR     Install location (default: /opt/offgridcloud).
 #   --repo OWNER/REPO  GitHub repo to check (default: W0rkingChr1s/OffgridCloud).
 #   -h, --help       Show this help.
@@ -18,10 +19,10 @@ set -euo pipefail
 
 PREFIX="/opt/offgridcloud"
 REPO="W0rkingChr1s/OffgridCloud"
-CHANNEL="release"
+CHANNEL=""
 CHECK=0
 
-usage() { sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +52,17 @@ current_version() {
   echo "${v:-unknown}"
 }
 
+installed_channel() {
+  # Stamped by install.sh. Older installs have no stamp: a describe-style
+  # version past a tag (0.4.10-44-g97b8eb0) can only come from a main checkout.
+  local c=""
+  [[ -f "$PREFIX/backend/app/CHANNEL" ]] && c="$(tr -d '[:space:]' < "$PREFIX/backend/app/CHANNEL")"
+  if [[ "$c" != "release" && "$c" != "main" ]]; then
+    if current_version | grep -Eq -- '-[0-9]+-g[0-9a-f]{7,40}$'; then c="main"; else c="release"; fi
+  fi
+  echo "$c"
+}
+
 latest_tag() {
   curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1
@@ -67,6 +79,13 @@ git -C "$SRC" fetch --tags --prune --unshallow origin 2>/dev/null \
   || git -C "$SRC" fetch --tags --prune origin
 
 CURRENT="$(current_version)"
+# Stay on the installed channel unless told otherwise — the portal's one-click
+# update passes no flags, and defaulting to "release" would silently roll a
+# main install back to the last (older) release.
+CHANNEL="${CHANNEL:-$(installed_channel)}"
+if [[ "$CHANNEL" != "release" && "$CHANNEL" != "main" ]]; then
+  echo "Unknown channel: $CHANNEL (use release or main)" >&2; exit 2
+fi
 if [[ "$CHANNEL" == "main" ]]; then
   TARGET="origin/main"
   TARGET_LABEL="main (latest)"
@@ -80,7 +99,7 @@ else
   fi
 fi
 
-echo "   Installed: $CURRENT"
+echo "   Installed: $CURRENT ($CHANNEL channel)"
 echo "   Target:    $TARGET_LABEL"
 
 if [[ $CHECK -eq 1 ]]; then
@@ -110,7 +129,7 @@ chmod +x "$SRC/deploy/install.sh"
 # Headless: no questions, keep the existing prefix/port, refresh the unit but
 # leave starting to us (below). Optional features stay as they were — their
 # separate units/sudoers are untouched by a core reinstall.
-OGC_STAMP_VERSION="$STAMP" OGC_NONINTERACTIVE=1 \
+OGC_STAMP_VERSION="$STAMP" OGC_CHANNEL="$CHANNEL" OGC_NONINTERACTIVE=1 \
   OGC_PREFIX="$PREFIX" OGC_PORT="$PORT" OGC_START=0 OGC_INSTALL_SERVICE=1 \
   bash "$SRC/deploy/install.sh"
 

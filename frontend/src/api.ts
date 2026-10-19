@@ -365,7 +365,10 @@ export interface NetworkApplyResult {
 
 export interface UpdateInfo {
   current: string;
+  channel: "release" | "main";
+  commit: string;
   latest: string | null;
+  behind_by: number;
   update_available: boolean;
   release_url: string;
   release_name: string;

@@ -1,7 +1,9 @@
-"""Update checks against GitHub Releases.
+"""Update checks against GitHub Releases (or the main branch).
 
 The instance knows its own version (``app.__version__``) and asks the GitHub
-Releases API for the latest published release. Pure helpers (version parsing /
+Releases API for the latest published release. Installs that follow the
+``main`` channel (bleeding edge) are compared commit-wise against the main
+branch instead, since a release check can't see new commits there. Pure helpers (version parsing /
 comparison) are separated from the network call so they're easy to unit-test and
 so the whole thing degrades gracefully when the box is offline (the common case
 for an off-grid appliance).
@@ -51,7 +53,11 @@ def is_newer(latest: str, current: str) -> bool:
 @dataclass
 class UpdateInfo:
     current: str
+    channel: str = "release"
+    commit: str = ""
     latest: str | None = None
+    # main channel only: commits on main that this install doesn't have yet.
+    behind_by: int = 0
     update_available: bool = False
     release_url: str = ""
     release_name: str = ""
@@ -74,26 +80,93 @@ def _fetch_latest_release(repo: str, timeout: float = 6.0) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _fetch_compare(repo: str, base: str, head: str, timeout: float = 6.0) -> dict:
+    url = f"https://api.github.com/repos/{repo}/compare/{base}...{head}"
+    req = urllib.request.Request(
+        url,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "OffgridCloud"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (fixed GitHub host)
+        return json.loads(resp.read().decode("utf-8"))
+
+
+_MAX_NOTE_COMMITS = 30
+
+
+def _check_main(info: UpdateInfo, repo: str, compare_fetcher) -> bool:
+    """Fill ``info`` from a commit compare against main. True if it's cacheable."""
+    if not info.commit:
+        info.error = "Installierter Commit unbekannt – Vergleich mit main nicht möglich."
+        return False
+    try:
+        data = compare_fetcher(repo, info.commit, "main")
+    except urllib.error.HTTPError as exc:
+        info.error = (
+            "Installierter Commit ist auf GitHub nicht bekannt."
+            if exc.code == 404
+            else f"Update-Check fehlgeschlagen (HTTP {exc.code})."
+        )
+        return False
+    except Exception:  # noqa: BLE001 - offline / rate-limited / DNS
+        info.error = "Kein Update-Check möglich (offline?)."
+        return False
+
+    # base = installed commit, head = main: ``ahead_by`` is what main has on top.
+    behind = int(data.get("ahead_by") or 0)
+    commits = data.get("commits") or []
+    info.behind_by = behind
+    info.update_available = behind > 0
+    head = commits[-1].get("sha", "") if behind and len(commits) == behind else ""
+    info.latest = f"main @ {head[:7]}" if head else "main"
+    info.release_name = f"{behind} neue Commits auf main" if behind else "main"
+    info.release_url = str(data.get("html_url") or "")
+    if commits:
+        info.published_at = str(
+            ((commits[-1].get("commit") or {}).get("committer") or {}).get("date") or ""
+        )
+    # Newest first, subject line only.
+    lines = [
+        "* " + (str((c.get("commit") or {}).get("message") or "").splitlines() or [""])[0]
+        for c in reversed(commits[-_MAX_NOTE_COMMITS:])
+    ]
+    if behind > len(lines):
+        lines.append(f"* … und {behind - len(lines)} weitere")
+    info.notes = "\n".join(lines)[:4000]
+    return True
+
+
 def check_for_update(
     current: str,
     repo: str,
     *,
+    channel: str = "release",
+    commit: str = "",
     now: float | None = None,
     fetcher=_fetch_latest_release,
+    compare_fetcher=_fetch_compare,
     use_cache: bool = True,
 ) -> UpdateInfo:
     """Return update status, caching successful lookups for a while.
+
+    ``channel="main"`` compares ``commit`` against the main branch; otherwise
+    ``current`` is compared against the latest release.
 
     Never raises: on any error (offline, rate-limited, no releases yet) it
     returns an ``UpdateInfo`` with ``update_available=False`` and a message.
     """
     now = time.time() if now is None else now
+    key = f"{repo}|{channel}|{commit}"
     if use_cache:
-        cached = _cache.get(repo)
+        cached = _cache.get(key)
         if cached and now - cached[0] < _CACHE_TTL:
             return cached[1]
 
-    info = UpdateInfo(current=current, checked_at=now)
+    info = UpdateInfo(current=current, channel=channel, commit=commit, checked_at=now)
+    if channel == "main":
+        if _check_main(info, repo, compare_fetcher):
+            _cache[key] = (now, info)
+        return info
+
     try:
         data = fetcher(repo)
     except urllib.error.HTTPError as exc:
@@ -116,7 +189,7 @@ def check_for_update(
     info.notes = str(data.get("body") or "")[:4000]
     info.update_available = bool(tag) and is_newer(tag, current)
 
-    _cache[repo] = (now, info)
+    _cache[key] = (now, info)
     return info
 
 
