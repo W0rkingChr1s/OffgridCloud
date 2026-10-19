@@ -14,6 +14,7 @@ the noisy ones (e.g. "Upload angenommen") without touching the channels.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from collections.abc import Callable
@@ -67,7 +68,9 @@ def _send_telegram(token: str, chat_id: str, text: str) -> None:
     import urllib.parse
     import urllib.request
 
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    data = urllib.parse.urlencode(
+        {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    ).encode("utf-8")
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     req = urllib.request.Request(url, data=data, method="POST")
     urllib.request.urlopen(req, timeout=10).close()  # noqa: S310 (admin-set token)
@@ -89,6 +92,26 @@ def _send_email(settings: SystemSettings, subject: str, body: str) -> None:
         if settings.smtp_username:
             smtp.login(settings.smtp_username, decrypt(settings.smtp_password_encrypted))
         smtp.send_message(msg)
+
+
+# Emoji prefix per event so the Telegram chat is scannable at a glance.
+TELEGRAM_ICONS: dict[str, str] = {
+    "media.received": "📥",
+    "media.done": "✅",
+    "media.failed": "❌",
+    "disk.low": "💾",
+    "server.startup": "🚀",
+    "server.online": "📡",
+    "transfer.paused": "⏸",
+    "transfer.resumed": "▶️",
+}
+
+
+def telegram_text(event: str, title: str, message: str) -> str:
+    """HTML-formatted Telegram message: icon + bold title, escaped body."""
+    icon = TELEGRAM_ICONS.get(event, "ℹ️")
+    head = f"{icon} <b>{html.escape(title)}</b>"
+    return f"{head}\n{html.escape(message)}" if message else head
 
 
 _DEFAULT_SENDERS = Senders(webhook=_send_webhook, telegram=_send_telegram, email=_send_email)
@@ -117,8 +140,6 @@ def dispatch(
     if flag is not None and not getattr(settings, flag, False):
         return False
 
-    text = f"{title}\n{message}" if message else title
-
     if settings.webhook_url:
         _guard("webhook", event, lambda: senders.webhook(settings.webhook_url, payload))
 
@@ -127,7 +148,9 @@ def dispatch(
         _guard(
             "telegram",
             event,
-            lambda: senders.telegram(token, settings.telegram_chat_id, text),
+            lambda: senders.telegram(
+                token, settings.telegram_chat_id, telegram_text(event, title, message)
+            ),
         )
 
     if settings.smtp_host and settings.smtp_to:

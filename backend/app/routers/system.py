@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import telegram_bot
 from ..admin_ops import audit, disk_usage, get_system_settings
 from ..config import get_settings
-from ..crypto import encrypt
+from ..crypto import decrypt, encrypt
 from ..db import get_db
 from ..deps import require_admin
 from ..models import AuditEvent, SystemSettings, User
@@ -20,6 +21,7 @@ from ..schemas import (
     PowerActionResult,
     SystemSettingsUpdate,
     SystemStatusOut,
+    TelegramTestResult,
 )
 
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(require_admin)])
@@ -129,6 +131,7 @@ def update_settings(
     db: Session = Depends(get_db),
 ) -> SystemStatusOut:
     row = get_system_settings(db)
+    telegram_before = (row.telegram_bot_token_encrypted, row.telegram_chat_id)
     changed = []
     if payload.delete_local_after_upload is not None:
         row.delete_local_after_upload = payload.delete_local_after_upload
@@ -149,7 +152,34 @@ def update_settings(
     if changed:
         db.commit()
         audit(db, admin, "system.update", ", ".join(changed))
+    if (row.telegram_bot_token_encrypted, row.telegram_chat_id) != telegram_before:
+        _greet_telegram(row)
     return _status(db)
+
+
+def _greet_telegram(row: SystemSettings) -> None:
+    """A (re)configured bot says hello in its chat — in the background, since
+    the uplink may be slow and saving must never wait on Telegram."""
+    token = decrypt(row.telegram_bot_token_encrypted)
+    if token and row.telegram_chat_id:
+        telegram_bot.announce_connected_async(token, row.telegram_chat_id)
+
+
+@router.post("/telegram/test", response_model=TelegramTestResult)
+def telegram_test(
+    _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> TelegramTestResult:
+    """Send the connect greeting synchronously so the portal can show whether
+    token and chat ID actually work (the save path only fires and forgets)."""
+    row = get_system_settings(db)
+    token = decrypt(row.telegram_bot_token_encrypted)
+    if not token or not row.telegram_chat_id:
+        raise HTTPException(status_code=409, detail="Bot-Token und Chat-ID zuerst speichern.")
+    try:
+        telegram_bot.announce_connected(token, row.telegram_chat_id)
+    except Exception as exc:  # noqa: BLE001 - surface Telegram's reason to the UI
+        return TelegramTestResult(sent=False, message=f"Senden fehlgeschlagen: {exc}")
+    return TelegramTestResult(sent=True, message="Nachricht gesendet – schau in den Chat.")
 
 
 def _apply_notify_settings(
