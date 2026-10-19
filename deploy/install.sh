@@ -453,9 +453,36 @@ fi
 
 # --- Frontend build ---------------------------------------------------------
 step "Building frontend (requires Node.js)..."
+# The frontend toolchain (Vite 8) needs Node ^20.19 or >=22.12. Boxes set up
+# with an older Node (bootstrap used to accept 18+) would otherwise fail every
+# self-update at the build step — so upgrade to Node 22 here when possible.
+node_ok() {
+  command -v node >/dev/null 2>&1 || return 1
+  local v major minor
+  v="$(node -v | sed 's/^v//')"
+  major="${v%%.*}"; minor="$(printf '%s' "$v" | cut -d. -f2)"
+  [[ "${major:-0}" -ge 23 ]] && return 0
+  [[ "${major:-0}" -eq 22 && "${minor:-0}" -ge 12 ]] && return 0
+  [[ "${major:-0}" -eq 20 && "${minor:-0}" -ge 19 ]] && return 0
+  return 1
+}
+if ! node_ok && command -v apt-get >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
+  echo "   Node.js $(node -v 2>/dev/null || echo 'fehlt') ist zu alt – installiere Node.js 22..."
+  if curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs; then
+    hash -r
+  else
+    echo "   Node.js-Upgrade fehlgeschlagen (offline?)." >&2
+  fi
+fi
 if ! command -v npm >/dev/null 2>&1; then
   echo "npm not found. Install Node.js, or build the frontend on another machine" >&2
   echo "and copy frontend/dist to backend/app/static before re-running." >&2
+  exit 1
+fi
+if ! node_ok; then
+  echo "Node.js $(node -v) ist zu alt für den Frontend-Build (benötigt ^20.19 oder >=22.12)." >&2
+  echo "Bitte Node.js 22 installieren (z. B. https://deb.nodesource.com/setup_22.x)." >&2
+  echo "Die bisherige Installation bleibt unverändert." >&2
   exit 1
 fi
 ( cd "$REPO_ROOT/frontend" && npm install && npm run build )

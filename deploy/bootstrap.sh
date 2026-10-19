@@ -51,11 +51,16 @@ else
   exit 1
 fi
 
-# --- Node.js >= 18 (needed to build the frontend) ---------------------------
+# --- Node.js ^20.19 / >=22.12 (needed to build the frontend with Vite 8) ------
 need_node=1
 if command -v node >/dev/null 2>&1; then
-  major="$(node -v | sed 's/^v\([0-9]*\).*/\1/')"
-  [[ "${major:-0}" -ge 18 ]] && need_node=0
+  v="$(node -v | sed 's/^v//')"
+  major="${v%%.*}"; minor="$(printf '%s' "$v" | cut -d. -f2)"
+  if [[ "${major:-0}" -ge 23 ]] \
+     || [[ "${major:-0}" -eq 22 && "${minor:-0}" -ge 12 ]] \
+     || [[ "${major:-0}" -eq 20 && "${minor:-0}" -ge 19 ]]; then
+    need_node=0
+  fi
 fi
 if [[ $need_node -eq 1 ]]; then
   step "Installing Node.js 22..."

@@ -933,7 +933,7 @@ function UpdateProgressView({
   onDismiss,
 }: {
   progress: UpdateProgress;
-  logRef: RefObject<HTMLPreElement>;
+  logRef: RefObject<HTMLPreElement | null>;
   onReload: () => void;
   onDismiss: () => void;
 }) {
