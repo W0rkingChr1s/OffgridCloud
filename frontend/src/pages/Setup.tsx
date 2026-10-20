@@ -5,7 +5,7 @@ import { api, ApiError, type SetupResult, type SetupStatus } from "../api";
 // Shown instead of the whole app while the box has no account yet.
 
 const input =
-  "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 const MANUAL = "__manual__";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -86,7 +86,7 @@ export default function Setup({ status }: { status: SetupStatus }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-900 to-ogc-indigo/40 px-4 py-10 text-slate-100">
+    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-slate-900 via-slate-900 to-ogc-indigo/40 px-4 py-10 text-slate-100">
       <div className="w-full max-w-md rounded-2xl bg-slate-800/60 p-8 shadow-xl ring-1 ring-white/10">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <img src="/logo-icon.svg" alt="OffgridCloud" className="h-14 w-14" />
@@ -177,7 +177,7 @@ export default function Setup({ status }: { status: SetupStatus }) {
             <button
               type="submit"
               disabled={busy}
-              className="mt-2 w-full rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="mt-2 w-full rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue py-2.5 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {busy ? "Wird eingerichtet…" : "Einrichtung abschließen"}
             </button>
