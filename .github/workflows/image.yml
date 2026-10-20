@@ -5,11 +5,19 @@ name: Raspberry Pi image
 # wizard (open Wi-Fi "OffgridCloud-Setup-XXXX" + captive portal when there is
 # no cable) — see deploy/setup/ and docs/IMAGE.md.
 #
-# Called by release.yml for every release (the .img.xz is attached to it), or
-# run by hand: Actions → "Raspberry Pi image" → "Run workflow" builds the
-# chosen ref and keeps the image as a workflow artifact for testing.
+# Called by release.yml for every release (the .img.xz is attached to it), on
+# PRs that change the image, or run by hand: Actions → "Raspberry Pi image" →
+# "Run workflow" builds the chosen ref and keeps the image as a workflow
+# artifact for testing (only once this file is on the default branch).
 
 on:
+  # PRs that touch the image itself build it once (artifact only), so a broken
+  # pi-gen stage shows up before a release does.
+  pull_request:
+    paths:
+      - ".github/workflows/image.yml"
+      - "deploy/image/**"
+      - "deploy/setup/**"
   workflow_dispatch:
     inputs:
       ref:
@@ -30,6 +38,11 @@ on:
 
 permissions:
   contents: write
+
+# A newer push to the same PR supersedes a running hour-long build.
+concurrency:
+  group: image-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   image:
