@@ -62,6 +62,16 @@ Wer CI auch auf `main` nach dem Merge will, hinterlegt einen fine-grained PAT
 (Contents + Pull requests: write) als Secret `AUTOMERGE_TOKEN`, für
 Dependabot-PRs zusätzlich als Dependabot-Secret.
 
+## Branch-Cleanup
+
+`.github/workflows/branch-cleanup.yml` löscht den Head-Branch eines PRs direkt
+nach dem Merge und räumt montags alle Branches ab, deren Stand bereits in einem
+gemergten PR steckt. Stehen bleiben der Default-Branch, geschützte Branches,
+Branches mit offenem PR (auch als Basis eines gestapelten PRs), Branches mit
+neuen Commits nach dem Merge und Branches von geschlossenen, nicht gemergten
+PRs. Von Hand: Actions → „Branch cleanup“ → „Run workflow“ (standardmäßig nur
+Probelauf).
+
 ## Roadmap
 
 Siehe [docs/ENTWICKLUNGSPLAN.md](docs/ENTWICKLUNGSPLAN.md).

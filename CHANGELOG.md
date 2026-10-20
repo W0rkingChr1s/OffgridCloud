@@ -19,6 +19,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 - PRs mit dem Label `automerge` werden automatisch per Squash gemerged, sobald CI (und ggf. der Image-Build) auf dem Head-Commit grün ist. Dependabot-Patch- und -Minor-Updates erhalten das Label automatisch (`.github/workflows/automerge.yml`, Details in [CONTRIBUTING.md](CONTRIBUTING.md)).
 
+### 🧹 Branch-Cleanup
+
+- Gemergte Branches werden automatisch gelöscht: sofort nach dem Merge und zusätzlich per wöchentlichem Durchlauf für Altlasten. Branches mit offenem PR oder neuen Commits bleiben stehen (`.github/workflows/branch-cleanup.yml`).
+
 ## [0.4.11] – 2026-10-19
 
 Die Box lässt sich jetzt **komplett per Telegram steuern** (Status, Neustart, Speedtest, Update). Außerdem bleibt eine Installation zuverlässig auf ihrem **Update-Kanal**, und **viele Sicherheitslücken in Abhängigkeiten** sind geschlossen.
