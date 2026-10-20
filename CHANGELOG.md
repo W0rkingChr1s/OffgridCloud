@@ -6,6 +6,14 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ⚖️ Pool: Bandbreite fair teilen
+
+- **Eine Leitung, gerechte Anteile:** Unter **Pool → Gemeinsame Leitung** die Kapazität der Leitung (KB/s) eintragen und „Bandbreite fair teilen“ einschalten. Jede Minute bekommt jede sendende Box mit Rang den gleichen Anteil. Wer gerade nicht sendet, hat seinen Anteil schon bereit, damit ein Neuling nicht kurz alles belegt.
+- **Gilt zusätzlich zum eigenen Limit** (das kleinere zählt) und ab der **nächsten Datei**: Ein laufender großer Upload behält sein Tempo, bis er fertig ist.
+- **Läuft von selbst ab:** Ohne Erneuerung durch den Hub fällt der Anteil nach 3 Minuten weg, keine Box bleibt dauerhaft gedrosselt. Ausschalten hebt ihn sofort auf.
+- **Kombinierbar mit Vorrang:** Erst pausiert der Vorrang niedrigere Ränge, dann teilen sich die übrigen die Leitung.
+- Braucht bei jeder Box mit Rang das Recht „steuern“. Die Box zeigt ihren Anteil unter **Bandbreite → Aktuelles Limit**, der Hub auf der Kachel. Neuer Endpunkt `POST /api/pool/limit`, Anteilsänderungen stehen im Audit-Log (die minütliche Erneuerung nicht).
+
 ### 🛰️ Pool: Transfers aus der Ferne steuern
 
 - **Vom Hub aus** lassen sich auf einer Peer-Box Uploads **pausieren/fortsetzen** und **alle fehlgeschlagenen Transfers neu anstoßen**, direkt auf der Kachel unter **Pool**.

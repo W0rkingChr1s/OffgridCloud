@@ -111,6 +111,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ **Pool-Discovery**: Boxen finden sich per mDNS (`_offgridcloud._tcp`) und koppeln per 6-stelligem Code statt Token-Copy-Paste (nur Leserecht).
 - ☑ **Pool-Meldungen**: Hub fasst Änderungen an den Peers (offline, Speicher, Pause, neue Fehlschläge) zu einer Nachricht pro Minute zusammen, nur bei Wechseln.
 - ☑ **Pool-Vorrang**: Rang 1–3 pro Box an einer gemeinsamen Leitung; der Hub pausiert niedrigere Ränge, solange höhere senden, und gibt nur selbst Pausiertes wieder frei.
+- ☑ **Pool: Bandbreite fair teilen**: Kapazität einer gemeinsamen Leitung wird jede Minute gleichmäßig auf die sendenden Boxen verteilt (Anteil läuft ohne Erneuerung nach 3 min ab).
 - ☐ **Pool-Ausbau** (Lastverteilung, Relay, Spiegelung …): siehe [Ausbauplan](MULTI-SERVER-POOL.md#ausbauplan).
 - ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
 

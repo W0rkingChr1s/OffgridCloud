@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from .. import bonding
 from ..admin_ops import audit, get_system_settings
 from ..bandwidth import (
+    active_pool_limit,
     effective_bwlimit,
     get_policy,
     measure_probe,
@@ -78,6 +79,8 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
         parallel_uploads=policy.parallel_uploads,
         running_uploads=inflight_count(),
         uploads_paused=policy.uploads_paused,
+        pool_limit_kbps=active_pool_limit(policy, datetime.utcnow()),
+        pool_limit_by=policy.pool_limit_by,
         bonding_available=bond.installed,
         bonding_running=bond.running,
         bonding_links=[

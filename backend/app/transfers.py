@@ -196,9 +196,11 @@ def control_state(db: Session) -> dict:
     failed = db.scalar(
         select(func.count(TransferJob.id)).where(TransferJob.status == TransferStatus.FAILED)
     )
+    policy = bandwidth.get_policy(db)
     return {
-        "uploads_paused": bandwidth.get_policy(db).uploads_paused,
+        "uploads_paused": policy.uploads_paused,
         "failed_transfers": int(failed or 0),
+        "pool_limit_kbps": bandwidth.active_pool_limit(policy, _utcnow_naive()),
     }
 
 
@@ -903,10 +905,14 @@ def process_one() -> bool:
         if job is None:
             return False
 
-        bwlimit = bandwidth.effective_bwlimit(
-            bandwidth.parse_schedule(policy.schedule_json),
-            policy.bwlimit_kbps,
-            datetime.now(),
+        bwlimit = bandwidth.combine_limits(
+            bandwidth.effective_bwlimit(
+                bandwidth.parse_schedule(policy.schedule_json),
+                policy.bwlimit_kbps,
+                datetime.now(),
+            ),
+            # Our share of a line shared with other pool boxes, if a hub set one.
+            bandwidth.active_pool_limit(policy, _utcnow_naive()),
         )
         # The limit is for the whole line: parallel uploads share it.
         slots = _parallel_slots(policy)

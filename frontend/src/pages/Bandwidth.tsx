@@ -109,7 +109,19 @@ export default function Bandwidth() {
 
       {status && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Tile title="Aktuelles Limit" value={status.effective_bwlimit_kbps === 0 ? "unbegrenzt" : `${status.effective_bwlimit_kbps} KB/s`} />
+          <Tile
+            title="Aktuelles Limit"
+            value={(() => {
+              // Own limit and a pool share both apply; the lower one wins.
+              const limits = [status.effective_bwlimit_kbps, status.pool_limit_kbps].filter((k) => k > 0);
+              return limits.length ? `${Math.min(...limits)} KB/s` : "unbegrenzt";
+            })()}
+            hint={
+              status.pool_limit_kbps > 0
+                ? `Anteil an gemeinsamer Leitung: ${status.pool_limit_kbps} KB/s (${status.pool_limit_by}) – gilt ab der nächsten Datei`
+                : undefined
+            }
+          />
           <div className="rounded-2xl bg-slate-800/60 p-5 shadow-lg ring-1 ring-white/5">
             <div className="mb-3 h-1.5 w-12 rounded-full bg-linear-to-r from-ogc-blue to-ogc-indigo" />
             <div className="text-sm font-medium text-slate-400">Zuletzt gemessen</div>
