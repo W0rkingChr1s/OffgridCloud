@@ -518,3 +518,21 @@ class StorageCache(Base):
     uuid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     label: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class StorageBuffer(Base):
+    """An attached partition marked as additional media buffer.
+
+    New uploads and imports land on it (before the box's own buffer) while it
+    is plugged in. Identified by filesystem UUID like :class:`StorageCache`;
+    ``mountpoint`` remembers where its files were written so their stored paths
+    can be rewritten if the drive comes back under a different mountpoint.
+    """
+
+    __tablename__ = "storage_buffers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(120), default="")
+    mountpoint: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

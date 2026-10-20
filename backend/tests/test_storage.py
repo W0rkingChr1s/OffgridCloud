@@ -323,13 +323,16 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(storage_import, "start", lambda **k: original(**k, run_async=False))
     monkeypatch.setattr(storage_import, "start_cache",
                         lambda **k: original_cache(**k, run_async=False))
+    from app import buffers
     from app.db import SessionLocal
-    from app.models import StorageCache
+    from app.models import StorageBuffer, StorageCache
 
+    monkeypatch.setattr(buffers, "SPACE_RESERVE", 0)
     with SessionLocal() as db:
         db.query(StorageCache).delete()
+        db.query(StorageBuffer).delete()
         db.commit()
-    return {"card": card, "ssd": ssd, "t0": t0}
+    return {"card": card, "ssd": ssd, "t0": t0, "lsblk": data}
 
 
 def _token_of(auth):
@@ -460,4 +463,122 @@ def test_cache_backup_browse_and_import(client, admin_auth, rig):
 
 def test_cache_backup_needs_a_cache(client, admin_auth, rig):
     r = client.post("/api/storage/caches/backup", headers=admin_auth, json={"device": "/dev/sdb1"})
+    assert r.status_code == 409
+
+
+# --- Buffer drives ----------------------------------------------------------------
+
+
+def _upload(client, auth, folder_id, filename, data: bytes):
+    sess = client.post(f"/api/folders/{folder_id}/uploads", headers=auth,
+                       json={"filename": filename, "size": len(data)}).json()
+    client.put(f"/api/uploads/{sess['id']}", headers={**auth, "X-Offset": "0"}, content=data)
+    return client.post(f"/api/uploads/{sess['id']}/complete", headers=auth).json()
+
+
+def _stored_paths(folder_id: int) -> list[str]:
+    from app.db import SessionLocal
+    from app.models import MediaItem
+
+    with SessionLocal() as db:
+        return [m.stored_path for m in db.query(MediaItem).filter_by(folder_id=folder_id)]
+
+
+def test_buffer_drive_takes_new_files_and_is_guarded(client, admin_auth, rig):
+    r = client.post("/api/storage/buffers", headers=admin_auth, json={"device": "/dev/sdd1"})
+    assert r.status_code == 201, r.text
+    overview = client.get("/api/storage", headers=admin_auth).json()
+    part = next(d for d in overview["disks"] if d["name"] == "sdd")["partitions"][0]
+    assert part["buffer_drive"] is True and part["protected"] is False
+    (buf,) = overview["buffers"]
+    assert buf["online"] and buf["device"] == "/dev/sdd1" and buf["pending"] == 0
+
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "B"}).json()
+    # Import from the card and a browser upload both land on the drive.
+    r = client.post("/api/storage/imports", headers=admin_auth, json={
+        "device": "/dev/sdb1", "paths": ["DCIM"], "folder_id": folder["id"]})
+    assert r.status_code == 202, r.text
+    _upload(client, admin_auth, folder["id"], "clip.mp4", b"x" * 100)
+    paths = _stored_paths(folder["id"])
+    root = str(rig["ssd"] / "OffgridCloud-Puffer") + "/"
+    # (How many imported depends on the shared test DB: duplicates are box-wide.)
+    assert len(paths) >= 3 and all(p.startswith(root) for p in paths)
+    # Our own buffer dir is hidden when browsing the drive.
+    listing = client.get("/api/storage/browse", params={"device": "/dev/sdd1"}, headers=admin_auth)
+    names = [e["name"] for e in listing.json()["entries"]]
+    assert "OffgridCloud-Puffer" not in names
+
+    # Pending files: it can't be unmounted, ejected, formatted or unmarked.
+    overview = client.get("/api/storage", headers=admin_auth).json()
+    assert overview["buffers"][0]["pending"] == len(paths)
+    for path, body in (("/api/storage/unmount", {"device": "/dev/sdd1"}),
+                       ("/api/storage/eject", {"device": "/dev/sdd"}),
+                       ("/api/storage/format", {"device": "/dev/sdd", "fstype": "exfat",
+                                                "confirm": "sdd"})):
+        r = client.post(path, headers=admin_auth, json=body)
+        assert r.status_code == 409, (path, r.text)
+    r = client.delete("/api/storage/buffers/CACHE-UUID", headers=admin_auth)
+    assert r.status_code == 409 and f"{len(paths)} Datei" in r.json()["detail"]
+
+
+def test_buffer_drive_unplugged_waits_and_moves(client, admin_auth, rig):
+    from app import buffers, integrity, transfers
+    from app.db import SessionLocal
+    from app.models import (
+        CloudProvider,
+        MediaItem,
+        MediaStatus,
+        TransferJob,
+        TransferStatus,
+    )
+
+    assert client.post("/api/storage/buffers", headers=admin_auth,
+                       json={"device": "/dev/sdd1"}).status_code == 201
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "U"}).json()
+    media = _upload(client, admin_auth, folder["id"], "far.mp4", b"y" * 50)
+
+    # Pull the drive: its mountpoint is gone.
+    ssd, moved = rig["ssd"], rig["ssd"].parent / "SSD-sdd1"
+    ssd.rename(moved)
+    stored = _stored_paths(folder["id"])[0]
+    assert buffers.is_offline(stored)
+    # New files fall back to the box's own buffer meanwhile.
+    _upload(client, admin_auth, folder["id"], "home.mp4", b"z" * 10)
+    assert any("OffgridCloud-Puffer" not in p for p in _stored_paths(folder["id"]))
+
+    with SessionLocal() as db:
+        # The boot check must not quarantine files that are merely away.
+        integrity.verify_local_media(db)
+        assert db.get(MediaItem, media["id"]).local_deleted is False
+        # A transfer waits instead of burning its attempts.
+        provider = CloudProvider(name="t", type="s3", config_encrypted="")
+        db.add(provider)
+        db.flush()
+        job = TransferJob(media_id=media["id"], provider_id=provider.id)
+        db.add(job)
+        db.commit()
+        calls = []
+        transfers.process_job(db, job, upload_fn=lambda *a: calls.append(a))
+        assert job.status == TransferStatus.QUEUED and job.attempts == 0 and not calls
+        db.delete(job)
+        db.delete(provider)
+        db.commit()
+
+    # Plugged back in under another mountpoint: stored paths follow it.
+    rig["lsblk"]["blockdevices"][-1]["children"][0]["mountpoint"] = str(moved)
+    drives.clear_cache()
+    overview = client.get("/api/storage", headers=admin_auth).json()
+    assert overview["buffers"][0]["online"] is True
+    stored = _stored_paths(folder["id"])
+    assert any(p.startswith(str(moved) + "/OffgridCloud-Puffer/") for p in stored)
+    assert all(Path(p).exists() for p in stored)
+    with SessionLocal() as db:
+        assert db.get(MediaItem, media["id"]).status != MediaStatus.FAILED
+
+
+def test_buffer_drive_refuses_fat32(client, admin_auth, rig):
+    rig["lsblk"]["blockdevices"][-1]["children"][0]["fstype"] = "vfat"
+    r = client.post("/api/storage/buffers", headers=admin_auth, json={"device": "/dev/sdd1"})
+    assert r.status_code == 409 and "exFAT" in r.json()["detail"]
+    r = client.post("/api/storage/buffers", headers=admin_auth, json={"device": "/dev/mmcblk0p2"})
     assert r.status_code == 409

@@ -33,6 +33,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import buffers
 from .admin_ops import audit
 from .db import SessionLocal
 from .models import MediaItem, MediaStatus, UploadSession
@@ -69,9 +70,12 @@ def reconcile_upload_sessions(db: Session) -> dict:
 
     sessions = db.scalars(select(UploadSession)).all()
     live_paths: set[str] = set()
+    offline = buffers.offline_mountpoints(db)
     for session in sessions:
         path = Path(session.temp_path)
         live_paths.add(os.path.normpath(str(path)))
+        if any(buffers.under(session.temp_path, mp) for mp in offline):
+            continue  # its buffer drive is unplugged — check it once it is back
         actual = _file_size(path)
 
         if actual is None:
@@ -112,13 +116,14 @@ def reconcile_upload_sessions(db: Session) -> dict:
     # Remove stray .part files whose session no longer exists (e.g. a crash
     # between finalising the DB and unlinking the temp file).
     try:
-        for part in uploads_tmp_dir().glob("*.part"):
-            if os.path.normpath(str(part)) not in live_paths:
-                try:
-                    part.unlink()
-                    orphans += 1
-                except OSError:  # pragma: no cover
-                    pass
+        for root in buffers.roots(db):
+            for part in uploads_tmp_dir(root).glob("*.part"):
+                if os.path.normpath(str(part)) not in live_paths:
+                    try:
+                        part.unlink()
+                        orphans += 1
+                    except OSError:  # pragma: no cover
+                        pass
     except OSError:  # pragma: no cover - tmp dir unreadable
         pass
 
@@ -143,12 +148,15 @@ def verify_local_media(db: Session) -> dict:
     """
     checked = 0
     corrupt = 0
+    offline = buffers.offline_mountpoints(db)
     items = db.scalars(
         select(MediaItem).where(MediaItem.local_deleted.is_(False))
     ).all()
     for media in items:
         if media.status not in _PENDING_STATES:
             continue  # already safe at a provider; local copy is disposable
+        if any(buffers.under(media.stored_path, mp) for mp in offline):
+            continue  # on an unplugged buffer drive — not lost, just away
         checked += 1
         actual = _file_size(media.stored_path)
         if actual is not None and actual == media.size:

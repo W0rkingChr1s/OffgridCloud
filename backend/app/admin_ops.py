@@ -47,10 +47,15 @@ def ensure_system_settings() -> None:
 
 
 def disk_usage() -> dict:
-    """Disk usage of the media buffer directory."""
-    path = get_settings().buffer_dir
-    path.mkdir(parents=True, exist_ok=True)
-    total, used, free = shutil.disk_usage(path)
+    """Disk usage of the media buffer — the box's own plus attached buffer drives."""
+    from . import buffers
+
+    try:
+        total, used, free = buffers.usage()
+    except Exception:  # noqa: BLE001 - a flaky drive must not break status pages
+        path = get_settings().buffer_dir
+        path.mkdir(parents=True, exist_ok=True)
+        total, used, free = shutil.disk_usage(path)
     percent_used = (used / total * 100) if total else 0.0
     low = free < LOW_SPACE_MIN_BYTES or (total and free / total < LOW_SPACE_FRACTION)
     return {

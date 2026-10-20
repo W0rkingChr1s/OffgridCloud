@@ -341,6 +341,29 @@ Sicherungen werden dort gelöscht. Ein Cache-Laufwerk lässt sich nicht formatie
 solange es markiert ist. Wiederholtes Sichern derselben Karte am selben Tag ergänzt die
 Sicherung und kopiert nichts doppelt.
 
+#### Puffer-Laufwerk — mehr Platz für den Upload-Puffer
+
+Ein angeschlossenes Laufwerk lässt sich im ⋯-Menü mit **„Als Puffer nutzen“** als
+zusätzlicher Puffer markieren (per Dateisystem-UUID, wie beim Cache). Solange es
+eingesteckt ist und Platz hat, landen **neue Uploads, Importe und Beschreibungen zuerst
+dort** (unter `OffgridCloud-Puffer/`), sonst wie bisher im Puffer auf der Box. Das
+schont nebenbei die System-SD. Die Anzeige „Puffer“ zählt dann Box und Laufwerke
+zusammen, auch für die Speicher-knapp-Meldung.
+
+- **Abziehen:** Solange Dateien auf dem Laufwerk noch nicht überall hochgeladen sind,
+  lässt es sich nicht aushängen, auswerfen, formatieren oder entmarkieren. Wird es
+  trotzdem gezogen, **warten** die betroffenen Transfers („Puffer-Laufwerk nicht
+  angeschlossen“), statt fehlzuschlagen. Auch die Integritätsprüfung beim Start stellt
+  diese Dateien nicht unter Quarantäne.
+- **Wieder einstecken:** Das Laufwerk wird automatisch eingehängt (alle ~10 s geprüft),
+  danach laufen die Uploads weiter. Landet es unter einem anderen Einhängepunkt, werden
+  die gespeicherten Pfade automatisch angepasst. Ein von Hand ausgehängtes
+  Puffer-Laufwerk bleibt ausgehängt, bis es abgezogen oder wieder eingehängt wird.
+- **Verlorenes Laufwerk:** Ist es nicht angeschlossen, kann die Markierung trotzdem
+  entfernt werden. Die noch nicht hochgeladenen Dateien darauf gelten dann als verloren.
+- **FAT32** wird als Puffer abgelehnt (max. 4 GB je Datei): vorher als exFAT oder ext4
+  formatieren.
+
 **Schutz:** Laufwerke mit einem Dateisystem außerhalb von `/media`, `/mnt` oder
 `/run/media` (also die System-SD/-SSD) und das Laufwerk mit dem OffgridCloud-Puffer
 werden als **System** bzw. **Puffer** markiert und lassen sich weder aushängen noch

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  type StorageBuffer,
   type StorageCache,
   type StorageDisk,
   type StorageImportJob,
@@ -184,8 +185,36 @@ export default function Storage() {
     }
   }
 
+  async function markBuffer(p: StoragePartition) {
+    try {
+      await api("/api/storage/buffers", { method: "POST", body: JSON.stringify({ device: p.path }) });
+      toast.success("Puffer eingerichtet", `Neue Uploads und Importe landen jetzt zuerst auf ${partTitle(p)}.`);
+    } catch (e) {
+      report(e);
+    } finally {
+      load();
+    }
+  }
+  async function unmarkBuffer(b: StorageBuffer) {
+    const warn = !b.device && b.pending
+      ? `\n\nAchtung: Das Laufwerk ist nicht angeschlossen — ${b.pending} Datei(en) darauf sind noch nicht hochgeladen und gelten dann als verloren.`
+      : "";
+    if (!confirm(`„${b.label}“ nicht mehr als Puffer nutzen?${warn}`)) return;
+    try {
+      await api(`/api/storage/buffers/${encodeURIComponent(b.uuid)}`, { method: "DELETE" });
+    } catch (e) {
+      report(e);
+    } finally {
+      load();
+    }
+  }
+
   const manage = overview?.manage_enabled ?? false;
   const buf = overview?.buffer;
+  const bufferDrives = overview?.buffers ?? [];
+  // Files on a buffer drive that are not uploaded yet — it must stay plugged in.
+  const pendingOn = (p: StoragePartition) =>
+    p.buffer_drive ? (bufferDrives.find((b) => b.uuid === p.uuid)?.pending ?? 0) : 0;
   const disks = overview?.disks ?? [];
   const media = disks.filter((d) => !d.protected);
   const systemDisks = disks.filter((d) => d.protected);
@@ -193,12 +222,17 @@ export default function Storage() {
 
   function diskMenu(d: StorageDisk): MoreMenuItem[] {
     const isCache = d.partitions.some((p) => p.cache);
+    const isBuffer = d.partitions.some((p) => p.buffer_drive);
     return [
       {
         label: "Komplett formatieren …",
         danger: true,
-        disabled: !manage || busy !== null || d.read_only || isCache,
-        title: isCache ? "Als Cache markiert — erst die Markierung entfernen" : undefined,
+        disabled: !manage || busy !== null || d.read_only || isCache || isBuffer,
+        title: isCache
+          ? "Als Cache markiert — erst die Markierung entfernen"
+          : isBuffer
+            ? "Als Puffer markiert — erst die Markierung entfernen"
+            : undefined,
         onClick: () => setFormatTarget({ device: d.path, name: d.name, whole: true }),
       },
     ];
@@ -207,18 +241,37 @@ export default function Storage() {
   function partMenu(d: StorageDisk, p: StoragePartition): MoreMenuItem[] {
     const items: MoreMenuItem[] = [];
     const cache = caches.find((c) => c.device === p.path);
+    const bufferDrive = bufferDrives.find((b) => b.uuid === p.uuid);
+    const pending = pendingOn(p);
     if (p.mountpoint) {
       items.push({
         label: "Aushängen",
-        disabled: !manage || busy !== null || p.busy,
+        disabled: !manage || busy !== null || p.busy || pending > 0,
+        title: pending ? `${pending} Datei(en) warten noch auf den Upload` : undefined,
         onClick: () => act("/api/storage/unmount", p.path, `${partTitle(p)} ausgehängt.`),
       });
       if (!p.cache && !p.read_only) {
         items.push({ label: "Als Cache nutzen", disabled: busy !== null, onClick: () => markCache(p) });
       }
+      if (!p.buffer_drive && !p.read_only) {
+        items.push({
+          label: "Als Puffer nutzen",
+          disabled: busy !== null || p.fstype === "vfat",
+          title: p.fstype === "vfat" ? "FAT32 kann keine Dateien über 4 GB — erst als exFAT oder ext4 formatieren" : undefined,
+          onClick: () => markBuffer(p),
+        });
+      }
     }
     if (p.cache && cache) items.push({ label: "Nicht mehr als Cache nutzen", onClick: () => unmarkCache(cache) });
-    if (p.path !== d.path && !p.cache) {
+    if (p.buffer_drive && bufferDrive) {
+      items.push({
+        label: "Nicht mehr als Puffer nutzen",
+        disabled: pending > 0,
+        title: pending ? `${pending} Datei(en) warten noch auf den Upload` : undefined,
+        onClick: () => unmarkBuffer(bufferDrive),
+      });
+    }
+    if (p.path !== d.path && !p.cache && !p.buffer_drive) {
       items.push({
         label: "Partition formatieren …",
         danger: true,
@@ -333,6 +386,7 @@ export default function Storage() {
                       {single?.label || diskTitle(d)}
                     </span>
                     {single?.cache && <Badge tone="amber">Cache</Badge>}
+                    {single?.buffer_drive && <Badge tone="teal">Puffer</Badge>}
                     {single?.busy && <Badge tone="teal">in Arbeit</Badge>}
                     {d.read_only && <Badge tone="slate">schreibgeschützt</Badge>}
                   </div>
@@ -359,7 +413,12 @@ export default function Storage() {
                   )}
                   <button
                     className={btn}
-                    disabled={!manage || busy !== null || d.partitions.some((p) => p.busy)}
+                    disabled={!manage || busy !== null || d.partitions.some((p) => p.busy || pendingOn(p) > 0)}
+                    title={
+                      d.partitions.some((p) => pendingOn(p) > 0)
+                        ? "Puffer-Laufwerk: Dateien darauf warten noch auf den Upload"
+                        : undefined
+                    }
                     onClick={() => act("/api/storage/eject", d.path, `${diskTitle(d)} kann entfernt werden.`)}
                   >
                     {busy === d.path ? "…" : "Auswerfen"}
@@ -384,6 +443,7 @@ export default function Storage() {
                             {partTitle(p)}
                           </span>
                           {p.cache && <Badge tone="amber">Cache</Badge>}
+                          {p.buffer_drive && <Badge tone="teal">Puffer</Badge>}
                           {p.busy && <Badge tone="teal">in Arbeit</Badge>}
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">
@@ -425,13 +485,44 @@ export default function Storage() {
       {buf && (
         <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="text-sm font-medium text-slate-400">Puffer auf der Box</div>
+            <div className="text-sm font-medium text-slate-400">
+              {bufferDrives.length ? "Puffer (Box + Laufwerke)" : "Puffer auf der Box"}
+            </div>
             <div className="text-sm text-slate-300">
               <span className="font-semibold text-white">{formatBytes(buf.free)}</span> frei von{" "}
               {formatBytes(buf.total)}
             </div>
           </div>
           <UsageBar used={buf.used} total={buf.total} />
+          {bufferDrives.length > 0 && (
+            <div className="mt-3 grid gap-1.5 text-xs">
+              {bufferDrives.map((b) => (
+                <div key={b.uuid} className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 text-slate-300">
+                    <span className="font-medium text-white">{b.label}</span>
+                    {b.online ? (
+                      <Badge tone="teal">aktiv</Badge>
+                    ) : (
+                      <Badge tone="amber">{b.error || "nicht verfügbar"}</Badge>
+                    )}
+                    {b.pending > 0 && <span className="text-slate-400">{b.pending} Datei(en) warten auf Upload</span>}
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    {b.online && `${formatBytes(b.free)} frei von ${formatBytes(b.total)}`}
+                    {!b.device && (
+                      <button className={btn} onClick={() => unmarkBuffer(b)}>
+                        Entfernen
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <p className="text-slate-500">
+                Neue Uploads und Importe landen zuerst auf einem angeschlossenen Puffer-Laufwerk, sonst auf der Box.
+                Solange Dateien darauf auf den Upload warten, bitte nicht abziehen.
+              </p>
+            </div>
+          )}
           {systemDisks.length > 0 && (
             <details className="mt-3 text-xs text-slate-500">
               <summary className="cursor-pointer select-none hover:text-slate-300">

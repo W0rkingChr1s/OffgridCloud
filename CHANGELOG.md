@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 💾 Neu: Wechselmedien als Puffer
+
+- Auf der Seite **Speicher** gibt es im ⋯-Menü eines Laufwerks **„Als Puffer nutzen“**. Solange es eingesteckt ist und Platz hat, landen neue Uploads, Importe und Beschreibungen zuerst dort (`OffgridCloud-Puffer/`), sonst wie bisher im Puffer auf der Box. Die Puffer-Anzeige zählt Box und Laufwerke zusammen.
+- Mit Dateien, die noch auf den Upload warten, lässt sich das Laufwerk nicht aushängen, auswerfen, formatieren oder entmarkieren. Wird es trotzdem gezogen, warten die Transfers, statt fehlzuschlagen, und die Integritätsprüfung beim Start lässt die Dateien in Ruhe.
+- Wieder eingesteckt, wird es automatisch eingehängt. Ein geänderter Einhängepunkt wird in den gespeicherten Pfaden nachgezogen.
+- Root-Helfer: neue Aktion `storage.sh prepare-buffer`. Ein Update (bzw. `install.sh`) spielt den Helfer neu ein. Ohne Helfer (Docker) wird der Ordner direkt angelegt.
+
 ### 🖥️ Konsole an der Box überarbeitet
 
 - **Neuer Tab „Speicher“:** Laufwerke und Speicherkarten einhängen, aushängen, auswerfen und formatieren, als Cache-Laufwerk markieren, Karteninhalte in einen Ordner hochladen oder ohne Netz aufs Cache-Laufwerk sichern. Laufende Vorgänge erscheinen mit Live-Fortschritt, Kartensicherungen lassen sich ansehen und löschen. Die Konsole kann damit dasselbe wie die Speicher-Seite der Web-UI.

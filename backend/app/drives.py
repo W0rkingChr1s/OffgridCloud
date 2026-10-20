@@ -67,6 +67,7 @@ class Partition:
     system: bool = False
     buffer: bool = False
     cache: bool = False  # marked as cache for offloading cards (by UUID)
+    buffer_drive: bool = False  # marked as additional media buffer (by UUID)
 
     @property
     def protected(self) -> bool:
@@ -215,14 +216,33 @@ def cache_uuids() -> set[str]:
         return set(db.scalars(select(StorageCache.uuid)))
 
 
+def buffer_uuids() -> set[str]:
+    from .db import SessionLocal
+    from .models import StorageBuffer
+
+    with SessionLocal() as db:
+        return set(db.scalars(select(StorageBuffer.uuid)))
+
+
 def list_disks() -> list[Disk]:
     settings = get_settings()
     disks = parse_lsblk(_run_lsblk(), [settings.buffer_dir, settings.data_dir])
     caches = cache_uuids()
+    buffers = buffer_uuids()
     for disk in disks:
         for part in disk.partitions:
             part.cache = bool(part.uuid) and part.uuid in caches and not part.protected
+            part.buffer_drive = bool(part.uuid) and part.uuid in buffers and not part.protected
     return disks
+
+
+def _check_buffer_pending(parts: list[Partition]) -> None:
+    from . import buffers
+    from .db import SessionLocal
+
+    with SessionLocal() as db:
+        for part in parts:
+            buffers.check_removable(db, part)
 
 
 _cached: tuple[float, list[Disk]] | None = None
@@ -301,7 +321,12 @@ def mount(device: str) -> str:
         return part.mountpoint
     if not part.fstype:
         raise StorageError("Kein Dateisystem erkannt — erst formatieren.")
-    return _helper("mount", part.path)
+    mountpoint = _helper("mount", part.path)
+    if part.buffer_drive:
+        from . import buffers
+
+        buffers.resume(part.uuid)
+    return mountpoint
 
 
 def unmount(device: str) -> None:
@@ -314,7 +339,12 @@ def unmount(device: str) -> None:
 
     if storage_import.is_busy(part.path):
         raise StorageError("Auf diesem Medium läuft gerade ein Import.")
+    _check_buffer_pending([part])
     _helper("unmount", part.path)
+    if part.buffer_drive:
+        from . import buffers
+
+        buffers.suspend(part.uuid)
 
 
 def eject(device: str) -> None:
@@ -325,7 +355,13 @@ def eject(device: str) -> None:
 
     if any(storage_import.is_busy(p.path) for p in disk.partitions):
         raise StorageError("Auf diesem Medium läuft gerade ein Import.")
+    _check_buffer_pending(disk.partitions)
     _helper("eject", disk.path)
+    from . import buffers
+
+    for part in disk.partitions:
+        if part.buffer_drive:
+            buffers.suspend(part.uuid)
 
 
 def format_device(device: str, fstype: str, label: str) -> None:
@@ -344,6 +380,8 @@ def format_device(device: str, fstype: str, label: str) -> None:
         raise StorageError("System- oder Pufferlaufwerk kann nicht formatiert werden.")
     if any(p.cache for p in disk.partitions):
         raise StorageError("Laufwerk ist als Cache markiert — erst die Markierung entfernen.")
+    if any(p.buffer_drive for p in disk.partitions):
+        raise StorageError("Laufwerk ist als Puffer markiert — erst die Markierung entfernen.")
     if disk.read_only:
         raise StorageError("Laufwerk ist schreibgeschützt.")
     from . import storage_import
