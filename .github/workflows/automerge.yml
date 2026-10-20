@@ -47,10 +47,15 @@ jobs:
   automerge:
     name: Auto-merge
     runs-on: ubuntu-latest
+    # A push to a PR branch starts CI twice on the same commit (push +
+    # pull_request). Whichever finishes first sees the other still running and
+    # skips, so react to both — the one that finishes last does the merge.
+    # Pushes to main find no open PR for their SHA and stop at "Find the PR".
     if: >-
       github.event_name == 'pull_request_target' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'pull_request')
+       (github.event.workflow_run.event == 'pull_request' ||
+        github.event.workflow_run.event == 'push'))
     env:
       GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN || github.token }}
       REPO: ${{ github.repository }}
