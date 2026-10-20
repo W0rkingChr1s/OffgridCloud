@@ -75,6 +75,23 @@ SITE
   [[ "$HOSTNAME_SHORT" != "$ALIAS" ]] && LAN_SITES+=", ${ALIAS}.local"
   render_site "$LAN_SITES" "tls internal"
   echo
+  # Plain-HTTP twin of the .local names: redirects to HTTPS like Caddy's
+  # automatic redirect would, except for the root-CA downloads. A device that
+  # does not trust the (rotating) tls-internal certificate cannot reach
+  # https:// at all — this is how it gets the CA to fix that.
+  HTTP_LAN_SITES="http://${LAN_SITES//, /, http://}"
+  cat <<SITE
+${HTTP_LAN_SITES} {
+    @rootca path /api/system/https/ca.crt /api/system/https/ca.mobileconfig
+    handle @rootca {
+        reverse_proxy localhost:${BACKEND_PORT}
+    }
+    handle {
+        redir https://{host}{uri} permanent
+    }
+}
+SITE
+  echo
   # Any other Host on port 80 (the IP address): plain HTTP. Named sites above
   # keep their automatic HTTP→HTTPS redirect — Caddy puts those first.
   render_site "http://" ""
@@ -124,5 +141,27 @@ STATE_DIR="$PREFIX/data"
 mkdir -p "$STATE_DIR"
 printf '{"hostname": "%s", "domain": "%s"}\n' "$HOSTNAME_SHORT" "$DOMAIN" \
   > "$STATE_DIR/https_state.json"
+
+# --- 6. Export Caddy's local root CA ---------------------------------------
+# The tls-internal leaf rotates every ~12 h, so a per-certificate browser
+# exception keeps breaking. The root (valid 10 years) is what devices should
+# trust; the backend serves it from here (System → HTTPS). Caddy's copy is
+# readable by the caddy user only. It's created when the config loads — give a
+# fresh install a few seconds (once exported, don't wait again: the UI calls
+# this script with a 30 s timeout). Public data, so world-readable is fine.
+CADDY_ROOT=""
+TRIES=10; [[ -s "$STATE_DIR/caddy-root.crt" ]] && TRIES=1
+for _ in $(seq 1 "$TRIES"); do
+  for cand in /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+              /root/.local/share/caddy/pki/authorities/local/root.crt; do
+    [[ -s "$cand" ]] && { CADDY_ROOT="$cand"; break 2; }
+  done
+  sleep 1
+done
+if [[ -n "$CADDY_ROOT" ]]; then
+  install -m 644 "$CADDY_ROOT" "$STATE_DIR/caddy-root.crt"
+else
+  echo "   Caddy root CA not found yet — re-run apply.sh later to export it." >&2
+fi
 
 step "Done. LAN: https://${HOSTNAME_SHORT}.local${DOMAIN:+  Public: https://$DOMAIN}"

@@ -11,11 +11,15 @@ A box reachable over https:// but never wired for UI management is therefore
 ``enabled`` but not ``manageable`` (no 409-guarded PUT form shown), instead of
 being mislabelled "not set up". PUT still requires ``manageable`` → 409 when the
 command is empty.
+
+The root CA downloads (``ca.crt`` / ``ca.mobileconfig``) live on a separate,
+unauthenticated router: they are needed exactly when a device cannot reach the
+box over https:// yet (so cannot log in), and a CA certificate is public data.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from .. import https_config
@@ -29,6 +33,7 @@ from ..schemas import HttpsConfigUpdate, HttpsStatusOut
 router = APIRouter(
     prefix="/api/system/https", tags=["https"], dependencies=[Depends(require_admin)]
 )
+public_router = APIRouter(prefix="/api/system/https", tags=["https"])
 
 
 def _status() -> HttpsStatusOut:
@@ -43,6 +48,7 @@ def _status() -> HttpsStatusOut:
     # that already serves HTTPS but was never wired for UI management.
     manageable = bool(settings.https_apply_command.strip())
     enabled = manageable or https_config.is_active(settings.data_dir)
+    ca = https_config.read_root_ca(settings.data_dir)
     return HttpsStatusOut(
         enabled=enabled,
         manageable=manageable,
@@ -50,6 +56,8 @@ def _status() -> HttpsStatusOut:
         domain=domain,
         lan_url=f"https://{hostname}.local" if hostname else "",
         public_url=f"https://{domain}" if domain else "",
+        ca_available=ca is not None,
+        ca_fingerprint=https_config.ca_fingerprint(ca) if ca else "",
     )
 
 
@@ -95,3 +103,32 @@ def update_https(
 
     audit(db, admin, "system.https.update", f"hostname={hostname} domain={domain or '—'}")
     return _status()
+
+
+def _root_ca() -> bytes:
+    ca = https_config.read_root_ca(get_settings().data_dir)
+    if ca is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Kein Root-Zertifikat vorhanden — HTTPS ist nicht eingerichtet.",
+        )
+    return ca
+
+
+@public_router.get("/ca.crt")
+def download_root_ca() -> Response:
+    return Response(
+        https_config.root_ca_pem(_root_ca()),
+        media_type="application/x-x509-ca-cert",
+        headers={"Content-Disposition": 'attachment; filename="offgridcloud-root.crt"'},
+    )
+
+
+@public_router.get("/ca.mobileconfig")
+def download_root_ca_profile() -> Response:
+    hostname = https_config.read_state(get_settings().data_dir)["hostname"]
+    return Response(
+        https_config.root_ca_mobileconfig(_root_ca(), hostname),
+        media_type="application/x-apple-aspen-config",
+        headers={"Content-Disposition": 'attachment; filename="offgridcloud.mobileconfig"'},
+    )

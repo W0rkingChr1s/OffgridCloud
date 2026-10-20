@@ -313,3 +313,80 @@ def test_https_put_rejects_bad_hostname(client, admin_auth, monkeypatch):
         "/api/system/https", headers=admin_auth, json={"hostname": "bad host!"}
     )
     assert resp.status_code == 422 or resp.status_code == 400
+
+
+# --- Root CA export (trust the Caddy local CA once per device) -------------
+
+_FAKE_DER = bytes(range(256)) * 3  # opaque to the helpers — they never parse X.509
+
+
+def _write_ca(data_dir: Path, der: bytes = _FAKE_DER) -> None:
+    (data_dir / https_config.ROOT_CA_FILENAME).write_bytes(https_config.root_ca_pem(der))
+
+
+def test_read_root_ca_missing_or_garbled_returns_none(tmp_path: Path):
+    assert https_config.read_root_ca(tmp_path) is None
+    (tmp_path / https_config.ROOT_CA_FILENAME).write_text("nope")
+    assert https_config.read_root_ca(tmp_path) is None
+
+
+def test_read_root_ca_roundtrips_pem(tmp_path: Path):
+    _write_ca(tmp_path)
+    assert https_config.read_root_ca(tmp_path) == _FAKE_DER
+
+
+def test_ca_fingerprint_format():
+    fp = https_config.ca_fingerprint(b"x")
+    assert fp.count(":") == 31 and fp == fp.upper()
+
+
+def test_mobileconfig_carries_der_and_stable_uuids():
+    import plistlib
+
+    a = plistlib.loads(https_config.root_ca_mobileconfig(_FAKE_DER, "box1"))
+    b = plistlib.loads(https_config.root_ca_mobileconfig(_FAKE_DER, "box1"))
+    cert = a["PayloadContent"][0]
+    assert a["PayloadType"] == "Configuration"
+    assert cert["PayloadType"] == "com.apple.security.root"
+    assert cert["PayloadContent"] == _FAKE_DER
+    # Same cert → same identity, so re-installing replaces instead of stacking.
+    assert a["PayloadUUID"] == b["PayloadUUID"]
+    assert "box1.local" in a["PayloadDisplayName"]
+
+
+def test_ca_download_is_public(client, monkeypatch, tmp_path: Path):
+    # No auth header: a device that cannot reach https:// yet cannot log in.
+    import app.routers.https as https_router
+    from app.config import get_settings
+
+    _write_ca(tmp_path)
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    monkeypatch.setattr(
+        https_router.https_config, "read_state", lambda d: {"hostname": "box1", "domain": ""}
+    )
+    crt = client.get("/api/system/https/ca.crt")
+    assert crt.status_code == 200
+    assert crt.headers["content-type"] == "application/x-x509-ca-cert"
+    assert crt.content.startswith(b"-----BEGIN CERTIFICATE-----")
+    prof = client.get("/api/system/https/ca.mobileconfig")
+    assert prof.status_code == 200
+    assert prof.headers["content-type"] == "application/x-apple-aspen-config"
+
+
+def test_ca_download_404_without_export(client, monkeypatch, tmp_path: Path):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    assert client.get("/api/system/https/ca.crt").status_code == 404
+    assert client.get("/api/system/https/ca.mobileconfig").status_code == 404
+
+
+def test_https_status_reports_ca(client, admin_auth, monkeypatch, tmp_path: Path):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "data_dir", tmp_path)
+    assert client.get("/api/system/https", headers=admin_auth).json()["ca_available"] is False
+    _write_ca(tmp_path)
+    body = client.get("/api/system/https", headers=admin_auth).json()
+    assert body["ca_available"] is True
+    assert body["ca_fingerprint"] == https_config.ca_fingerprint(_FAKE_DER)

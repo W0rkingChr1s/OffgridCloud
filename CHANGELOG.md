@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Behoben
+
+- **Anmeldung über `https://<name>.local` schlug plötzlich fehl, per IP ging es:** Das selbst ausgestellte Zertifikat der Box wird etwa alle 12 Stunden erneuert, eine einmal bestätigte Browser-Warnung gilt danach nicht mehr. Safari ließ dann jede Anfrage still scheitern, während der Service Worker die zwischengespeicherte Seite zeigte. Die Meldung „Anmeldung fehlgeschlagen“ wirkte wie ein falsches Passwort. Jetzt:
+  - **Root-Zertifikat zum Download** unter **System → Erweitert → Zertifikat auf Geräten vertrauen**, als iOS/macOS-Profil oder `.crt`, mit SHA-256-Fingerabdruck. Einmal installiert, hält es 10 Jahre. Die Downloads sind auch ohne Anmeldung per `http://<name>.local` erreichbar.
+  - **Gelber Hinweis „Box nicht erreichbar“**, sobald die Box nicht antwortet, mit Erklärung, Link zum Zertifikat und „Neu verbinden“ (setzt Service Worker und Cache zurück, damit der Browser die Warnung wieder zeigt).
+  - **Login sagt, was los ist:** „Box nicht erreichbar – die Anmeldedaten wurden gar nicht geprüft“ statt „Anmeldung fehlgeschlagen“, auch bei Passkeys.
+
 ## [0.7.6] – 2026-10-20
 
 Uploads hängen nicht mehr stumm bei 0 %: Bei Verbindungsaussetzern macht der Browser dort weiter, wo die Box steht.

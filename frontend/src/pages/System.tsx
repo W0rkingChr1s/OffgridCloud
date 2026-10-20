@@ -3,6 +3,7 @@ import {
   api,
   ApiError,
   getHttpsStatus,
+  rootCaUrls,
   updateHttps,
   type AuditEvent,
   type HttpsStatus,
@@ -354,6 +355,57 @@ function HttpsSettings() {
             </button>
           </div>
           {urls}
+        </>
+      )}
+      {https.enabled && <RootCaTrust https={https} />}
+    </div>
+  );
+}
+
+// tls internal: the leaf certificate rotates every ~12 h, so "accept the
+// warning once" keeps breaking (Safari then fails requests silently). Trusting
+// the box's root CA once per device fixes it for good.
+function RootCaTrust({ https }: { https: HttpsStatus }) {
+  const ca = rootCaUrls();
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex items-center gap-1.5 text-slate-300">
+        Zertifikat auf Geräten vertrauen
+        <InfoTip text="Das Zertifikat für https://<name>.local stellt die Box selbst aus und erneuert es etwa alle 12 Stunden. Eine einmal bestätigte Browser-Warnung gilt nur für das alte Zertifikat – danach schlagen Anmeldung und Daten still fehl. Wer das Root-Zertifikat der Box einmal installiert, hat Ruhe (es ist 10 Jahre gültig). Auch Passkeys laufen damit zuverlässig." />
+      </div>
+      {!https.ca_available ? (
+        <span className="block text-xs text-slate-500">
+          Root-Zertifikat noch nicht exportiert – nach dem nächsten Update (oder erneutem
+          Ausführen von deploy/https/apply.sh) steht es hier zum Download bereit.
+        </span>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={ca.profile}
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              Profil für iPhone/iPad/Mac
+            </a>
+            <a
+              href={ca.crt}
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5"
+            >
+              Zertifikat (.crt)
+            </a>
+          </div>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-slate-500">
+            <li>
+              iOS: Profil laden → Einstellungen → „Profil geladen“ → Installieren. Danach
+              Einstellungen → Allgemein → Info → Zertifikatsvertrauenseinstellungen →
+              „Volles Vertrauen“ einschalten.
+            </li>
+            <li>Android/Windows/Linux: .crt als vertrauenswürdige Stammzertifizierungsstelle importieren.</li>
+            <li>
+              Vor dem Vertrauen den Fingerabdruck (SHA-256) vergleichen:{" "}
+              <code className="break-all text-slate-300">{https.ca_fingerprint}</code>
+            </li>
+          </ul>
         </>
       )}
     </div>

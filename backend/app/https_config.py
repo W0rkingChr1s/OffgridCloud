@@ -9,13 +9,25 @@ the bash script; Python only validates input and shells out to it.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
+import plistlib
 import re
 import shlex
 import subprocess
+import uuid
 from pathlib import Path
 
 _STATE_FILENAME = "https_state.json"
+# Public root certificate of Caddy's local CA (``tls internal``), copied here
+# by apply.sh so the unprivileged backend can hand it out — Caddy's own copy
+# lives in /var/lib/caddy, readable by the caddy user only.
+ROOT_CA_FILENAME = "caddy-root.crt"
+_PEM_RE = re.compile(
+    rb"-----BEGIN CERTIFICATE-----\s*(.+?)\s*-----END CERTIFICATE-----", re.DOTALL
+)
 
 # mDNS short name: DNS label rules — letters/digits/hyphen, no leading/trailing
 # hyphen, 1–63 chars. Avahi appends ".local" itself.
@@ -127,3 +139,73 @@ def run_apply(command: str, *, hostname: str, domain: str, run=subprocess.run) -
         tail = (result.stderr or result.stdout or "").strip()[-500:]
         raise RuntimeError(tail or f"apply.sh exited with {result.returncode}")
     return result.stdout
+
+
+def read_root_ca(data_dir: Path) -> bytes | None:
+    """DER bytes of the exported Caddy root CA, or None if absent/garbled.
+
+    The leaf certificate behind ``tls internal`` rotates every ~12 h and the
+    intermediate weekly, so a per-certificate browser exception keeps breaking
+    (Safari then fails every request without showing a warning again). The root
+    is valid for ten years — trusting it once on a device fixes that for good.
+    """
+    try:
+        raw = (Path(data_dir) / ROOT_CA_FILENAME).read_bytes()
+    except OSError:
+        return None
+    match = _PEM_RE.search(raw)
+    if not match:
+        return None
+    try:
+        return base64.b64decode(b"".join(match.group(1).split()), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def root_ca_pem(der: bytes) -> bytes:
+    body = base64.b64encode(der)
+    lines = [body[i : i + 64] for i in range(0, len(body), 64)]
+    return b"-----BEGIN CERTIFICATE-----\n" + b"\n".join(lines) + b"\n-----END CERTIFICATE-----\n"
+
+
+def ca_fingerprint(der: bytes) -> str:
+    """SHA-256 fingerprint as iOS/macOS/Firefox show it (AB:CD:…)."""
+    digest = hashlib.sha256(der).hexdigest().upper()
+    return ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
+
+
+def root_ca_mobileconfig(der: bytes, hostname: str) -> bytes:
+    """Unsigned iOS/macOS configuration profile that installs the root CA.
+
+    UUIDs derive from the certificate, so downloading it again replaces the
+    profile instead of stacking duplicates. After installing, iOS still wants
+    "full trust" switched on under Settings → General → About → Certificate
+    Trust Settings — the UI says so.
+    """
+    seed = hashlib.sha256(der).hexdigest()
+    name = f"{hostname}.local" if hostname else "OffgridCloud"
+    ident = "tech.offgridcloud.rootca"
+    profile = {
+        "PayloadType": "Configuration",
+        "PayloadVersion": 1,
+        "PayloadIdentifier": f"{ident}.{seed[:16]}",
+        "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ident}/{seed}")),
+        "PayloadDisplayName": f"OffgridCloud-Zertifikat ({name})",
+        "PayloadDescription": (
+            f"Vertraut der lokalen Zertifizierungsstelle der OffgridCloud-Box {name}, "
+            "damit https://…local ohne Zertifikatswarnung funktioniert."
+        ),
+        "PayloadOrganization": "OffgridCloud",
+        "PayloadContent": [
+            {
+                "PayloadType": "com.apple.security.root",
+                "PayloadVersion": 1,
+                "PayloadIdentifier": f"{ident}.{seed[:16]}.cert",
+                "PayloadUUID": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{ident}/{seed}/cert")),
+                "PayloadDisplayName": "Caddy Local Authority",
+                "PayloadCertificateFileName": "offgridcloud-root.cer",
+                "PayloadContent": der,
+            }
+        ],
+    }
+    return plistlib.dumps(profile)
