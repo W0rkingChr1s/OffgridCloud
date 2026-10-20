@@ -110,6 +110,22 @@ Unter **Netzwerk** (nur Admin):
   sein. Der AP ist deshalb eine echte Rückfallebene: Er ist an, wenn kein Uplink
   besteht, und aus, sobald ein hinterlegtes WLAN wieder da ist. Für „beides
   gleichzeitig“ braucht es einen zweiten WLAN-Adapter (USB) oder einen Kabel-Uplink.
+- **Rückkehr aus dem AP:** Weil der Funkchip im AP-Modus belegt ist, sucht der
+  Watchdog aktiv nach bekannten WLANs. Berücksichtigt werden alle WLAN-Profile mit
+  Autoconnect, auch das aus dem Raspberry Pi Imager (`netplan-wlan0-*`).
+  1. Alle **2 Minuten** scannt er, ohne den AP abzuschalten. Ist ein bekanntes
+     WLAN sichtbar, verbindet er sich damit.
+  2. Viele Treiber, darunter der des Pi (`brcmfmac`), liefern im AP-Modus keine
+     oder nur veraltete Scan-Ergebnisse. Deshalb schaltet er den AP zusätzlich
+     **alle 10 Minuten für wenige Sekunden ab**, sucht als Client und stellt den
+     AP sofort wieder her, wenn nichts Bekanntes in Reichweite ist. Laufende
+     Uploads übers AP-WLAN brechen dabei kurz ab und müssen neu verbinden.
+
+  Die Intervalle lassen sich über `ap_probe_interval` und
+  `ap_blind_probe_interval` in `network.json` setzen (Standard 120/600 s). Die
+  App überschreibt diese Datei beim „Anwenden“, die Werte gelten also nur bis
+  dahin. Versteckte SSIDs tauchen in Scans nicht auf und werden deshalb nur über
+  einen Kabel-Uplink erkannt.
 - **Kein NetworkManager?** Auf Systemen mit `dhcpcd`/`systemd-networkd` steuert
   die App nichts aktiv. Die Konfiguration wird trotzdem exportiert; die
   Umsetzung müsste dann ein eigenes Setup (hostapd/dnsmasq) übernehmen.

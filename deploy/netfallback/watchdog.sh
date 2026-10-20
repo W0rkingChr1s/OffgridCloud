@@ -5,7 +5,14 @@
 # known Wi-Fi). If it loses upstream for `fail_threshold` consecutive checks and
 # the fallback is enabled, it brings up the self-hosted access point so the
 # field team can still upload. When a known network returns, it drops the AP and
-# lets NetworkManager rejoin.
+# rejoins it.
+#
+# A single Wi-Fi radio can't be AP and client at once, so while the AP is up
+# NetworkManager never sees the known network come back on its own. Every
+# `ap_probe_interval` seconds the watchdog therefore probes actively (see
+# probe_known_networks): scan for a known SSID while still hosting the AP, and
+# every `ap_blind_probe_interval` seconds drop the AP briefly to look as a
+# client, since many drivers can't scan in AP mode.
 #
 # Runs as a loop service (root). Reads the exported config each iteration, so
 # changes made in the UI take effect after the next `apply.sh` (which restarts
@@ -27,6 +34,12 @@ CONFIG="${CONFIG:-$CONFIG_DEFAULT}"
 STATE_DIR="${OGC_NETWATCH_STATE_DIR:-/run/offgridcloud}"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 FAIL_FILE="$STATE_DIR/net-fail-count"
+PROBE_FILE="$STATE_DIR/ap-probe-last"
+BLIND_FILE="$STATE_DIR/ap-blind-probe-last"
+# How long `nmcli connection up` may take when rejoining a known network.
+JOIN_WAIT="${OGC_NETWATCH_JOIN_WAIT:-25}"
+# Settle time after a rescan before reading the scan results.
+SCAN_SETTLE="${OGC_NETWATCH_SCAN_SETTLE:-4}"
 
 log() { printf '[netwatch] %s\n' "$*"; }
 
@@ -72,6 +85,120 @@ has_upstream() {
   return 1
 }
 
+ap_is_active() {
+  nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$1"
+}
+
+# Visible SSIDs, one per line (nmcli -t escapes ':' and '\' with a backslash).
+visible_ssids() {
+  nmcli -t -f SSID device wifi list --rescan yes 2>/dev/null \
+    | sed -e 's/\\\(.\)/\1/g' | grep -v '^$' | sort -u
+}
+
+# Wi-Fi *client* profiles that may autoconnect, highest priority first, as
+# "<priority>\t<ssid>\t<name>". Includes profiles OffgridCloud doesn't manage
+# (e.g. the network entered in Raspberry Pi Imager → netplan-wlan0-<SSID>).
+known_client_profiles() {
+  local ap_name="$1" name type auto prio ssid mode
+  while IFS=: read -r name type auto prio; do
+    [[ "$type" == "802-11-wireless" ]] || continue
+    [[ "$name" == "$ap_name" ]] && continue
+    [[ "$auto" == "yes" ]] || continue
+    mode="$(nmcli -t -f 802-11-wireless.mode connection show "$name" 2>/dev/null)"
+    mode="${mode#*:}"
+    [[ "$mode" == "ap" || "$mode" == "adhoc" || "$mode" == "mesh" ]] && continue
+    ssid="$(nmcli -t -f 802-11-wireless.ssid connection show "$name" 2>/dev/null)"
+    ssid="${ssid#*:}"
+    [[ -n "$ssid" ]] || continue
+    [[ "$prio" =~ ^-?[0-9]+$ ]] || prio=0
+    printf '%s\t%s\t%s\n' "$prio" "$ssid" "$name"
+  done < <(nmcli -t -f NAME,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show 2>/dev/null) \
+    | sort -t $'\t' -k1,1nr
+}
+
+# Seconds since the timestamp stored in "$1" (huge if never stamped).
+since_stamp() {
+  local last=0
+  [[ -f "$1" ]] && last="$(cat "$1" 2>/dev/null || echo 0)"
+  [[ "$last" =~ ^[0-9]+$ ]] || last=0
+  echo $(( $(date +%s) - last ))
+}
+
+cfg_seconds() {  # <key> <default> <minimum>
+  local v
+  v="$(cfg "$1" "$2")"
+  [[ "$v" =~ ^[0-9]+$ ]] && (( v >= $3 )) || v="$2"
+  echo "$v"
+}
+
+# Known profiles (from known_client_profiles) whose SSID is in the visible list,
+# as "<ssid>\t<name>", priority order preserved.
+in_range() {
+  local profiles="$1" visible="$2" prio ssid name
+  [[ -n "$visible" ]] || return 0
+  while IFS=$'\t' read -r prio ssid name; do
+    [[ -n "$ssid" ]] && grep -qxF -- "$ssid" <<<"$visible" && printf '%s\t%s\n' "$ssid" "$name"
+  done <<<"$profiles"
+  return 0
+}
+
+# Try candidates in order; 0 as soon as one gives us an uplink.
+join_any() {
+  local ap_name="$1" candidates="$2" ssid name
+  while IFS=$'\t' read -r ssid name; do
+    [[ -n "$name" ]] || continue
+    log "known network '$ssid' in range — joining via '$name'"
+    if nmcli --wait "$JOIN_WAIT" connection up "$name" >/dev/null 2>&1 \
+         && has_upstream "$ap_name"; then
+      log "rejoined '$ssid' — left AP mode"
+      echo 0 > "$FAIL_FILE"
+      return 0
+    fi
+    log "joining '$ssid' failed"
+  done <<<"$candidates"
+  return 1
+}
+
+# While hosting the AP: is a known network back? If so, leave the AP and join it.
+#
+# Two stages, because a single radio can't be AP and client at once:
+#  1. every `ap_probe_interval` s: scan while still hosting — no interruption.
+#  2. every `ap_blind_probe_interval` s, if stage 1 found nothing: drop the AP
+#     for a few seconds and scan as a client. Needed because many drivers (the
+#     Pi's brcmfmac among them) return nothing or only stale results in AP mode.
+probe_known_networks() {
+  local ap_name="$1" interval blind_interval profiles candidates
+  interval="$(cfg_seconds ap_probe_interval 120 30)"
+  blind_interval="$(cfg_seconds ap_blind_probe_interval 600 60)"
+  (( $(since_stamp "$PROBE_FILE") >= interval )) || return 1
+  date +%s > "$PROBE_FILE"
+
+  profiles="$(known_client_profiles "$ap_name")"
+  if [[ -z "$profiles" ]]; then
+    log "AP mode: no known Wi-Fi profiles to probe for"
+    return 1
+  fi
+
+  candidates="$(in_range "$profiles" "$(visible_ssids)")"
+  if [[ -n "$candidates" ]]; then
+    nmcli connection down "$ap_name" >/dev/null 2>&1 || true
+  else
+    (( $(since_stamp "$BLIND_FILE") >= blind_interval )) || return 1
+    date +%s > "$BLIND_FILE"
+    log "AP mode: nothing known seen while hosting — dropping AP briefly to scan"
+    nmcli connection down "$ap_name" >/dev/null 2>&1 || true
+    sleep "$SCAN_SETTLE"
+    candidates="$(in_range "$profiles" "$(visible_ssids)")"
+  fi
+
+  join_any "$ap_name" "$candidates" && return 0
+
+  log "no known network reachable — restoring fallback AP '$ap_name'"
+  nmcli connection up "$ap_name" >/dev/null 2>&1 \
+    || log "failed to restore AP '$ap_name'"
+  return 1
+}
+
 evaluate_once() {
   if ! command -v nmcli >/dev/null 2>&1; then
     log "nmcli not present — nothing to do"; return 0
@@ -87,7 +214,7 @@ evaluate_once() {
 
   if has_upstream "$ap_name"; then
     echo 0 > "$FAIL_FILE"
-    if nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$ap_name"; then
+    if ap_is_active "$ap_name"; then
       log "upstream restored — leaving AP mode"
       nmcli connection down "$ap_name" >/dev/null 2>&1 || true
     fi
@@ -103,10 +230,11 @@ evaluate_once() {
     log "no upstream (fail $fails) — fallback disabled, staying put"
     return 0
   fi
+  if ap_is_active "$ap_name"; then
+    probe_known_networks "$ap_name" || true
+    return 0
+  fi
   if (( fails >= threshold )); then
-    if nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "$ap_name"; then
-      return 0  # already hosting the AP
-    fi
     log "no upstream for $fails checks — bringing up fallback AP '$ap_name'"
     nmcli connection up "$ap_name" >/dev/null 2>&1 \
       || log "failed to bring up AP '$ap_name' (does it exist? run apply.sh)"
