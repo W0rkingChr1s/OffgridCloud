@@ -349,6 +349,14 @@ class BandwidthPolicyUpdate(BaseModel):
     schedule: list[BandwidthWindow] | None = None
     metered_mode: Literal["allow", "pause", "limit"] | None = None
     metered_budget_mb: int | None = Field(default=None, ge=1, le=10_000_000)
+    bonding_enabled: bool | None = None
+    parallel_uploads: int | None = Field(default=None, ge=1, le=4)
+
+
+class BondingLinkOut(BaseModel):
+    name: str  # interface, e.g. "wlan0"
+    used: bool  # net-merge spreads uploads over it
+    detail: str = ""  # its address, or why it is skipped
 
 
 class BandwidthStatusOut(BaseModel):
@@ -366,6 +374,12 @@ class BandwidthStatusOut(BaseModel):
     metered_used_bytes: int = 0  # sent over a metered link today
     metered: bool = False  # the uplink in use right now is metered
     uplink: str = ""  # label of the uplink in use, e.g. "USB-Tethering (iPhone)"
+    bonding_enabled: bool = False  # admin switched link bundling on
+    bonding_available: bool = False  # net-merge installed (deploy/netmerge/install.sh)
+    bonding_running: bool = False  # its SOCKS5 proxy answers
+    bonding_links: list[BondingLinkOut] = []  # what net-merge sees
+    parallel_uploads: int = 1  # uploads running at the same time (1-4)
+    running_uploads: int = 0  # how many run right now
 
 
 class DiskUsageOut(BaseModel):
@@ -484,6 +498,7 @@ class NetworkStatusOut(BaseModel):
     tether: str | None = None  # "iphone" | "android" while a phone tethers via USB
     tether_ip: str | None = None
     metered: bool = False
+    metered_present: bool = False
     uplink_ip: str | None = None
     detail: str = ""
 

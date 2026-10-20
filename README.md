@@ -74,6 +74,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 
 - 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
 - 📱 **USB-Tethering** — iPhone oder Android-Handy per Kabel als Uplink, automatisch erkannt und hinter Kabel und WLAN eingereiht; Uploads über die getaktete Verbindung wahlweise normal, bis zu einem Tagesvolumen oder pausiert
+- 🔀 **Leitungsbündelung** — mit [net-merge](https://github.com/rohit267/net-merge) laufen Uploads über alle Uplinks gleichzeitig (z. B. WLAN + LTE-Handy); nur für rclone, ohne Eingriff ins Routing der Box, Ziele im LAN/VPN gehen weiter direkt
 - 🔐 **VPN-Client** — wählt sich per WireGuard/OpenVPN ins Heimnetz ein, damit intern-only Ziele (z. B. ein NAS) erreichbar sind
 - 🌐 **HTTPS out of the box** — Caddy + mDNS: `https://offgridcloud-XXXXX.local`, Alias `https://offgridcloud.local` und per IP `http://<host-ip>` — auch offline im Feld
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)

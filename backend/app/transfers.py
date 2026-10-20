@@ -32,7 +32,7 @@ from .models import (
     TransferStatus,
 )
 from .providers_registry import get_type
-from .rclone import DeleteResult, UploadResult, delete_remote, run_upload
+from .rclone import PROXY_OPTION, DeleteResult, UploadResult, delete_remote, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
 
@@ -174,16 +174,41 @@ def _rclone_upload_fn(
     return run_upload(local_path, options, dest, bwlimit_kbps, on_progress)
 
 
+_last_route = [""]  # last bundling decision, so changes are logged once
+
+
+def _bonding_proxy(db: Session, options: dict) -> str:
+    """net-merge proxy for this upload, or ``""`` to go direct (see app/bonding.py)."""
+    from . import bonding
+    from . import vpn as vpnsvc
+
+    policy = bandwidth.get_policy(db)
+    decision = bonding.decide(
+        enabled=True,
+        options=options,
+        metered_mode=policy.metered_mode,
+        metered_present=network.metered_link_present(),
+        openvpn_active=vpnsvc.active_type() == "openvpn",
+    )
+    route = "gebündelt" if decision.proxy else f"direkt ({decision.reason})"
+    if route != _last_route[0]:
+        _last_route[0] = route
+        logger.info("Leitungsbündelung: Uploads %s", route)
+    return decision.proxy
+
+
 def process_job(
     db: Session,
     job: TransferJob,
     upload_fn: UploadFn = _rclone_upload_fn,
     bwlimit_kbps: int = 0,
     metered: bool = False,
+    bonding: bool = False,
 ) -> TransferJob:
     """Run one transfer job through its state machine. Commits its own changes.
 
     With ``metered`` the bytes sent count against today's metered data budget.
+    With ``bonding`` the upload goes through net-merge when that is safe.
     """
     media = db.get(MediaItem, job.media_id)
     provider = db.get(CloudProvider, job.provider_id)
@@ -227,6 +252,10 @@ def process_job(
     except json.JSONDecodeError:
         config = {}
     options = pt.to_rclone_options(config)
+    if bonding:
+        proxy = _bonding_proxy(db, options)
+        if proxy:
+            options[PROXY_OPTION] = proxy
     dest = _build_dest(dest_path, media.filename)
 
     job_id = job.id
@@ -247,9 +276,12 @@ def process_job(
             used = media.size
         bandwidth.add_metered_usage(db, used, date.today().isoformat())
 
-    # Feed observed throughput back into the bandwidth gate.
+    # Feed observed throughput back into the bandwidth gate. With parallel
+    # uploads one job only sees its share of the line, so add what the others
+    # are moving right now.
     if result.kbps > 0:
-        bandwidth.record_measurement(db, result.kbps)
+        others = sum(v["kbps"] for v in get_live().values())
+        bandwidth.record_measurement(db, result.kbps + others)
 
     settings = get_settings()
     if result.ok:
@@ -646,12 +678,31 @@ def _has_queued(db: Session) -> bool:
     ) is not None
 
 
-def _pick_eligible(db: Session, max_bytes: int | None = None) -> TransferJob | None:
+# --- Parallel uploads ------------------------------------------------------
+# Up to MAX_PARALLEL worker slots pick jobs at the same time (the admin sets how
+# many under Bandbreite). A job counts as taken from the moment a slot picks it
+# until process_job returns; the metered budget other slots may still spend is
+# reduced by the sizes those jobs reserve.
+MAX_PARALLEL = 4
+_claim_lock = threading.Lock()
+_inflight: dict[int, int] = {}  # job id -> bytes reserved against the metered budget
+
+
+def inflight_count() -> int:
+    with _claim_lock:
+        return len(_inflight)
+
+
+def _pick_eligible(
+    db: Session, max_bytes: int | None = None, exclude: set[int] | frozenset = frozenset()
+) -> TransferJob | None:
     """Next due job; with ``max_bytes`` only one whose file fits that budget."""
     query = select(TransferJob).where(
         TransferJob.status == TransferStatus.QUEUED,
         or_(TransferJob.next_attempt_at.is_(None), TransferJob.next_attempt_at <= _now()),
     )
+    if exclude:
+        query = query.where(TransferJob.id.not_in(exclude))
     if max_bytes is not None:
         query = query.join(MediaItem, MediaItem.id == TransferJob.media_id).where(
             MediaItem.size <= max_bytes
@@ -742,12 +793,29 @@ def process_one() -> bool:
                         _utcnow_naive(),
                     )
 
-        job = _pick_eligible(db, max_bytes) if ok else None
-        if ok and job is None and max_bytes is not None and _pick_eligible(db) is not None:
-            ok = False
-            reason = (
-                f"Restvolumen {_format_bytes(max_bytes)} reicht für keine wartende Datei"
-            )
+        job = None
+        if ok:
+            with _claim_lock:
+                taken = set(_inflight)
+                if max_bytes is not None:
+                    max_bytes = max(0, max_bytes - sum(_inflight.values()))
+                job = _pick_eligible(db, max_bytes, taken)
+                if job is not None:
+                    reserved = 0
+                    if metered and max_bytes is not None:
+                        media = db.get(MediaItem, job.media_id)
+                        reserved = media.size if media else 0
+                    _inflight[job.id] = reserved
+            if (
+                job is None
+                and max_bytes is not None
+                and not taken
+                and _pick_eligible(db) is not None
+            ):
+                ok = False
+                reason = (
+                    f"Restvolumen {_format_bytes(max_bytes)} reicht für keine wartende Datei"
+                )
 
         # Announce a one-shot "paused"/"resumed" on bandwidth-gate transitions.
         _note_bandwidth_gate(db, ok, reason)
@@ -763,17 +831,38 @@ def process_one() -> bool:
             policy.bwlimit_kbps,
             datetime.now(),
         )
-        process_job(db, job, bwlimit_kbps=bwlimit, metered=metered)
+        # The limit is for the whole line: parallel uploads share it.
+        slots = _parallel_slots(policy)
+        if bwlimit > 0 and slots > 1:
+            bwlimit = max(1, bwlimit // slots)
+        try:
+            process_job(
+                db, job, bwlimit_kbps=bwlimit, metered=metered, bonding=policy.bonding_enabled
+            )
+        finally:
+            with _claim_lock:
+                _inflight.pop(job.id, None)
         return True
 
 
-async def worker_loop(stop: asyncio.Event) -> None:
-    interval = get_settings().worker_poll_interval
-    recover_running_jobs()
-    logger.info("Transfer worker started")
+def _parallel_slots(policy) -> int:
+    return max(1, min(MAX_PARALLEL, policy.parallel_uploads or 1))
+
+
+def _slot_active(slot: int) -> bool:
+    """Whether worker slot ``slot`` (0-based) may run under the current setting."""
+    if slot == 0:
+        return True
+    with SessionLocal() as db:
+        return slot < _parallel_slots(bandwidth.get_policy(db))
+
+
+async def _worker_slot(slot: int, stop: asyncio.Event, interval: float) -> None:
     while not stop.is_set():
         try:
-            handled = await asyncio.to_thread(process_one)
+            handled = await asyncio.to_thread(
+                lambda: _slot_active(slot) and process_one()
+            )
         except Exception:  # pragma: no cover - keep the worker alive
             logger.exception("Transfer worker error")
             handled = False
@@ -782,4 +871,12 @@ async def worker_loop(stop: asyncio.Event) -> None:
                 await asyncio.wait_for(stop.wait(), timeout=interval)
             except TimeoutError:
                 pass
+
+
+async def worker_loop(stop: asyncio.Event) -> None:
+    """Run MAX_PARALLEL slots; ``parallel_uploads`` decides how many pick jobs."""
+    interval = get_settings().worker_poll_interval
+    recover_running_jobs()
+    logger.info("Transfer worker started")
+    await asyncio.gather(*(_worker_slot(i, stop, interval) for i in range(MAX_PARALLEL)))
     logger.info("Transfer worker stopped")

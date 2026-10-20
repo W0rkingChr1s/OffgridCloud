@@ -8,6 +8,7 @@ from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from .. import bonding
 from ..admin_ops import audit, get_system_settings
 from ..bandwidth import (
     effective_bwlimit,
@@ -24,7 +25,13 @@ from ..db import get_db
 from ..deps import require_admin
 from ..models import BandwidthPolicy, User
 from ..network import metered_uplink
-from ..schemas import BandwidthPolicyUpdate, BandwidthStatusOut, BandwidthWindow
+from ..schemas import (
+    BandwidthPolicyUpdate,
+    BandwidthStatusOut,
+    BandwidthWindow,
+    BondingLinkOut,
+)
+from ..transfers import inflight_count
 
 router = APIRouter(
     prefix="/api/bandwidth",
@@ -35,6 +42,7 @@ router = APIRouter(
 
 def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
     schedule = parse_schedule(policy.schedule_json)
+    bond = bonding.get_status()
     metered, uplink = metered_uplink()
     used = metered_used_today(policy, date.today().isoformat())
     ok, reason, _ = metered_gate(
@@ -63,6 +71,15 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
         metered_used_bytes=used,
         metered=metered,
         uplink=uplink,
+        bonding_enabled=policy.bonding_enabled,
+        parallel_uploads=policy.parallel_uploads,
+        running_uploads=inflight_count(),
+        bonding_available=bond.installed,
+        bonding_running=bond.running,
+        bonding_links=[
+            BondingLinkOut(name=link.name, used=link.used, detail=link.detail)
+            for link in bond.links
+        ],
     )
 
 
@@ -92,6 +109,18 @@ def update_bandwidth(
         policy.metered_mode = payload.metered_mode
     if payload.metered_budget_mb is not None:
         policy.metered_budget_mb = payload.metered_budget_mb
+    if payload.bonding_enabled is not None:
+        if payload.bonding_enabled and not bonding.proxy_url():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "net-merge ist nicht eingerichtet "
+                    "(sudo /opt/offgridcloud/deploy/netmerge/install.sh)"
+                ),
+            )
+        policy.bonding_enabled = payload.bonding_enabled
+    if payload.parallel_uploads is not None:
+        policy.parallel_uploads = payload.parallel_uploads
     db.commit()
     db.refresh(policy)
     audit(
@@ -99,7 +128,8 @@ def update_bandwidth(
         admin,
         "bandwidth.update",
         f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}"
-        f" metered={policy.metered_mode}/{policy.metered_budget_mb}MB",
+        f" metered={policy.metered_mode}/{policy.metered_budget_mb}MB"
+        f" bonding={policy.bonding_enabled} parallel={policy.parallel_uploads}",
     )
     return _status(policy)
 

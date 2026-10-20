@@ -92,6 +92,7 @@ HAS_SERVICE=0; [[ -f /etc/systemd/system/offgridcloud.service ]] && HAS_SERVICE=
 HAS_KIOSK=0;   [[ -f /etc/systemd/system/offgrid-kiosk.service ]] && HAS_KIOSK=1
 HAS_NETFB=0;   [[ -f /etc/systemd/system/offgridcloud-netwatch.service ]] && HAS_NETFB=1
 HAS_VPN=0;     [[ -f /etc/systemd/system/offgridcloud.service.d/10-vpn-caps.conf ]] && HAS_VPN=1
+HAS_NETMERGE=0; [[ -f /etc/systemd/system/offgridcloud-netmerge.service ]] && HAS_NETMERGE=1
 HAS_HTTPS=0
 if [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile 2>/dev/null; then
   HAS_HTTPS=1
@@ -123,6 +124,7 @@ Gefunden in $PREFIX:
   HTTPS (Caddy + Hostname) .... $(found $HAS_HTTPS)
   Netzwerk-Redundanz .......... $(found $HAS_NETFB)
   VPN-Client (Drop-in) ........ $(found $HAS_VPN)
+  Leitungsbündelung ........... $(found $HAS_NETMERGE)
   Kiosk-Konsole ............... $(found $HAS_KIOSK)
   Dienst-Benutzer ($SERVICE_USER) .... $(found $HAS_USER)
   Datenbank + Puffer .......... $(found $HAS_DB) ($DATA_SIZE)
@@ -379,6 +381,12 @@ run rm -f /etc/systemd/system/offgridcloud-setup-ap.service \
 command -v nmcli >/dev/null 2>&1 && run nmcli connection delete offgridcloud-setup >/dev/null 2>&1 || true
 run rm -rf /var/lib/offgridcloud
 run systemctl daemon-reload 2>/dev/null || true
+
+# --- 2b. Link bundling (net-merge) ------------------------------------------
+# Only our service goes; the net-merge package itself stays (apt remove
+# net-merge, if nothing else uses it).
+run systemctl disable --now offgridcloud-netmerge.service 2>/dev/null || true
+run rm -f /etc/systemd/system/offgridcloud-netmerge.service
 
 # --- 3. Network-redundancy layer --------------------------------------------
 step "Removing the network-redundancy layer (watchdog + fallback AP), if installed..."

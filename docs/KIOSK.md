@@ -39,7 +39,7 @@ Innerhalb eines Tabs: **↑/↓** wählen, **Enter** öffnen, **Esc** zurück.
   **Kartensicherungen** (Sicherungen je Cache-Laufwerk ansehen/löschen) und
   **Puffer-Belegung**.
 - **4 · Netz & Verbindung** — **WLAN & Fallback-AP** (AP/Watchdog, bekannte WLANs
-  hinzufügen/löschen, Scan, „Anwenden"), **Bandbreite** (Limit + Mindest-Gate) und
+  hinzufügen/löschen, Scan, „Anwenden"), **Bandbreite** (Limit, Mindest-Gate, getaktete Verbindung, Leitungsbündelung, parallele Uploads) und
   **VPN** (Profile verbinden/trennen/löschen, neues Profil aus `.conf`/`.ovpn`).
 - **5 · Pool** — Pool-Übersicht (dieser Knoten + Peers), diesen Knoten **teilbar**
   machen (Token erzeugen/anzeigen/entfernen), **Peers** (andere Boxen) verwalten.

@@ -112,6 +112,7 @@ class NetworkStatus:
     tether: str | None = None  # "iphone" | "android" while a phone tethers via USB
     tether_ip: str | None = None
     metered: bool = False  # the uplink in use is metered (mobile data)
+    metered_present: bool = False  # any connected link is metered, used or not
     uplink_ip: str | None = None  # IPv4 the box currently routes out through
     detail: str = ""  # human-readable note (why unsupported, etc.)
 
@@ -280,6 +281,11 @@ def build_status(
     if uplink is not None:
         details = info.get(uplink[1], {})
         status.metered = uplink[0] == "tether" or details.get("metered") == "yes"
+    # Link bundling uses every link, not just the default route's — so it has
+    # to know about a phone sitting in reserve too.
+    status.metered_present = any(
+        mode == "tether" or info.get(dev, {}).get("metered") == "yes" for mode, dev in uplinks
+    )
 
     if status.ap_active:
         status.mode = "ap"
@@ -370,8 +376,24 @@ def get_status(*, apply_wired: bool = False) -> NetworkStatus:
 # nmcli calls per poll would be noticeable on a Pi 3, and a phone isn't plugged
 # in or out every second, so the answer is cached briefly.
 METERED_CACHE_SECONDS = 30.0
-_metered_cache: tuple[float, bool, str] | None = None
+_metered_cache: tuple[float, bool, str, bool] | None = None
 _metered_lock = threading.Lock()
+
+
+def _metered_state(max_age: float) -> tuple[bool, str, bool]:
+    global _metered_cache
+    with _metered_lock:
+        now = time.monotonic()
+        if _metered_cache is not None and now - _metered_cache[0] < max_age:
+            return _metered_cache[1], _metered_cache[2], _metered_cache[3]
+        status = get_status()
+        result = (
+            status.supported and status.metered,
+            describe_uplink(status),
+            status.supported and status.metered_present,
+        )
+        _metered_cache = (now, *result)
+        return result
 
 
 def metered_uplink(*, max_age: float = METERED_CACHE_SECONDS) -> tuple[bool, str]:
@@ -380,15 +402,13 @@ def metered_uplink(*, max_age: float = METERED_CACHE_SECONDS) -> tuple[bool, str
     Without NetworkManager the box can't tell, so it reports "not metered" and
     the metered-upload rules stay inactive instead of blocking every upload.
     """
-    global _metered_cache
-    with _metered_lock:
-        now = time.monotonic()
-        if _metered_cache is not None and now - _metered_cache[0] < max_age:
-            return _metered_cache[1], _metered_cache[2]
-        status = get_status()
-        result = (status.supported and status.metered, describe_uplink(status))
-        _metered_cache = (now, *result)
-        return result
+    metered, label, _ = _metered_state(max_age)
+    return metered, label
+
+
+def metered_link_present(*, max_age: float = METERED_CACHE_SECONDS) -> bool:
+    """True while any metered link (e.g. a phone in reserve) is connected."""
+    return _metered_state(max_age)[2]
 
 
 def reset_metered_cache() -> None:

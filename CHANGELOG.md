@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🔀 Neu: Leitungsbündelung mit net-merge
+
+- **Alle Uplinks gleichzeitig:** Mit [net-merge](https://github.com/rohit267/net-merge) verteilt die Box ihre Cloud-Uploads auf Kabel, WLAN und ein angestecktes Handy zugleich. Das bringt vor allem bei großen Dateien zu S3, Azure und B2 etwas, deren Teile rclone parallel hochlädt.
+- **Nur für rclone:** net-merge läuft als SOCKS5-Proxy auf `127.0.0.1:1080` (Dienst `offgridcloud-netmerge`). Routing, Rückfall-WLAN und VPN der Box bleiben unberührt. Antwortet der Proxy nicht, gehen Uploads direkt.
+- **Vorsichtig:** Ziele im LAN oder hinter dem VPN, ein aktiver OpenVPN-Tunnel und ein getaktetes Handy bei Regel „Tagesvolumen“/„pausieren“ umgehen die Bündelung.
+- Einrichten mit `sudo deploy/netmerge/install.sh` (oder „Leitungsbündelung“ im Installer), einschalten unter **Bandbreite → Leitungsbündelung**. Standard: aus.
+- **Parallele Uploads:** Unter Bandbreite lassen sich 1–4 Uploads gleichzeitig einstellen (Standard 1). Mit Bündelung nimmt jeder Upload eine eigene Leitung, das bringt auch bei WebDAV und SFTP mehr Durchsatz. Das KB/s-Limit gilt für alle zusammen, laufende Uploads zählen beim Tagesvolumen schon mit.
+- Anleitung und Grenzen: [docs/NETZWERK-REDUNDANZ.md](docs/NETZWERK-REDUNDANZ.md#leitungsbündelung-net-merge).
+
 ### 📱 Neu: USB-Tethering mit iPhone oder Android
 
 - **Handy per Kabel als Uplink:** Ein per USB angestecktes iPhone (`ipheth`) oder Android-Handy (`rndis_host`/`cdc_ncm`) wird erkannt. Die Netzwerk-Seite zeigt den Modus „USB-Tethering“ mit dem Gerät, Telegram `/netz` und die Konsole an der Box ebenso. Fürs iPhone installiert `install.sh` jetzt `usbmuxd` mit, ohne das kommt der Link nicht hoch.

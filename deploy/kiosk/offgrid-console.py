@@ -498,6 +498,9 @@ BANDWIDTH_FIELDS = [
     ("group", "Getaktete Verbindung (USB-Tethering)"),
     ("metered_mode", "Uploads: allow / pause / limit", "text"),
     ("metered_budget_mb", "Tagesvolumen bei limit (MB)", "int"),
+    ("group", "Mehrere Leitungen & parallele Uploads"),
+    ("bonding_enabled", "Über alle Leitungen bündeln (net-merge)", "bool"),
+    ("parallel_uploads", "Parallele Uploads (1-4, Pi 3: max. 2)", "int"),
 ]
 
 # Top-level tabs: (key, label, short label). The dashboard is the landing view

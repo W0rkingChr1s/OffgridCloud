@@ -135,6 +135,11 @@ class Settings(BaseSettings):
 
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
+    # Link bundling: the SOCKS5 address of the local net-merge helper (e.g.
+    # ``127.0.0.1:1080``). Set by ``deploy/netmerge/install.sh``; empty = not
+    # installed, the toggle in the UI stays unavailable. See app/bonding.py.
+    netmerge_proxy: str = ""
+    netmerge_binary: str = "net-merge"
 
     # Background upload worker. Disabled in tests so job state can be driven
     # deterministically.

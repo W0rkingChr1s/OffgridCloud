@@ -106,6 +106,19 @@ export interface BandwidthStatus {
   metered_used_bytes: number;
   metered: boolean;
   uplink: string;
+  bonding_enabled: boolean;
+  bonding_available: boolean;
+  bonding_running: boolean;
+  bonding_links: BondingLink[];
+  parallel_uploads: number;
+  running_uploads: number;
+}
+
+/** A network link as net-merge sees it (link bundling). */
+export interface BondingLink {
+  name: string;
+  used: boolean;
+  detail: string;
 }
 
 /** What uploads do while the uplink is metered (USB-tethered phone). */
