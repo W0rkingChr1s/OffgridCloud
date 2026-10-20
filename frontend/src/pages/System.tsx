@@ -90,7 +90,7 @@ export default function System() {
         {disk && (
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
             <div
-              className={`h-full rounded-full ${disk.low_space ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+              className={`h-full rounded-full ${disk.low_space ? "bg-red-500" : "bg-linear-to-r from-ogc-teal to-ogc-blue"}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -182,7 +182,7 @@ export default function System() {
                     <td className="whitespace-nowrap px-4 py-2.5 align-top text-slate-400">{auditFmt.format(new Date(e.created_at + "Z"))}</td>
                     <td className="hidden px-4 py-2.5 text-slate-300 sm:table-cell">{e.user_email || "—"}</td>
                     <td className="px-4 py-2.5">
-                      <span className="rounded bg-slate-700/60 px-2 py-0.5 text-xs text-slate-200">{e.action}</span>
+                      <span className="rounded-sm bg-slate-700/60 px-2 py-0.5 text-xs text-slate-200">{e.action}</span>
                       {e.detail && <div className="mt-1 text-xs text-slate-400 sm:hidden">{e.detail}</div>}
                     </td>
                     <td className="hidden px-4 py-2.5 text-slate-400 sm:table-cell">{e.detail}</td>
@@ -207,7 +207,7 @@ export default function System() {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
 const auditFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" });
 
@@ -392,8 +392,8 @@ function PowerCard({ status }: { status: SystemStatus }) {
       {!anyEnabled ? (
         <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
           Alle Aktionen sind deaktiviert (Befehle leer). In der{" "}
-          <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">.env</code> die
-          <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">OGC_*_COMMAND</code>
+          <code className="rounded-sm bg-black/30 px-1.5 py-0.5 text-slate-200">.env</code> die
+          <code className="ml-1 rounded-sm bg-black/30 px-1.5 py-0.5 text-slate-200">OGC_*_COMMAND</code>
           -Werte setzen oder den Installer erneut ausführen.
         </div>
       ) : (
@@ -521,7 +521,7 @@ function NotificationsCard({
   }
 
   const btnCls =
-    "rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+    "rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
   const configured = (on: boolean, text = "eingerichtet") =>
     on ? <span className="text-emerald-300">{text}</span> : "nicht eingerichtet";
 
@@ -858,7 +858,7 @@ function UpdateCard() {
                 type="button"
                 onClick={apply}
                 disabled={busyOrRunning}
-                className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 Jetzt aktualisieren
               </button>
@@ -866,7 +866,7 @@ function UpdateCard() {
           ) : (
             <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
               Update auf dem Server ausführen:
-              <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">
+              <code className="ml-1 rounded-sm bg-black/30 px-1.5 py-0.5 text-slate-200">
                 sudo /opt/offgridcloud/src/deploy/update.sh
               </code>
             </div>
@@ -940,7 +940,7 @@ function UpdateProgressView({
       {log && (
         <pre
           ref={logRef}
-          className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-slate-300"
+          className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap wrap-break-word rounded-lg bg-black/40 p-3 text-xs leading-relaxed text-slate-300"
         >
           {log}
         </pre>
@@ -952,7 +952,7 @@ function UpdateProgressView({
             <button
               type="button"
               onClick={onReload}
-              className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+              className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
             >
               Portal neu laden
             </button>

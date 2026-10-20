@@ -63,7 +63,7 @@ export default function Users() {
         </div>
         <button
           onClick={() => setShowCreate((v) => !v)}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           {showCreate ? "Abbrechen" : "+ Benutzer"}
         </button>
@@ -106,7 +106,7 @@ export default function Users() {
                       value={u.role}
                       disabled={self}
                       onChange={(e) => patch(u.id, { role: e.target.value as Role })}
-                      className="rounded border border-white/10 bg-slate-800 px-2 py-1 disabled:opacity-50"
+                      className="rounded-sm border border-white/10 bg-slate-800 px-2 py-1 disabled:opacity-50"
                     >
                       <option value="user">user</option>
                       <option value="admin">admin</option>
@@ -126,20 +126,20 @@ export default function Users() {
                       <button
                         onClick={() => patch(u.id, { active: !u.active })}
                         disabled={self}
-                        className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5 disabled:opacity-30"
+                        className="rounded-sm border border-white/10 px-2 py-1 text-xs hover:bg-white/5 disabled:opacity-30"
                       >
                         {u.active ? "Sperren" : "Entsperren"}
                       </button>
                       <button
                         onClick={() => resetPassword(u.id)}
-                        className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
+                        className="rounded-sm border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
                       >
                         Passwort
                       </button>
                       <button
                         onClick={() => remove(u.id)}
                         disabled={self}
-                        className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-30"
+                        className="rounded-sm border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-30"
                       >
                         Löschen
                       </button>
@@ -180,7 +180,7 @@ function CreateUserForm({
     }
   }
 
-  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
   return (
     <form onSubmit={submit} className="mb-6 grid gap-3 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10 sm:grid-cols-2">
@@ -191,7 +191,7 @@ function CreateUserForm({
         <option value="user">user</option>
         <option value="admin">admin</option>
       </select>
-      <button type="submit" className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue py-2 font-semibold text-white sm:col-span-2">
+      <button type="submit" className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue py-2 font-semibold text-white sm:col-span-2">
         Anlegen
       </button>
     </form>

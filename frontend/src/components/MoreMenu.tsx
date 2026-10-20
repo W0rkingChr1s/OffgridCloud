@@ -47,7 +47,7 @@ export default function MoreMenu({ items, label = "Weitere Aktionen" }: { items:
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1 min-w-[12rem] overflow-hidden rounded-xl bg-slate-900 py-1 shadow-xl ring-1 ring-white/10"
+          className="absolute right-0 z-30 mt-1 min-w-48 overflow-hidden rounded-xl bg-slate-900 py-1 shadow-xl ring-1 ring-white/10"
         >
           {items.map((it) => (
             <button

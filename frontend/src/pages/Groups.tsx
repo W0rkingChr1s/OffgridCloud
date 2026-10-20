@@ -60,7 +60,7 @@ export default function Groups() {
     }
   }
 
-  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
   const members = users.filter((u) => u.role !== "admin");
   const sort = useSort(groups, GROUP_SORT, { key: "name" });
 
@@ -76,7 +76,7 @@ export default function Groups() {
       <form onSubmit={create} className="mb-8 grid gap-3 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10 sm:grid-cols-[1fr_2fr_auto]">
         <input className={field} placeholder="Teamname" value={name} onChange={(e) => setName(e.target.value)} required />
         <input className={field} placeholder="Beschreibung (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
-        <button type="submit" className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 font-semibold text-white">
+        <button type="submit" className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 font-semibold text-white">
           Anlegen
         </button>
       </form>
@@ -97,7 +97,7 @@ export default function Groups() {
                 {g.description && <div className="text-sm text-slate-400">{g.description}</div>}
                 <div className="mt-1 text-xs text-slate-500">{g.member_ids.length} Mitglieder</div>
               </div>
-              <button onClick={() => remove(g)} className="rounded border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10">
+              <button onClick={() => remove(g)} className="rounded-sm border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10">
                 Löschen
               </button>
             </div>

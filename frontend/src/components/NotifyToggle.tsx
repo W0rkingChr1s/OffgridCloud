@@ -66,7 +66,7 @@ export default function NotifyToggle() {
         >
           <span
             className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
-              enabled ? "left-[1.125rem]" : "left-0.5"
+              enabled ? "left-4.5" : "left-0.5"
             }`}
           />
         </span>

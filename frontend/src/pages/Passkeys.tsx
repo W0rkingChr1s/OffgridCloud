@@ -64,7 +64,7 @@ export default function Passkeys() {
         type="button"
         onClick={add}
         disabled={busy || !passkeysSupported()}
-        className="mb-6 rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        className="mb-6 rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
       >
         {busy ? "…" : "Passkey hinzufügen"}
       </button>

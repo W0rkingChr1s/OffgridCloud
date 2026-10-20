@@ -92,7 +92,7 @@ export default function Providers() {
         </div>
         <button
           onClick={startCreate}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           + Provider
         </button>
@@ -131,7 +131,7 @@ export default function Providers() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-semibold text-white">{p.name}</span>
-                      <span className={`rounded px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
+                      <span className={`rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                     </div>
                     <div className="text-sm text-slate-400">{typeLabel}</div>
                     {p.status === "error" && p.last_error && (
@@ -139,13 +139,13 @@ export default function Providers() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => testSaved(p)} className="rounded border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
+                    <button onClick={() => testSaved(p)} className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
                       Testen
                     </button>
-                    <button onClick={() => startEdit(p)} className="rounded border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
+                    <button onClick={() => startEdit(p)} className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
                       Bearbeiten
                     </button>
-                    <button onClick={() => remove(p)} className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10">
+                    <button onClick={() => remove(p)} className="rounded-sm border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10">
                       Löschen
                     </button>
                   </div>
@@ -328,7 +328,7 @@ function ProviderStep({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Anbieter suchen…"
-          className="w-48 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm outline-none focus:border-ogc-teal"
+          className="w-48 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm outline-hidden focus:border-ogc-teal"
         />
       </div>
       {category && (
@@ -347,7 +347,7 @@ function ProviderStep({
             <div className="flex items-center gap-2">
               <span className="font-semibold text-white">{t.label}</span>
               {t.popular && (
-                <span className="rounded bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ogc-teal">
+                <span className="rounded-sm bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ogc-teal">
                   Beliebt
                 </span>
               )}
@@ -427,7 +427,7 @@ function CredentialsStep({
   }
 
   const input =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
   return (
     <form onSubmit={save}>
@@ -493,7 +493,7 @@ function CredentialsStep({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {editing ? "Speichern" : "Anlegen"}
         </button>
@@ -512,7 +512,7 @@ function FieldInput({
   onChange: (value: string) => void;
 }) {
   const input =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
   const label = (
     <span className="mb-1 block text-slate-400">
       {field.label}

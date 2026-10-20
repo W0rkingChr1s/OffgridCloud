@@ -146,7 +146,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, [open]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-900 to-ogc-indigo/40 text-slate-100">
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-900 to-ogc-indigo/40 text-slate-100">
       <header className="sticky top-0 z-30 border-b border-white/5 bg-slate-900/70 backdrop-blur-md pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3 sm:px-6 sm:py-4">
           <Link to="/" className="flex shrink-0 items-center gap-2">
@@ -172,7 +172,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
         <div
           onClick={() => setOpen(false)}
-          className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200 ${
             open ? "opacity-100" : "opacity-0"
           }`}
         />
@@ -201,7 +201,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="mx-5 mb-2 flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ogc-teal to-ogc-blue text-sm font-bold text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-ogc-teal to-ogc-blue text-sm font-bold text-white">
               {(user?.name || user?.email || "?").charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
