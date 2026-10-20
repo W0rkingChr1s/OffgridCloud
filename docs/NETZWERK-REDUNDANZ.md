@@ -78,7 +78,7 @@ sudo /opt/offgridcloud/deploy/netfallback/install.sh
 
 Unter **Netzwerk** (nur Admin):
 
-1. **Rückfall-WLAN aktivieren** und AP-Name/-Passwort setzen (WPA2, 8–63
+1. **Rückfall-WLAN** einschalten und unter **AP-Einstellungen** (aufklappen) AP-Name/-Passwort setzen (WPA2, 8–63
    Zeichen; leer = offenes Netz). Optional Ländercode (z. B. `DE`) für die
    korrekte Funkregulierung.
 2. Unter **Hinterlegte Netzwerke** die WLANs eintragen, mit denen sich die Box
