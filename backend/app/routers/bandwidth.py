@@ -110,7 +110,10 @@ def update_bandwidth(
         if payload.bonding_enabled and not bonding.proxy_url():
             raise HTTPException(
                 status_code=409,
-                detail="net-merge ist nicht eingerichtet (sudo /opt/offgridcloud/deploy/netmerge/install.sh)",
+                detail=(
+                    "net-merge ist nicht eingerichtet "
+                    "(sudo /opt/offgridcloud/deploy/netmerge/install.sh)"
+                ),
             )
         policy.bonding_enabled = payload.bonding_enabled
     db.commit()
