@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🌗 Neu: Hell-Modus
+
+- Im Menü unter **Darstellung**: Dunkel (Standard), Hell oder System (folgt der Einstellung des Geräts und wechselt live mit). Die Wahl wird pro Browser gespeichert und vor dem ersten Rendern angewendet, deshalb blitzt nichts dunkel auf.
+- Umgesetzt über die Farbvariablen von Tailwind 4 (`html.light` in `index.css`), ohne `dark:`-Varianten im Markup. Ältere Browser ohne `color-mix()` (Chrome < 111, Safari < 16.2) bekommen die Option nicht angezeigt, dort bleibt alles dunkel.
+- Behoben: Im Dunkel-Modus schimmerte der Hintergrund rechts unten hell, wenn das Gerät auf hell eingestellt war (`color-scheme` ist jetzt fest `dark`).
+
 ### ✨ Neu: Fertiges Raspberry-Pi-Image mit Setup-Assistent
 
 - **Flashbares Image** für Raspberry Pi 3/4/5 und Zero 2 W (Raspberry Pi OS Lite, arm64). Gebaut mit pi-gen auf einem nativen arm64-Runner und an jedes Release als `offgridcloud-<version>-rpi-arm64.img.xz` angehängt (`.github/workflows/image.yml`).

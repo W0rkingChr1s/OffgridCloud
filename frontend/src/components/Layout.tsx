@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import NotifyToggle from "./NotifyToggle";
+import ThemeToggle from "./ThemeToggle";
 
 type IconProps = { className?: string };
 
@@ -234,6 +235,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="border-t border-white/5 px-3 py-3">
+            <div className="mb-2">
+              <ThemeToggle />
+            </div>
             <div className="mb-2">
               <NotifyToggle />
             </div>

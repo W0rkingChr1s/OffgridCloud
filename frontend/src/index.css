@@ -42,6 +42,98 @@
   color-scheme: light dark;
 }
 
+html.dark {
+  color-scheme: dark;
+}
+
+/*
+  Light theme (src/theme.ts). The UI is written dark-first with plain colour
+  utilities (bg-slate-900, text-white, border-white/10 …). Instead of a
+  dark: variant on every element, html.light redefines the colour variables
+  those utilities read:
+
+  - slate is mirrored: page/card backgrounds (900/800/700) become light,
+    text shades (100–400) become dark; 500 stays the mid grey.
+  - white becomes the darkest text colour, so text-white headings and the
+    white/5–white/10 hover tints, borders and rings turn into dark ones.
+  - the light accent shades used as text on dark (red/emerald/amber/sky/
+    orange 50–400) map to their dark counterparts; 500+ are unchanged.
+  - brand: a deeper teal for legible links, a pale indigo for backgrounds.
+
+  Opacity utilities resolve through color-mix(var(--color-…)), which is why
+  theme.ts only offers light mode where color-mix() is supported. The retro
+  easter egg is a dark terminal look and keeps the dark palette.
+*/
+html.light:not(.retro) {
+  color-scheme: light;
+
+  --color-white: oklch(20.8% 0.042 265.755);
+
+  --color-slate-50: oklch(12.9% 0.042 264.695);
+  --color-slate-100: oklch(20.8% 0.042 265.755);
+  --color-slate-200: oklch(27.9% 0.041 260.031);
+  --color-slate-300: oklch(37.2% 0.044 257.287);
+  --color-slate-400: oklch(44.6% 0.043 257.281);
+  --color-slate-600: oklch(70.4% 0.04 256.788);
+  --color-slate-700: oklch(92.9% 0.013 255.508);
+  --color-slate-800: oklch(100% 0 0);
+  --color-slate-900: oklch(96.8% 0.007 247.896);
+  --color-slate-950: oklch(92.9% 0.013 255.508);
+
+  --color-red-50: oklch(39.6% 0.141 25.723);
+  --color-red-100: oklch(44.4% 0.177 26.899);
+  --color-red-200: oklch(44.4% 0.177 26.899);
+  --color-red-300: oklch(50.5% 0.213 27.518);
+  --color-red-400: oklch(57.7% 0.245 27.325);
+
+  --color-orange-100: oklch(47% 0.157 37.304);
+  --color-orange-200: oklch(47% 0.157 37.304);
+  --color-orange-300: oklch(55.3% 0.195 38.402);
+  --color-orange-400: oklch(64.6% 0.222 41.116);
+
+  --color-amber-100: oklch(47.3% 0.137 46.201);
+  --color-amber-200: oklch(47.3% 0.137 46.201);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-amber-400: oklch(66.6% 0.179 58.318);
+
+  --color-emerald-100: oklch(43.2% 0.095 166.913);
+  --color-emerald-200: oklch(43.2% 0.095 166.913);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(59.6% 0.145 163.225);
+
+  --color-sky-100: oklch(44.3% 0.11 240.79);
+  --color-sky-200: oklch(44.3% 0.11 240.79);
+  --color-sky-300: oklch(50% 0.134 242.749);
+  --color-sky-400: oklch(58.8% 0.158 241.966);
+
+  --color-ogc-teal: #0d8584;
+  --color-ogc-indigo: #c7d2fe;
+}
+
+/*
+  Spots that keep real white in light mode: white text on a solid accent
+  (gradient, teal and red buttons, avatar), switch knobs (bg-white) and
+  overlays on photos/videos. Restoring the dark palette there keeps
+  text-white / bg-white white. Full-screen scrims (inset-0) are excluded —
+  their dialog content follows the light theme.
+*/
+html.light:not(.retro)
+  :is(
+    [class*="from-ogc-"],
+    [class~="bg-ogc-teal"],
+    [class~="bg-red-600"],
+    [class~="bg-white"],
+    [class*="bg-ogc-blue/"],
+    [class*="bg-black/5"],
+    [class*="bg-black/6"],
+    [class*="bg-black/7"]
+  ):not([class*="inset-0"]) {
+  --color-white: #fff;
+  --color-slate-100: oklch(96.8% 0.007 247.896);
+  --color-slate-200: oklch(92.9% 0.013 255.508);
+  --color-slate-300: oklch(86.9% 0.022 252.894);
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

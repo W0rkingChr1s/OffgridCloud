@@ -4,7 +4,10 @@ import App from "./App.tsx";
 import { printConsoleBanner } from "./console-banner.ts";
 import "./index.css";
 import "./retro.css";
+import { applyTheme, watchSystemTheme } from "./theme";
 
+applyTheme();
+watchSystemTheme();
 void printConsoleBanner();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

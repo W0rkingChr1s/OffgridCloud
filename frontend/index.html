@@ -10,6 +10,19 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="OffgridCloud" />
     <title>OffgridCloud</title>
+    <script>
+      // Apply the stored colour theme before first paint (no dark flash in
+      // light mode). Mirrors src/theme.ts — keep the key and logic in sync.
+      (function () {
+        try {
+          var pref = localStorage.getItem("ogc_theme");
+          if (pref !== "light" && pref !== "system") return;
+          if (!(window.CSS && CSS.supports && CSS.supports("color", "color-mix(in oklab, red, blue)"))) return;
+          var light = pref === "light" || window.matchMedia("(prefers-color-scheme: light)").matches;
+          if (light) document.documentElement.className = "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <!-- ↑ ↑ ↓ ↓ ← → ← → B A — some things never go out of style. -->
