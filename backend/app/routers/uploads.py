@@ -115,6 +115,11 @@ async def upload_chunk(
         )
     written = 0
     with open(session.temp_path, "ab") as fh:
+        # A chunk that broke off mid-stream (client timeout, Wi-Fi gone) left
+        # uncommitted bytes behind. Drop them so the resent chunk lands at the
+        # committed offset instead of after the torn tail.
+        if os.fstat(fh.fileno()).st_size > session.received:
+            fh.truncate(session.received)
         async for chunk in request.stream():
             if chunk:
                 fh.write(chunk)

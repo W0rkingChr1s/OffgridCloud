@@ -103,6 +103,8 @@ interface UploadRow {
   progress: number;
   error?: string;
   done?: boolean;
+  /** Set while a stalled/failed chunk is being retried. */
+  retry?: string;
 }
 
 export default function FolderDetail() {
@@ -203,9 +205,17 @@ export default function FolderDetail() {
         const update = (patch: Partial<UploadRow>) =>
           setUploads((prev) => prev.map((r) => (r === row ? Object.assign(row, patch) : r)));
         try {
-          const item = await uploadFile(folderId, file, (frac) => update({ progress: frac }));
+          const item = await uploadFile(folderId, file, {
+            onProgress: (frac) => update({ progress: frac }),
+            onRetry: (info) =>
+              update({
+                retry: info
+                  ? `${info.reason} – neuer Versuch ${info.attempt}/${info.max} …`
+                  : undefined,
+              }),
+          });
           uploadedIds.push(item.id);
-          update({ progress: 1, done: true });
+          update({ progress: 1, done: true, retry: undefined });
           toast.push({
             variant: "success",
             title: "Upload fertig",
@@ -214,7 +224,7 @@ export default function FolderDetail() {
           });
         } catch (e) {
           const msg = e instanceof ApiError ? e.message : "Upload fehlgeschlagen";
-          update({ error: msg });
+          update({ error: msg, retry: undefined });
           toast.push({
             variant: "error",
             title: "Upload fehlgeschlagen",
@@ -446,6 +456,7 @@ export default function FolderDetail() {
                   style={{ width: `${Math.round(u.progress * 100)}%` }}
                 />
               </div>
+              {u.retry && !u.error && <div className="mt-1 text-xs text-amber-300">{u.retry}</div>}
               {u.error && <div className="mt-1 text-xs text-red-300">{u.error}</div>}
             </div>
           ))}

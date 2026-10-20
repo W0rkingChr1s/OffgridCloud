@@ -119,3 +119,37 @@ def test_filename_path_traversal_is_sanitised(client, admin_auth):
     resp = _upload_file(client, admin_auth, folder["id"], "../../etc/passwd", b"data")
     assert resp.status_code == 200
     assert resp.json()["filename"] == "passwd"
+
+
+def test_resent_chunk_after_torn_write_is_not_duplicated(client, admin_auth):
+    # A chunk that broke off mid-stream leaves uncommitted bytes in the .part
+    # file; the client resends from the committed offset and must not end up
+    # with those bytes twice.
+    folder = client.post("/api/folders", headers=admin_auth, json={"name": "T"}).json()
+    data = b"0123456789abcdef"
+    sess = client.post(
+        f"/api/folders/{folder['id']}/uploads",
+        headers=admin_auth,
+        json={"filename": "t.bin", "size": len(data)},
+    ).json()
+    uid = sess["id"]
+    resp = client.put(
+        f"/api/uploads/{uid}", headers={**admin_auth, "X-Offset": "0"}, content=data[:8]
+    )
+    assert resp.json()["received"] == 8
+
+    from app.db import SessionLocal
+    from app.models import UploadSession
+
+    with SessionLocal() as db:
+        temp_path = db.get(UploadSession, uid).temp_path
+    with open(temp_path, "ab") as fh:
+        fh.write(data[8:12])  # torn tail of an aborted chunk
+
+    resp = client.put(
+        f"/api/uploads/{uid}", headers={**admin_auth, "X-Offset": "8"}, content=data[8:]
+    )
+    assert resp.json()["received"] == len(data)
+    media = client.post(f"/api/uploads/{uid}/complete", headers=admin_auth).json()
+    assert media["size"] == len(data)
+    assert media["sha256"] == hashlib.sha256(data).hexdigest()
