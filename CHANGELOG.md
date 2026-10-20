@@ -22,6 +22,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Behoben
 
+- **Safari: „FetchEvent.respondWith received an error: Returned response is null“ auf `https://<name>.local`:** Der Service Worker hat bei einer fehlgeschlagenen Anfrage ohne Cache-Treffer eine leere Antwort geliefert. Ausgelöst wird das, weil Safari die Ausnahme für das selbstsignierte Zertifikat nicht auf Anfragen des Service Workers anwendet. Der Service Worker prüft jetzt beim Installieren, ob er die Box erreicht, und meldet sich sonst selbst ab (auch eine bereits aktive ältere Version). Er liefert nie mehr eine leere Antwort und legt die App-Shell vorab in den Cache. Per IP (HTTP) war die Box nicht betroffen.
 - **`sudo /opt/offgridcloud/deploy/netmerge/install.sh`: command not found:** Die Bandbreiten-Seite verweist auf dieses Skript, der Installer hat es aber nur kopiert, wenn die Bündelung schon beim Installieren gewählt war. Es liegt jetzt immer dort (ausgeführt wird es weiterhin nur mit der Option).
 
 ## [0.7.1] – 2026-10-20
