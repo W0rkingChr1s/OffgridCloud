@@ -65,7 +65,11 @@ sed -e "s#/opt/offgridcloud/src/deploy/netfallback/watchdog.sh#$WATCHDOG#g" \
     -e "s#/opt/offgridcloud/data/network.json#$CONFIG_FILE#g" \
     "$HERE/offgridcloud-netwatch.service" > /etc/systemd/system/offgridcloud-netwatch.service
 systemctl daemon-reload
-systemctl enable --now offgridcloud-netwatch.service || \
+systemctl enable offgridcloud-netwatch.service >/dev/null 2>&1 || true
+# Restart, not just `enable --now`: on an update (install.sh/update.sh re-run
+# this) the running loop keeps executing the old watchdog.sh it already read,
+# so fixes would only take effect after the next reboot.
+systemctl restart offgridcloud-netwatch.service || \
   echo "   Watchdog did not start — check: journalctl -u offgridcloud-netwatch -e" >&2
 
 # --- 3. sudoers rule for the apply helper ----------------------------------
