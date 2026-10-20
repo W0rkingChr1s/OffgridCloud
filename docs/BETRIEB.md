@@ -106,17 +106,63 @@ Der Installer legt eine `.env` im Repo-Stamm an (mit zufälligem `OGC_SECRET_KEY
 Den Dienst stoppen/starten: `Stop-ScheduledTask -TaskName OffgridCloud` /
 `Start-ScheduledTask -TaskName OffgridCloud`.
 
-### Variante C — ein Docker-Image (plattformübergreifend)
+### Variante C — Docker (fertiges Image, plattformübergreifend)
+
+Jedes Release wird als Multi-Arch-Image (`linux/amd64`, `linux/arm64`) in die
+GitHub Container Registry gepusht (`.github/workflows/docker.yml`):
+
+| Tag | Inhalt |
+|-----|--------|
+| `latest` | neuestes Release |
+| `0.5`, `0.5.0` | fest auf eine Minor- bzw. exakte Version |
+| `main` | aktueller Stand von `main` (Update-Kanal „main“) |
+| `sha-<commit>` | ein bestimmter `main`-Commit |
+
+Auf dem Raspberry Pi braucht es ein **64-bit-OS** (arm64); 32-bit-Raspberry-Pi-OS
+wird nicht unterstützt.
+
+**Mit Docker Compose (empfohlen):**
 
 ```bash
-docker build -f deploy/Dockerfile -t offgridcloud .
+mkdir offgridcloud && cd offgridcloud
+curl -fsSLO https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/.env.example -o .env
+nano .env               # OGC_SECRET_KEY + OGC_INITIAL_ADMIN_PASSWORD setzen
+docker compose up -d    # http://<host>:8000
+```
+
+Daten (SQLite, Status, Medien-Puffer) liegen in `./data` neben der
+`docker-compose.yml` — auf dem Pi den Volume-Pfad auf die USB-SSD umbiegen
+(`/mnt/ssd/offgrid:/data`). Port und Image-Tag lassen sich per `OGC_PORT` /
+`OGC_IMAGE_TAG` in der `.env` setzen (z. B. `OGC_IMAGE_TAG=main`). Im
+geklonten Repo baut `docker compose up -d --build` das Image stattdessen lokal.
+
+**Ohne Compose:**
+
+```bash
 docker run -d --name offgridcloud \
   -p 8000:8000 \
   -v /mnt/ssd/offgrid:/data \
-  --env-file .env \
+  --env-file .env -e OGC_DATA_DIR=/data -e OGC_BUFFER_DIR=/data/buffer \
   --restart unless-stopped \
-  offgridcloud
+  ghcr.io/w0rkingchr1s/offgridcloud:latest
 ```
+
+**Unterschiede zur nativen Installation.** Im Container gibt es kein sudo,
+systemd oder Zugriff auf Host-Laufwerke. Das Image schaltet deshalb ab:
+One-Click-Update (Update = neues Image ziehen, die System-Seite zeigt den
+passenden Befehl), Dienst-Neustart/Reboot/Shutdown im Portal und per Telegram
+(Docker startet den Container per `restart: unless-stopped` selbst neu) sowie
+Ein-/Aushängen und Formatieren unter „Speicher“. Rückfall-WLAN, HTTPS per
+Caddy/mDNS und das Kiosk-Menü sind Funktionen der nativen Installation. Der
+**VPN-Client** funktioniert, wenn der Container `NET_ADMIN` und `/dev/net/tun`
+bekommt (in der `docker-compose.yml` auskommentiert vorbereitet, siehe
+[VPN.md](VPN.md)). Ein Healthcheck auf `/api/health` ist im Image eingebaut
+(`docker ps` zeigt `healthy`).
+
+> **Für Maintainer:** GHCR legt das Paket beim ersten Push **privat** an. Einmal
+> unter *GitHub → Packages → offgridcloud → Package settings* auf **Public**
+> stellen, sonst scheitert `docker pull` ohne Login.
 
 ## 2. Konfiguration (.env)
 
@@ -142,6 +188,13 @@ mDNS-Namen und erzeugt:
   und Ziffern), damit mehrere Boxen im selben Netz nicht auf denselben Namen
   hören. Im Installer lässt sich der Name frei überschreiben, z. B. auf
   `offgridcloud`;
+- den festen **Alias** `https://offgridcloud.local` (gleiches Zertifikat, per
+  mDNS vom Dienst `offgridcloud-mdns-alias` veröffentlicht) — damit man sich
+  den Zufallsnamen nicht merken muss. Laufen mehrere Boxen im selben Netz,
+  bekommt nur die erste den Alias; die anderen sind weiter unter ihrem
+  eindeutigen Namen erreichbar;
+- **Zugriff per IP**: `http://<IP der Box>` (ohne `s` — für eine nackte IP gibt
+  es kein Zertifikat). Die `.local`-Namen leiten weiterhin auf HTTPS um;
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
@@ -163,7 +216,7 @@ dann automatisch entfernt) oder direkt:
 sudo ./deploy/https/uninstall.sh
 ```
 
-Beides entfernt die verwaltete Caddy-Konfiguration, deaktiviert caddy, löscht
+Beides entfernt die verwaltete Caddy-Konfiguration und den Alias-Dienst, deaktiviert caddy, löscht
 die sudoers-Regel samt `.env`-Verdrahtung und stellt den ursprünglichen
 Hostnamen wieder her (sofern er beim Einrichten aufgezeichnet wurde). Die
 Pakete caddy/avahi bleiben installiert.
@@ -180,8 +233,9 @@ eine nackte LAN-IP ohne HTTPS funktionieren Passkeys nicht.
 - **Anmelden:** auf der Login-Seite „Mit Passkey anmelden" (mit ausgefüllter
   E-Mail gezielt, ohne E-Mail als Ein-Klick).
 - **Zwei Zugänge:** Ein Passkey gilt nur für die Adresse, unter der er angelegt
-  wurde. Wer sowohl lokal (`https://<hostname>.local`) als auch über eine Domain
-  zugreift, legt pro Adresse einen eigenen Passkey an.
+  wurde. Wer sowohl lokal (`https://<hostname>.local`), über den Alias
+  `https://offgridcloud.local` als auch über eine Domain zugreift, legt pro
+  Adresse einen eigenen Passkey an.
 - **Fallback:** Das Passwort bleibt immer gültig. Geht ein Gerät verloren, per
   Passwort anmelden und den Passkey unter **Passkeys** löschen; ein Admin kann
   zudem das Passwort zurücksetzen.
@@ -431,7 +485,10 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
   jede aktive Funktion als Vorgabe vor und aktualisiert sie beim Durchbestätigen
   (siehe [§1](#1-installation)). Nützlich, wenn eine **neue** Funktion (z. B. das
   Kiosk-Menü) nachträglich dazukommen soll — die entsprechende Frage dann auf ja.
-- **Docker:** Image neu bauen/ziehen, Container ersetzen (Volume `/data` bleibt erhalten).
+- **Docker:** `docker compose pull && docker compose up -d` zieht das neue
+  Image und ersetzt den Container; `/data` bleibt erhalten. Ohne Compose:
+  `docker pull ghcr.io/w0rkingchr1s/offgridcloud:latest`, Container entfernen
+  und mit demselben `docker run` neu starten.
 
 Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
 (Resume-Recovery); laufende Uploads gehen nicht verloren.
@@ -564,9 +621,9 @@ braucht eine Administrator-PowerShell.
 ### Docker
 
 ```bash
-docker rm -f offgridcloud
-docker rmi offgridcloud
-docker volume rm <volume>      # bzw. das gemountete Verzeichnis löschen — DESTRUKTIV
+docker compose down            # bzw. docker rm -f offgridcloud
+docker rmi ghcr.io/w0rkingchr1s/offgridcloud
+rm -rf ./data                  # bzw. das gemountete Verzeichnis — DESTRUKTIV
 ```
 
 ## 11. Troubleshooting

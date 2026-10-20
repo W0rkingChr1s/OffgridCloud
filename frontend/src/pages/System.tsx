@@ -867,7 +867,9 @@ function UpdateCard() {
             <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
               Update auf dem Server ausführen:
               <code className="ml-1 rounded-sm bg-black/30 px-1.5 py-0.5 text-slate-200">
-                sudo /opt/offgridcloud/src/deploy/update.sh
+                {info?.in_docker
+                  ? "docker compose pull && docker compose up -d"
+                  : "sudo /opt/offgridcloud/src/deploy/update.sh"}
               </code>
             </div>
           )}

@@ -62,6 +62,13 @@ def test_build_allowlist_from_state_and_localhost():
     assert "localhost" in allow
 
 
+def test_build_allowlist_includes_mdns_alias():
+    allow = webauthn_config.build_allowlist(
+        state={"hostname": "offgridcloud-ab12c", "domain": ""}, extra_origins=""
+    )
+    assert {"offgridcloud-ab12c.local", "offgridcloud.local"} <= allow
+
+
 def test_build_allowlist_empty_state_is_localhost_only():
     allow = webauthn_config.build_allowlist(state={"hostname": "", "domain": ""}, extra_origins="")
     assert allow == {"localhost"}

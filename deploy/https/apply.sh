@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Render the Caddy reverse-proxy config for OffgridCloud and (re)apply it.
 #
-# Always emits a LAN block for <hostname>.local with a self-signed cert
-# (Caddy 'tls internal'). If --domain is given, ALSO emits a public block that
-# gets a real Let's Encrypt certificate automatically. Both coexist — LAN access
-# never depends on the domain (design decision B).
+# Always emits a LAN block for <hostname>.local and the fixed alias
+# offgridcloud.local (published by offgridcloud-mdns-alias) with a self-signed
+# cert (Caddy 'tls internal'), plus a plain-HTTP catch-all so the box also
+# answers on http://<its IP> — there is no certificate for a bare IP. If
+# --domain is given, ALSO emits a public block that gets a real Let's Encrypt
+# certificate automatically. Both coexist — LAN access never depends on the
+# domain (design decision B).
 #
 # Idempotent: run it again with the same values and nothing changes. Called by
 # deploy/https/install.sh at install time and by the backend (PUT
@@ -19,6 +22,7 @@ DOMAIN=""
 PREFIX="${OGC_PREFIX:-/opt/offgridcloud}"
 CADDYFILE="/etc/caddy/Caddyfile"
 BACKEND_PORT="${OGC_PORT:-8000}"
+ALIAS="offgridcloud"  # keep in sync with offgridcloud-mdns-alias.service
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,7 +30,7 @@ while [[ $# -gt 0 ]]; do
     --domain)   DOMAIN="${2:-}"; shift 2 ;;
     --prefix)   PREFIX="${2:?}"; shift 2 ;;
     --port)     BACKEND_PORT="${2:?}"; shift 2 ;;
-    -h|--help)  sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)  sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -67,7 +71,13 @@ SITE
   echo "# Managed by deploy/https/apply.sh — edits are overwritten. Change the"
   echo "# hostname/domain via the installer or System → HTTPS in the web UI."
   echo
-  render_site "${HOSTNAME_SHORT}.local" "tls internal"
+  LAN_SITES="${HOSTNAME_SHORT}.local"
+  [[ "$HOSTNAME_SHORT" != "$ALIAS" ]] && LAN_SITES+=", ${ALIAS}.local"
+  render_site "$LAN_SITES" "tls internal"
+  echo
+  # Any other Host on port 80 (the IP address): plain HTTP. Named sites above
+  # keep their automatic HTTP→HTTPS redirect — Caddy puts those first.
+  render_site "http://" ""
   if [[ -n "$DOMAIN" ]]; then
     echo
     render_site "$DOMAIN" ""

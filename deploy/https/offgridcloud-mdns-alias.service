@@ -1,0 +1,17 @@
+# Publishes the fixed alias offgridcloud.local next to the box's unique
+# <hostname>.local (deploy/https/mdns-alias.py). Installed by
+# deploy/https/install.sh.
+[Unit]
+Description=OffgridCloud mDNS alias (offgridcloud.local)
+After=avahi-daemon.service
+Wants=avahi-daemon.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/offgridcloud/deploy/https/mdns-alias.py offgridcloud
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

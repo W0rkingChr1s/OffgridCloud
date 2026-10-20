@@ -227,6 +227,22 @@ def test_updates_endpoint_returns_current_version(client, admin_auth, monkeypatc
     assert body["self_update_enabled"] is True
 
 
+def test_updates_reports_docker(client, admin_auth, monkeypatch):
+    # In a container the UI must point at pulling a new image, not update.sh.
+    import app.routers.updates as up
+    from app.updater import UpdateInfo
+
+    monkeypatch.setattr(
+        up,
+        "check_for_update",
+        lambda current, repo, use_cache=True, **kw: UpdateInfo(current=current),
+    )
+    monkeypatch.setenv("OGC_IN_DOCKER", "1")
+    assert client.get("/api/updates", headers=admin_auth).json()["in_docker"] is True
+    monkeypatch.setenv("OGC_IN_DOCKER", "0")
+    assert client.get("/api/updates", headers=admin_auth).json()["in_docker"] is False
+
+
 def test_updates_apply_enabled_by_default(client, admin_auth, monkeypatch):
     # Apply is on out of the box; stub the launcher so nothing actually spawns.
     import app.routers.updates as up

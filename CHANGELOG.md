@@ -12,6 +12,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - Umgesetzt über die Farbvariablen von Tailwind 4 (`html.light` in `index.css`), ohne `dark:`-Varianten im Markup. Ältere Browser ohne `color-mix()` (Chrome < 111, Safari < 16.2) bekommen die Option nicht angezeigt, dort bleibt alles dunkel.
 - Behoben: Im Dunkel-Modus schimmerte der Hintergrund rechts unten hell, wenn das Gerät auf hell eingestellt war (`color-scheme` ist jetzt fest `dark`).
 
+### 🌐 Box unter `offgridcloud.local` und per IP erreichbar
+
+- Neben dem eindeutigen `https://offgridcloud-XXXXX.local` hört die Box jetzt auch auf den festen Alias **`https://offgridcloud.local`**. Den veröffentlicht der neue Dienst `offgridcloud-mdns-alias` per avahi, je Netzwerk-Schnittstelle mit der passenden IP (LAN und Rückfall-WLAN). Bei mehreren Boxen im selben Netz bekommt nur die erste den Alias.
+- **Zugriff per IP:** Caddy beantwortet `http://<IP der Box>` jetzt direkt (ohne Zertifikat, weil es für nackte IPs keins gibt). Die `.local`-Namen leiten weiter auf HTTPS um.
+- Passkeys sind auch unter `offgridcloud.local` erlaubt (eigener Passkey pro Adresse).
+
 ### ✨ Neu: Fertiges Raspberry-Pi-Image mit Setup-Assistent
 
 - **Flashbares Image** für Raspberry Pi 3/4/5 und Zero 2 W (Raspberry Pi OS Lite, arm64). Gebaut mit pi-gen auf einem nativen arm64-Runner und an jedes Release als `offgridcloud-<version>-rpi-arm64.img.xz` angehängt (`.github/workflows/image.yml`).
@@ -20,6 +26,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Optionaler Setup-Code** und Passwort fürs Setup-WLAN über `offgridcloud-setup.txt` auf der Boot-Partition. Falsche Codes werden gedrosselt.
 - Der Assistent setzt Admin, Box-Namen, Ziel-WLAN und das Passwort fürs Rückfall-WLAN und übergibt dann an `deploy/setup/finish.sh`. Anleitung: [docs/IMAGE.md](docs/IMAGE.md).
 - `install.sh` hat dafür einen Image-Build-Modus (`OGC_IMAGE_BUILD=1`), `deploy/https/install.sh` die Option `--skip-apply`.
+
+### 🐳 Docker: fertiges Image auf GHCR
+
+- **Multi-Arch-Image** (`linux/amd64`, `linux/arm64`) unter `ghcr.io/w0rkingchr1s/offgridcloud`: `latest` und `<major>.<minor>`/`<version>` bei jedem Release, `main` bei jedem Push auf `main`. arm64 wird nativ gebaut, ohne QEMU (`.github/workflows/docker.yml`).
+- **`docker-compose.yml`** im Repo-Stamm: `docker compose up -d` startet die Box, `docker compose pull && docker compose up -d` aktualisiert sie. VPN-Rechte sind auskommentiert vorbereitet.
+- **Image kennt seine Version:** Version, Commit und Update-Kanal werden beim Build gestempelt, die System-Seite zeigt also die echte Version statt `0.1.0`.
+- **Docker-taugliche Vorgaben:** Im Container sind One-Click-Update, Neustart/Reboot/Shutdown und die Laufwerks-Aktionen abgeschaltet (kein sudo/systemd). Die System-Seite zeigt als Update-Befehl `docker compose pull …` statt `update.sh`. Healthcheck auf `/api/health` eingebaut.
 
 ### 🤖 Auto-Merge für Pull Requests
 
