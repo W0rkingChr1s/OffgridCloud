@@ -403,6 +403,10 @@ if command -v apt-get >/dev/null 2>&1; then
   # Speicher page: format/mount USB sticks, SD cards and external disks.
   apt-get install -y --no-install-recommends exfatprogs dosfstools e2fsprogs fdisk \
     || echo "   Storage tools (exfatprogs/dosfstools) not installed — formatting limited." >&2
+  # USB tethering: Android works with the stock kernel drivers, an iPhone also
+  # needs usbmuxd for the pairing handshake before ipheth brings the link up.
+  apt-get install -y --no-install-recommends usbmuxd \
+    || echo "   usbmuxd not installed — iPhone USB tethering will not work." >&2
   [[ $WITH_FFMPEG -eq 1 ]] && apt-get install -y --no-install-recommends ffmpeg
 elif command -v dnf >/dev/null 2>&1; then
   dnf install -y python3-virtualenv curl || dnf install -y python3 curl

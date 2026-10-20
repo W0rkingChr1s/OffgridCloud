@@ -28,6 +28,8 @@ import re
 import shlex
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -44,6 +46,18 @@ from .models import KnownNetwork, NetworkSettings
 AP_CONNECTION_NAME = "offgridcloud-ap"
 # Prefix for the client connections the apply helper creates from known networks.
 CLIENT_CONNECTION_PREFIX = "ogc-wifi-"
+
+# USB tethering: a phone plugged into the box shows up as an ordinary
+# ``ethernet`` device, so only its kernel driver tells it apart from a cable.
+# ``cdc_ether`` is deliberately missing: plenty of USB-Ethernet dongles use it
+# too, so it only counts as a phone when NetworkManager also reports the link as
+# metered (Android sends the ANDROID_METERED DHCP option).
+TETHER_DRIVERS = {
+    "ipheth": "iphone",
+    "rndis_host": "android",
+    "cdc_ncm": "android",
+}
+TETHER_LABELS = {"iphone": "iPhone", "android": "Android"}
 
 # nmcli field separator (``-t`` terse mode escapes literal ':' as '\:').
 _SEP = ":"
@@ -87,7 +101,7 @@ class NetworkStatus:
 
     supported: bool = False  # NetworkManager present → live control possible
     apply_wired: bool = False  # privileged apply helper configured
-    mode: str = "unknown"  # ethernet | client | ap | offline | unknown
+    mode: str = "unknown"  # ethernet | client | tether | ap | offline | unknown
     online: bool = False  # NetworkManager reports full/limited connectivity
     connectivity: str = "unknown"  # full | limited | portal | none | unknown
     ethernet: bool = False  # a wired connection carries an address
@@ -95,6 +109,10 @@ class NetworkStatus:
     wifi_ip: str | None = None
     ap_active: bool = False  # the box is currently hosting its fallback AP
     ap_ssid: str | None = None
+    tether: str | None = None  # "iphone" | "android" while a phone tethers via USB
+    tether_ip: str | None = None
+    metered: bool = False  # the uplink in use is metered (mobile data)
+    uplink_ip: str | None = None  # IPv4 the box currently routes out through
     detail: str = ""  # human-readable note (why unsupported, etc.)
 
 
@@ -159,28 +177,87 @@ def parse_connectivity(raw: str) -> str:
     return value or "unknown"
 
 
+def parse_metered(value: str) -> bool:
+    """``GENERAL.METERED`` reads ``yes``, ``yes (guessed)``, ``no (guessed)``, ``unknown``."""
+    return value.strip().lower().startswith("yes")
+
+
+def tether_kind(driver: str, *, metered: bool = False) -> str | None:
+    """``"iphone"``/``"android"`` if ``driver`` belongs to a USB-tethered phone."""
+    driver = driver.strip().lower()
+    if driver in TETHER_DRIVERS:
+        return TETHER_DRIVERS[driver]
+    if driver == "cdc_ether" and metered:
+        return "android"
+    return None
+
+
+def parse_device_details(raw: str) -> dict[str, str]:
+    """Parse ``nmcli -t -f GENERAL.DRIVER,GENERAL.METERED,IP4.ADDRESS device show <dev>``.
+
+    Returns ``driver``, ``metered`` (``"yes"``/``"no"``) and the first IPv4
+    ``ip`` (without prefix length); missing fields come back empty.
+    """
+    out = {"driver": "", "metered": "no", "ip": ""}
+    for line in raw.splitlines():
+        key, sep, value = line.partition(_SEP)
+        if not sep:
+            continue
+        key, value = key.strip(), value.strip()
+        if key == "GENERAL.DRIVER":
+            out["driver"] = value
+        elif key == "GENERAL.METERED":
+            out["metered"] = "yes" if parse_metered(value) else "no"
+        elif key.startswith("IP4.ADDRESS") and value and not out["ip"]:
+            out["ip"] = value.split("/")[0].strip()
+    return out
+
+
 def build_status(
     *,
     devices: list[dict[str, str]],
     connectivity: str,
     wifi_ip: str | None = None,
     ap_connection_name: str = AP_CONNECTION_NAME,
+    device_info: dict[str, dict[str, str]] | None = None,
+    uplink_ip: str | None = None,
 ) -> NetworkStatus:
-    """Derive a :class:`NetworkStatus` from parsed nmcli output (pure)."""
-    status = NetworkStatus(supported=True, connectivity=connectivity)
+    """Derive a :class:`NetworkStatus` from parsed nmcli output (pure).
+
+    ``device_info`` maps device names to :func:`parse_device_details` output and
+    is what tells a USB-tethered phone apart from a real cable. ``uplink_ip`` is
+    the source address of the default route (see ``netinfo.internal_ip``); it
+    decides which link actually carries the uploads when several are up.
+    """
+    info = device_info or {}
+    status = NetworkStatus(supported=True, connectivity=connectivity, uplink_ip=uplink_ip)
+    # Uplink candidates as (mode, device), so the one the default route uses
+    # can be picked below.
+    uplinks: list[tuple[str, str]] = []
 
     for dev in devices:
         connected = dev["state"].startswith("connected")
         conn = dev["connection"]
+        details = info.get(dev["device"], {})
         if dev["type"] == "ethernet" and connected:
-            status.ethernet = True
+            kind = tether_kind(
+                details.get("driver", ""), metered=details.get("metered") == "yes"
+            )
+            if kind:
+                status.tether = kind
+                status.tether_ip = details.get("ip") or None
+                uplinks.append(("tether", dev["device"]))
+            else:
+                status.ethernet = True
+                uplinks.append(("ethernet", dev["device"]))
         elif dev["type"] == "wifi" and connected and conn:
             if conn == ap_connection_name:
                 status.ap_active = True
                 status.ap_ssid = conn
             else:
                 status.wifi_ssid = conn
-                status.wifi_ip = wifi_ip
+                status.wifi_ip = wifi_ip or details.get("ip") or None
+                uplinks.append(("client", dev["device"]))
 
     # "Online" means the box has a usable uplink so the fallback AP isn't needed.
     # An active client/Ethernet connection IS that uplink — don't rely solely on
@@ -188,35 +265,65 @@ def build_status(
     # many setups (connectivity checking disabled, netplan/networkd-rendered
     # profiles) even while a real network with an IP is connected. That false
     # "offline" would otherwise read as a dead link in the UI.
-    has_uplink = status.ethernet or bool(status.wifi_ssid)
-    status.online = has_uplink or connectivity in {"full", "limited", "portal"}
+    status.online = bool(uplinks) or connectivity in {"full", "limited", "portal"}
+
+    # Which link carries the traffic: the one owning the default route's source
+    # address. Without that, fall back to the route-metric order the netfallback
+    # NetworkManager drop-in sets up (cable 100, Wi-Fi 600, phone 700).
+    uplink = next(
+        (u for u in uplinks if uplink_ip and info.get(u[1], {}).get("ip") == uplink_ip),
+        None,
+    )
+    if uplink is None:
+        order = {"ethernet": 0, "client": 1, "tether": 2}
+        uplink = min(uplinks, key=lambda u: order[u[0]], default=None)
+    if uplink is not None:
+        details = info.get(uplink[1], {})
+        status.metered = uplink[0] == "tether" or details.get("metered") == "yes"
 
     if status.ap_active:
         status.mode = "ap"
-    elif status.ethernet:
-        status.mode = "ethernet"
-    elif status.wifi_ssid:
-        status.mode = "client"
+    elif uplink is not None:
+        status.mode = uplink[0]
     else:
         status.mode = "offline"
     return status
 
 
-def _wifi_ip(devices: list[dict[str, str]], ap_connection_name: str) -> str | None:
-    """Best-effort IPv4 of the active *client* Wi-Fi device."""
+def describe_uplink(status: NetworkStatus) -> str:
+    """Short German label of the link in use, e.g. ``USB-Tethering (iPhone)``."""
+    if status.mode == "tether":
+        return f"USB-Tethering ({TETHER_LABELS.get(status.tether or '', 'Handy')})"
+    if status.mode == "client":
+        return f"WLAN {status.wifi_ssid}" if status.wifi_ssid else "WLAN"
+    if status.mode == "ethernet":
+        return "Kabel (Ethernet)"
+    if status.mode == "ap":
+        return "Eigener Access Point"
+    if status.mode == "offline":
+        return "Offline"
+    return "Unbekannt"
+
+
+def _device_info(devices: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    """Driver, metered flag and IPv4 of every connected device (one nmcli call each)."""
+    out: dict[str, dict[str, str]] = {}
     for dev in devices:
-        if (
-            dev["type"] == "wifi"
-            and dev["state"].startswith("connected")
-            and dev["connection"] not in ("", ap_connection_name)
-        ):
-            raw = _run_nmcli(["-t", "-f", "IP4.ADDRESS", "device", "show", dev["device"]])
-            if raw:
-                for line in raw.splitlines():
-                    _, _, value = line.partition(_SEP)
-                    if value.strip():
-                        return value.split("/")[0].strip()
-    return None
+        if not dev["state"].startswith("connected") or dev["type"] in ("loopback", ""):
+            continue
+        raw = _run_nmcli(
+            [
+                "-t",
+                "-f",
+                "GENERAL.DRIVER,GENERAL.METERED,IP4.ADDRESS",
+                "device",
+                "show",
+                dev["device"],
+            ]
+        )
+        if raw:
+            out[dev["device"]] = parse_device_details(raw)
+    return out
 
 
 def get_status(*, apply_wired: bool = False) -> NetworkStatus:
@@ -239,12 +346,15 @@ def get_status(*, apply_wired: bool = False) -> NetworkStatus:
             apply_wired=apply_wired,
             detail="nmcli-Abfrage fehlgeschlagen (läuft der NetworkManager-Dienst?).",
         )
+    from .netinfo import internal_ip
+
     devices = parse_device_status(dev_raw)
     connectivity = parse_connectivity(conn_raw) if conn_raw is not None else "unknown"
     status = build_status(
         devices=devices,
         connectivity=connectivity,
-        wifi_ip=_wifi_ip(devices, AP_CONNECTION_NAME),
+        device_info=_device_info(devices),
+        uplink_ip=internal_ip(),
     )
     if status.wifi_ssid:
         # build_status only sees the connection *name* (e.g. the Imager/netplan
@@ -254,6 +364,38 @@ def get_status(*, apply_wired: bool = False) -> NetworkStatus:
             status.wifi_ssid = ssid
     status.apply_wired = apply_wired
     return status
+
+
+# The transfer worker asks before every job whether the uplink is metered. A few
+# nmcli calls per poll would be noticeable on a Pi 3, and a phone isn't plugged
+# in or out every second, so the answer is cached briefly.
+METERED_CACHE_SECONDS = 30.0
+_metered_cache: tuple[float, bool, str] | None = None
+_metered_lock = threading.Lock()
+
+
+def metered_uplink(*, max_age: float = METERED_CACHE_SECONDS) -> tuple[bool, str]:
+    """``(metered, label)`` of the uplink in use, cached for ``max_age`` seconds.
+
+    Without NetworkManager the box can't tell, so it reports "not metered" and
+    the metered-upload rules stay inactive instead of blocking every upload.
+    """
+    global _metered_cache
+    with _metered_lock:
+        now = time.monotonic()
+        if _metered_cache is not None and now - _metered_cache[0] < max_age:
+            return _metered_cache[1], _metered_cache[2]
+        status = get_status()
+        result = (status.supported and status.metered, describe_uplink(status))
+        _metered_cache = (now, *result)
+        return result
+
+
+def reset_metered_cache() -> None:
+    """Forget the cached metered state (used by tests)."""
+    global _metered_cache
+    with _metered_lock:
+        _metered_cache = None
 
 
 # --------------------------------------------------------------------------- #

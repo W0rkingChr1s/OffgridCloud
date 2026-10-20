@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 📱 Neu: USB-Tethering mit iPhone oder Android
+
+- **Handy per Kabel als Uplink:** Ein per USB angestecktes iPhone (`ipheth`) oder Android-Handy (`rndis_host`/`cdc_ncm`) wird erkannt. Die Netzwerk-Seite zeigt den Modus „USB-Tethering“ mit dem Gerät, Telegram `/netz` und die Konsole an der Box ebenso. Fürs iPhone installiert `install.sh` jetzt `usbmuxd` mit, ohne das kommt der Link nicht hoch.
+- **Handy nur als Reserve:** Ein neues NetworkManager-Drop-in (`offgridcloud-tether.conf`) gibt Handys die Routen-Metrik 700. Kabel und bekanntes WLAN haben damit Vorrang, das Handy trägt den Upload nur, wenn sonst nichts da ist.
+- **Getaktete Verbindung:** Unter Bandbreite einstellbar, was Uploads über das Handy (oder einen als getaktet erkannten WLAN-Hotspot) tun: normal senden, bis zu einem **Tagesvolumen** senden (Dateien, die nicht mehr passen, warten) oder **pausieren**. Der Worker misst dabei nicht nach, um kein Volumen zu verbrennen. Standard bleibt „normal senden“.
+- Anleitung und Einschränkungen: [docs/NETZWERK-REDUNDANZ.md](docs/NETZWERK-REDUNDANZ.md#usb-tethering-iphoneandroid).
+
 ### 🖥️ Konsole an der Box überarbeitet
 
 - **Neuer Tab „Speicher“:** Laufwerke und Speicherkarten einhängen, aushängen, auswerfen und formatieren, als Cache-Laufwerk markieren, Karteninhalte in einen Ordner hochladen oder ohne Netz aufs Cache-Laufwerk sichern. Laufende Vorgänge erscheinen mit Live-Fortschritt, Kartensicherungen lassen sich ansehen und löschen. Die Konsole kann damit dasselbe wie die Speicher-Seite der Web-UI.

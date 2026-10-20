@@ -25,6 +25,7 @@ const NETWORK_SORT: SortOption<KnownNetwork>[] = [
 const MODE_LABELS: Record<NetworkStatus["mode"], string> = {
   ethernet: "Kabel (Ethernet)",
   client: "WLAN-Client",
+  tether: "USB-Tethering",
   ap: "Eigener Access Point",
   offline: "Offline",
   unknown: "Unbekannt",
@@ -144,15 +145,30 @@ function StatusCard({ status }: { status: NetworkStatus }) {
         </span>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Modus" value={MODE_LABELS[status.mode]} />
         <Field
-          label="Verbunden mit"
-          value={status.wifi_ssid || (status.ethernet ? "Kabel" : status.ap_ssid || "—")}
+          label="Modus"
+          value={MODE_LABELS[status.mode] + (status.metered ? " · getaktet" : "")}
         />
-        <Field label="IP-Adresse" value={status.wifi_ip || "—"} />
+        <Field label="Verbunden mit" value={connectedTo(status)} />
+        <Field label="IP-Adresse" value={status.uplink_ip || status.wifi_ip || "—"} />
       </div>
+      {status.tether && status.mode !== "tether" && (
+        <p className="mt-3 text-xs text-slate-500">
+          {TETHER_NAMES[status.tether]} per USB angeschlossen (Reserve, solange Kabel oder WLAN
+          da ist).
+        </p>
+      )}
     </div>
   );
+}
+
+const TETHER_NAMES = { iphone: "iPhone", android: "Android-Handy" } as const;
+
+function connectedTo(status: NetworkStatus): string {
+  if (status.mode === "tether" && status.tether) return TETHER_NAMES[status.tether];
+  if (status.mode === "client" && status.wifi_ssid) return status.wifi_ssid;
+  if (status.mode === "ethernet") return "Kabel";
+  return status.wifi_ssid || status.ap_ssid || "—";
 }
 
 function Field({ label, value }: { label: string; value: string }) {

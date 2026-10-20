@@ -8,6 +8,7 @@ light format check, not strict deliverability validation.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -346,6 +347,8 @@ class BandwidthPolicyUpdate(BaseModel):
     min_bandwidth_kbps: int | None = Field(default=None, ge=0)
     bwlimit_kbps: int | None = Field(default=None, ge=0)
     schedule: list[BandwidthWindow] | None = None
+    metered_mode: Literal["allow", "pause", "limit"] | None = None
+    metered_budget_mb: int | None = Field(default=None, ge=1, le=10_000_000)
 
 
 class BandwidthStatusOut(BaseModel):
@@ -356,8 +359,13 @@ class BandwidthStatusOut(BaseModel):
     last_kbps: float
     last_measured_at: datetime | None
     effective_bwlimit_kbps: int  # what applies right now
-    gated: bool  # uploads currently paused by the min-bandwidth gate
+    gated: bool  # uploads currently paused (min-bandwidth gate or metered rule)
     gate_reason: str
+    metered_mode: str = "allow"  # allow | pause | limit
+    metered_budget_mb: int = 500
+    metered_used_bytes: int = 0  # sent over a metered link today
+    metered: bool = False  # the uplink in use right now is metered
+    uplink: str = ""  # label of the uplink in use, e.g. "USB-Tethering (iPhone)"
 
 
 class DiskUsageOut(BaseModel):
@@ -473,6 +481,10 @@ class NetworkStatusOut(BaseModel):
     wifi_ip: str | None = None
     ap_active: bool
     ap_ssid: str | None = None
+    tether: str | None = None  # "iphone" | "android" while a phone tethers via USB
+    tether_ip: str | None = None
+    metered: bool = False
+    uplink_ip: str | None = None
     detail: str = ""
 
 

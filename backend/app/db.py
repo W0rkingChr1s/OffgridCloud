@@ -83,6 +83,11 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Watchdog: probing for a known network while hosting the fallback AP.
     ("network_settings", "ap_probe_interval", "INTEGER NOT NULL DEFAULT 120"),
     ("network_settings", "ap_blind_probe_interval", "INTEGER NOT NULL DEFAULT 600"),
+    # Uploads over a metered uplink (USB tethering): pause or daily budget.
+    ("bandwidth_policy", "metered_mode", "VARCHAR(8) NOT NULL DEFAULT 'allow'"),
+    ("bandwidth_policy", "metered_budget_mb", "INTEGER NOT NULL DEFAULT 500"),
+    ("bandwidth_policy", "metered_used_bytes", "BIGINT NOT NULL DEFAULT 0"),
+    ("bandwidth_policy", "metered_day", "VARCHAR(10) NOT NULL DEFAULT ''"),
 ]
 
 

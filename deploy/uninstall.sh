@@ -385,6 +385,8 @@ step "Removing the network-redundancy layer (watchdog + fallback AP), if install
 run systemctl disable --now offgridcloud-netwatch.service 2>/dev/null || true
 run rm -f /etc/systemd/system/offgridcloud-netwatch.service
 run rm -rf /run/offgridcloud
+# USB-tethering route metric drop-in (phone ranks behind cable and Wi-Fi).
+run rm -f /etc/NetworkManager/conf.d/offgridcloud-tether.conf
 if command -v nmcli >/dev/null 2>&1; then
   # The fallback AP is ours alone — take it down and delete the profile. Its
   # name is configurable; read it from network.json, fall back to the default.

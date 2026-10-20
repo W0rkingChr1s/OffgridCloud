@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type BandwidthStatus, type BandwidthWindow } from "../api";
+import {
+  api,
+  ApiError,
+  type BandwidthStatus,
+  type BandwidthWindow,
+  type MeteredMode,
+} from "../api";
 import Layout from "../components/Layout";
 
 export default function Bandwidth() {
@@ -8,6 +14,8 @@ export default function Bandwidth() {
   const [minKbps, setMinKbps] = useState(0);
   const [bwlimit, setBwlimit] = useState(0);
   const [schedule, setSchedule] = useState<BandwidthWindow[]>([]);
+  const [meteredMode, setMeteredMode] = useState<MeteredMode>("allow");
+  const [budgetMb, setBudgetMb] = useState(500);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -17,6 +25,8 @@ export default function Bandwidth() {
     setMinKbps(s.min_bandwidth_kbps);
     setBwlimit(s.bwlimit_kbps);
     setSchedule(s.schedule);
+    setMeteredMode(s.metered_mode);
+    setBudgetMb(s.metered_budget_mb);
   }
 
   function load() {
@@ -47,6 +57,8 @@ export default function Bandwidth() {
           min_bandwidth_kbps: minKbps,
           bwlimit_kbps: bwlimit,
           schedule,
+          metered_mode: meteredMode,
+          metered_budget_mb: budgetMb,
         }),
       });
       apply(s);
@@ -160,6 +172,57 @@ export default function Bandwidth() {
           </div>
         </div>
 
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-300">
+              Getaktete Verbindung (USB-Tethering)
+            </span>
+            {status && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  status.metered ? "bg-amber-500/20 text-amber-200" : "bg-white/5 text-slate-400"
+                }`}
+              >
+                {status.metered ? `aktiv: ${status.uplink}` : "gerade nicht getaktet"}
+              </span>
+            )}
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Hängt ein iPhone oder Android-Handy per USB als Uplink an der Box, laufen Uploads über
+            dessen Datenvolumen. Gilt unabhängig vom Schalter oben.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm">
+              <span className="mb-1 block text-slate-400">Uploads über getaktete Verbindung</span>
+              <select
+                className={`${field} w-full`}
+                value={meteredMode}
+                onChange={(e) => setMeteredMode(e.target.value as MeteredMode)}
+              >
+                <option value="allow">normal senden</option>
+                <option value="limit">bis zum Tagesvolumen senden</option>
+                <option value="pause">pausieren, bis Kabel oder WLAN da ist</option>
+              </select>
+            </label>
+            {meteredMode === "limit" && (
+              <label className="text-sm">
+                <span className="mb-1 block text-slate-400">Tagesvolumen (MB)</span>
+                <input
+                  type="number"
+                  min={1}
+                  className={field}
+                  value={budgetMb}
+                  onChange={(e) => setBudgetMb(Number(e.target.value))}
+                />
+                <span className="mt-1 block text-xs text-slate-500">
+                  Heute verbraucht: {status ? formatMb(status.metered_used_bytes) : "—"}. Dateien,
+                  die nicht mehr ins Restvolumen passen, warten auf Kabel oder WLAN.
+                </span>
+              </label>
+            )}
+          </div>
+        </div>
+
         <div className="mt-6 flex items-center gap-3">
           <button type="submit" className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 font-semibold text-white">
             Speichern
@@ -169,6 +232,10 @@ export default function Bandwidth() {
       </form>
     </Layout>
   );
+}
+
+function formatMb(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 }
 
 function Tile({
