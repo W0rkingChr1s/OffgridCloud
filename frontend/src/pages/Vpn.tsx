@@ -8,6 +8,7 @@ import {
   type VpnType,
 } from "../api";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
 
 const TYPE_LABEL: Record<VpnType, string> = {
@@ -87,7 +88,7 @@ export default function Vpn() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">VPN</h2>
           <p className="text-sm text-slate-400">
@@ -99,7 +100,7 @@ export default function Vpn() {
             setEditing(null);
             setShowForm(true);
           }}
-          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="whitespace-nowrap rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           + VPN
         </button>
@@ -139,7 +140,8 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
         </div>
       )}
 
-      {caps && caps.ready && (
+      {/* Only worth a line when one of the two clients is missing. */}
+      {caps && caps.ready && !(caps.wireguard && caps.openvpn) && (
         <div className="mb-4 flex flex-wrap gap-2 text-xs">
           <CapBadge ok={caps.wireguard} label="WireGuard" />
           <CapBadge ok={caps.openvpn} label="OpenVPN" />
@@ -153,20 +155,26 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
       {showForm && <VpnForm caps={caps} editing={editing} onDone={close} onCancel={() => setShowForm(false)} />}
 
       {tunnels.length === 0 ? (
-        <p className="text-sm text-slate-500">Noch kein VPN eingerichtet.</p>
+        !showForm && (
+          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
+            Noch kein VPN eingerichtet. Mit „+ VPN“ z. B. die WireGuard-Verbindung der FRITZ!Box hinterlegen.
+          </div>
+        )
       ) : (
         <div className="space-y-3">
-          <div className="flex justify-end">
-            <SortMenu sort={sort} />
-          </div>
+          {tunnels.length > 4 && (
+            <div className="flex justify-end">
+              <SortMenu sort={sort} />
+            </div>
+          )}
           {sort.sorted.map((t) => {
             const active = t.active;
             const st = active ? statusMap : null;
             return (
               <div key={t.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-48 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-lg font-semibold text-white">{t.name}</span>
                       <span
                         className={`rounded px-2 py-0.5 text-xs ${
@@ -179,6 +187,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       </span>
                       <span className="rounded-sm bg-white/5 px-2 py-0.5 text-xs text-slate-400">
                         {TYPE_LABEL[t.type]}
+                        {t.autostart && " · Autostart"}
                       </span>
                     </div>
                     {active && st && (
@@ -189,18 +198,15 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       </div>
                     )}
                     {!active && t.last_error && (
-                      <div className="mt-1 text-xs text-red-300">{t.last_error}</div>
-                    )}
-                    {t.autostart && (
-                      <div className="mt-1 text-xs text-slate-500">Autostart aktiv</div>
+                      <div className="mt-1 wrap-break-word text-xs text-red-300">{t.last_error}</div>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     {active ? (
                       <button
                         onClick={() => disconnect(t)}
                         disabled={busyId === t.id}
-                        className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-50"
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-50"
                       >
                         Trennen
                       </button>
@@ -208,7 +214,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       <button
                         onClick={() => connect(t)}
                         disabled={busyId === t.id || (caps ? !caps.ready : false)}
-                        className="rounded-sm bg-linear-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                        className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         {busyId === t.id ? "…" : "Verbinden"}
                       </button>
@@ -218,16 +224,11 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                         setEditing(t);
                         setShowForm(true);
                       }}
-                      className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
                     >
                       Bearbeiten
                     </button>
-                    <button
-                      onClick={() => remove(t)}
-                      className="rounded-sm border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10"
-                    >
-                      Löschen
-                    </button>
+                    <MoreMenu items={[{ label: "Löschen …", danger: true, onClick: () => remove(t) }]} />
                   </div>
                 </div>
               </div>
