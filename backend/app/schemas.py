@@ -519,6 +519,8 @@ class NetworkSettingsOut(BaseModel):
     country_code: str
     check_interval: int
     fail_threshold: int
+    ap_probe_interval: int = 120
+    ap_blind_probe_interval: int = 600
     ap_has_password: bool = False
 
 
@@ -531,6 +533,8 @@ class NetworkSettingsUpdate(BaseModel):
     country_code: str | None = None
     check_interval: int | None = Field(default=None, ge=5, le=3600)
     fail_threshold: int | None = Field(default=None, ge=1, le=20)
+    ap_probe_interval: int | None = Field(default=None, ge=30, le=3600)
+    ap_blind_probe_interval: int | None = Field(default=None, ge=60, le=86400)
 
 
 class NetworkOverviewOut(BaseModel):

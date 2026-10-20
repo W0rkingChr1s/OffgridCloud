@@ -289,6 +289,45 @@ function FallbackSettings({
             }
           />
         </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-slate-400">Suche im AP-Modus (Sekunden)</span>
+          <input
+            type="number"
+            min={30}
+            max={3600}
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            value={form.ap_probe_interval}
+            onChange={(e) => setForm({ ...form, ap_probe_interval: Number(e.target.value) })}
+            onBlur={() =>
+              form.ap_probe_interval !== settings.ap_probe_interval &&
+              save({ ap_probe_interval: form.ap_probe_interval })
+            }
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Scan nach bekannten WLANs, während der AP läuft — ohne Unterbrechung.
+          </span>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-slate-400">AP kurz abschalten zum Suchen (Sekunden)</span>
+          <input
+            type="number"
+            min={60}
+            max={86400}
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            value={form.ap_blind_probe_interval}
+            onChange={(e) =>
+              setForm({ ...form, ap_blind_probe_interval: Number(e.target.value) })
+            }
+            onBlur={() =>
+              form.ap_blind_probe_interval !== settings.ap_blind_probe_interval &&
+              save({ ap_blind_probe_interval: form.ap_blind_probe_interval })
+            }
+          />
+          <span className="mt-1 block text-xs text-slate-500">
+            Nötig, wenn der WLAN-Chip im AP-Modus nicht scannen kann (Raspberry Pi). Verbundene
+            Geräte verlieren dabei für einige Sekunden die Verbindung.
+          </span>
+        </label>
       </div>
 
       <label className="mt-4 flex items-center gap-2 text-sm text-slate-300">

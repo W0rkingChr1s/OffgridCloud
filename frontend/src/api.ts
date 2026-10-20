@@ -493,6 +493,8 @@ export interface NetworkSettings {
   country_code: string;
   check_interval: number;
   fail_threshold: number;
+  ap_probe_interval: number;
+  ap_blind_probe_interval: number;
   ap_has_password: boolean;
 }
 

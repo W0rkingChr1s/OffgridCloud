@@ -80,6 +80,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "webauthn_user_handle", "BLOB"),
     # Storage import: source file mtime for duplicate detection. Nullable.
     ("media_items", "source_mtime", "FLOAT"),
+    # Watchdog: probing for a known network while hosting the fallback AP.
+    ("network_settings", "ap_probe_interval", "INTEGER NOT NULL DEFAULT 120"),
+    ("network_settings", "ap_blind_probe_interval", "INTEGER NOT NULL DEFAULT 600"),
 ]
 
 

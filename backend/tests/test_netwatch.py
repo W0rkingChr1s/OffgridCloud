@@ -215,3 +215,20 @@ def test_prefers_higher_priority_profile(tmp_path):
     )
     st, _ = _run(env, config)
     assert st["active"] == "ogc-wifi-buero"
+
+
+def test_probe_intervals_come_from_config(tmp_path):
+    # Values set in the UI land in network.json; the watchdog must honour them.
+    env, config = _setup(tmp_path, scan_ap=[], scan_client=["Fremd"])
+    cfg = json.loads(config.read_text())
+    cfg.update({"ap_probe_interval": 2000, "ap_blind_probe_interval": 5000})
+    config.write_text(json.dumps(cfg))
+
+    probe = Path(env["OGC_NETWATCH_STATE_DIR"]) / "ap-probe-last"
+    probe.write_text(str(int(time.time()) - 1000))  # > default 120, < configured 2000
+    st, _ = _run(env, config)
+    assert st["calls"] == []
+
+    probe.write_text(str(int(time.time()) - 3000))  # probe due, blind (5000) never ran
+    st, _ = _run(env, config)
+    assert st["calls"] == ["scan-ap", f"down {AP}", "scan-client", f"up {AP}"]

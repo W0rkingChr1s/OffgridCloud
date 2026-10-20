@@ -431,6 +431,8 @@ def export_config(db: Session) -> dict:
         },
         "check_interval": settings.check_interval,
         "fail_threshold": settings.fail_threshold,
+        "ap_probe_interval": settings.ap_probe_interval,
+        "ap_blind_probe_interval": settings.ap_blind_probe_interval,
         "known_networks": [
             {
                 "ssid": n.ssid,
