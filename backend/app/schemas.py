@@ -894,3 +894,35 @@ class StorageCacheBackupRequest(BaseModel):
     media_only: bool = True
     only_new: bool = True
     eject_after: bool = False
+
+
+# --- First-boot setup wizard (prebuilt image) ------------------------------
+
+
+class SetupStatusOut(BaseModel):
+    required: bool
+    code_required: bool = False
+    suggested_hostname: str = ""
+    country: str = ""
+
+
+class SetupCompleteRequest(BaseModel):
+    code: str = ""
+    admin_email: str
+    admin_password: str = Field(min_length=8)
+    admin_name: str = Field(default="", max_length=200)
+    hostname: str
+    # Empty = keep the current uplink (cable / Wi-Fi set up in Raspberry Pi Imager).
+    wifi_ssid: str = ""
+    wifi_password: str = ""
+    fallback_password: str
+    country: str = "DE"
+
+    _norm_email = field_validator("admin_email")(_normalise_email)
+
+
+class SetupCompleteOut(BaseModel):
+    hostname: str
+    url: str
+    wifi_ssid: str
+    finish_started: bool

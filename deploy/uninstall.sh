@@ -369,7 +369,15 @@ run rm -f /etc/sudoers.d/offgridcloud \
           /etc/sudoers.d/offgridcloud-power \
           /etc/sudoers.d/offgridcloud-https \
           /etc/sudoers.d/offgridcloud-network \
-          /etc/sudoers.d/offgridcloud-storage
+          /etc/sudoers.d/offgridcloud-storage \
+          /etc/sudoers.d/offgridcloud-setup
+# Image only: first-boot + setup-Wi-Fi units and their state (deploy/setup/).
+run systemctl disable --now offgridcloud-setup-ap.service offgridcloud-firstboot.service 2>/dev/null || true
+run rm -f /etc/systemd/system/offgridcloud-setup-ap.service \
+          /etc/systemd/system/offgridcloud-firstboot.service \
+          /etc/NetworkManager/dnsmasq-shared.d/offgridcloud-setup.conf
+command -v nmcli >/dev/null 2>&1 && run nmcli connection delete offgridcloud-setup >/dev/null 2>&1 || true
+run rm -rf /var/lib/offgridcloud
 run systemctl daemon-reload 2>/dev/null || true
 
 # --- 3. Network-redundancy layer --------------------------------------------

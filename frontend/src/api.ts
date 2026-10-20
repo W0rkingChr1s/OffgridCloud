@@ -589,6 +589,20 @@ export interface Health {
   rclone: { available: boolean; version: string | null; error: string | null };
 }
 
+export interface SetupStatus {
+  required: boolean;
+  code_required: boolean;
+  suggested_hostname: string;
+  country: string;
+}
+
+export interface SetupResult {
+  hostname: string;
+  url: string;
+  wifi_ssid: string;
+  finish_started: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

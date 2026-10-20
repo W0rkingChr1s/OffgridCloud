@@ -1,0 +1,122 @@
+name: Raspberry Pi image
+
+# Builds the flashable OffgridCloud OS image (Raspberry Pi OS Lite, arm64) with
+# pi-gen. The image carries no secrets: on first boot it opens the setup
+# wizard (open Wi-Fi "OffgridCloud-Setup-XXXX" + captive portal when there is
+# no cable) — see deploy/setup/ and docs/IMAGE.md.
+#
+# Called by release.yml for every release (the .img.xz is attached to it), or
+# run by hand: Actions → "Raspberry Pi image" → "Run workflow" builds the
+# chosen ref and keeps the image as a workflow artifact for testing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch or tag to build (default: the selected branch)"
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "Tag to build"
+        required: true
+        type: string
+      release-tag:
+        description: "Attach the image to this GitHub release"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    name: Build image (arm64)
+    # Native arm64 runner: pi-gen runs without QEMU emulation.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Tags are needed: the installer stamps the version via `git describe`.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend (natively, outside the image chroot)
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Determine image name
+        id: name
+        run: |
+          VERSION="$(git describe --tags 2>/dev/null | sed -E 's/^v//' || true)"
+          VERSION="${VERSION:-$(git rev-parse --short HEAD)}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=offgridcloud-${VERSION}-rpi-arm64" >> "$GITHUB_OUTPUT"
+
+      - name: Stage the checkout for pi-gen
+        run: |
+          DEST=deploy/image/stage-offgridcloud/00-offgridcloud/files/offgridcloud
+          mkdir -p "$DEST"
+          # Everything incl. .git (one-click updates pull into it) and the
+          # prebuilt frontend/dist; not the npm cache.
+          rsync -a --exclude 'frontend/node_modules' --exclude 'deploy/image/stage-offgridcloud/00-offgridcloud/files' \
+            ./ "$DEST/"
+
+      - name: Build image with pi-gen
+        id: build
+        uses: usimd/pi-gen-action@v1
+        with:
+          image-name: ${{ steps.name.outputs.image }}
+          release: trixie
+          pi-gen-version: arm64
+          stage-list: stage0 stage1 stage2 ./deploy/image/stage-offgridcloud
+          compression: xz
+          compression-level: 6
+          hostname: offgridcloud-setup
+          # No password → the account is locked; set user/SSH in Raspberry Pi
+          # Imager if you want shell access. OffgridCloud itself needs none.
+          username: offgrid-admin
+          locale: de_DE.UTF-8
+          timezone: Europe/Berlin
+          keyboard-keymap: de
+          keyboard-layout: German
+          wpa-country: DE
+          increase-runner-disk-size: true
+
+      - name: Checksum
+        id: sum
+        run: |
+          IMG="${{ steps.build.outputs.image-path }}"
+          sha256sum "$IMG" | sed "s#  .*/#  #" > "$IMG.sha256"
+          cat "$IMG.sha256"
+          ls -lh "$IMG"
+          echo "path=$IMG" >> "$GITHUB_OUTPUT"
+
+      - name: Attach to release
+        if: inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.release-tag }}" \
+            "${{ steps.sum.outputs.path }}" "${{ steps.sum.outputs.path }}.sha256" --clobber
+
+      - name: Keep as workflow artifact
+        if: inputs.release-tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.image }}
+          path: |
+            ${{ steps.sum.outputs.path }}
+            ${{ steps.sum.outputs.path }}.sha256
+          retention-days: 7
