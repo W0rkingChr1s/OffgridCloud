@@ -276,3 +276,26 @@ def test_bandwidth_api_metered_settings(client, admin_auth, monkeypatch, metered
 
     bad = client.put("/api/bandwidth", headers=admin_auth, json={"metered_mode": "sometimes"})
     assert bad.status_code == 422
+
+
+def test_build_status_lists_every_uplink_primary_first():
+    status = network.build_status(
+        devices=[_dev("usb0"), _dev("wlan0", "wifi", "HomeWifi"), _dev("eth0")],
+        connectivity="full",
+        device_info={
+            "usb0": {"driver": "ipheth", "metered": "no", "ip": "172.20.10.2"},
+            "wlan0": {"driver": "brcmfmac", "metered": "no", "ip": "192.168.1.50"},
+            "eth0": {"driver": "bcmgenet", "metered": "no", "ip": "192.168.1.60"},
+        },
+        uplink_ip="192.168.1.50",
+    )
+    assert [(link.device, link.kind, link.primary) for link in status.links] == [
+        ("wlan0", "client", True),
+        ("usb0", "tether", False),
+        ("eth0", "ethernet", False),
+    ]
+    phone = status.links[1]
+    assert phone.label == "iPhone"
+    assert phone.metered is True
+    assert phone.ip == "172.20.10.2"
+    assert network.status_dict(status)["links"][0]["device"] == "wlan0"
