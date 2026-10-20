@@ -11,7 +11,7 @@ revoked without touching the others. Everything else is admin-only management
 from __future__ import annotations
 
 import jwt
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,7 @@ from ..admin_ops import audit
 from ..crypto import encrypt
 from ..db import get_db
 from ..deps import require_admin
-from ..models import PoolAccessToken, PoolPeer, PoolTokenScope, Role, User
+from ..models import PoolAccessToken, PoolPeer, PoolTokenScope, Role, TransferStatus, User
 from ..schemas import (
     PoolAccessTokenCreate,
     PoolAccessTokenCreated,
@@ -35,8 +35,10 @@ from ..schemas import (
     PoolTotals,
     TransferControlIn,
     TransferControlOut,
+    TransferJobOut,
 )
 from ..security import decode_access_token
+from .transfers import enrich_jobs
 
 router = APIRouter(prefix="/api/pool", tags=["pool"])
 
@@ -71,6 +73,31 @@ def _unauthorized() -> HTTPException:
     )
 
 
+def _authorize_peer_call(
+    db: Session,
+    x_pool_token: str | None,
+    x_pool_hub: str | None,
+    authorization: str | None,
+    *,
+    control: bool,
+) -> str:
+    """Admin or a hub token (with "control" scope if ``control``). Returns the caller."""
+    if _is_admin_bearer(db, authorization):
+        return "lokal (Admin)"
+    token = pool_core.authenticate(db, x_pool_token, x_pool_hub)
+    if token is None:
+        raise _unauthorized()
+    if control and token.scope != PoolTokenScope.CONTROL:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dieses Pool-Token darf nur lesen, nicht steuern",
+        )
+    caller = f"Hub „{token.name}“"
+    if token.last_used_hub:
+        caller += f" ({token.last_used_hub})"
+    return caller
+
+
 @router.get("/status", response_model=PoolNodeStatus)
 def pool_status(
     x_pool_token: str | None = Header(default=None, alias="X-Pool-Token"),
@@ -97,23 +124,49 @@ def pool_control(
     db: Session = Depends(get_db),
 ) -> TransferControlOut:
     """A hub controls this node's transfers — only with a "control" token."""
-    if _is_admin_bearer(db, authorization):
-        caller = "lokal (Admin)"
-    else:
-        token = pool_core.authenticate(db, x_pool_token, x_pool_hub)
-        if token is None:
-            raise _unauthorized()
-        if token.scope != PoolTokenScope.CONTROL:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Dieses Pool-Token darf nur lesen, nicht steuern",
-            )
-        caller = f"Hub „{token.name}“"
-        if token.last_used_hub:
-            caller += f" ({token.last_used_hub})"
+    caller = _authorize_peer_call(db, x_pool_token, x_pool_hub, authorization, control=True)
     message = transfers_core.apply_control(db, payload.action)
     audit(db, None, f"pool.remote_{payload.action}", f"{message} – {caller}")
     return TransferControlOut(**transfers_core.control_state(db), message=message)
+
+
+# Hubs show at most this many jobs per peer; the list is for spotting problems.
+POOL_JOB_LIMIT = 100
+
+
+@router.get("/jobs", response_model=list[TransferJobOut])
+def pool_jobs(
+    job_status: TransferStatus | None = Query(default=None, alias="status"),
+    x_pool_token: str | None = Header(default=None, alias="X-Pool-Token"),
+    x_pool_hub: str | None = Header(default=None, alias="X-Pool-Hub"),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> list[TransferJobOut]:
+    """This node's transfer jobs for a hub (any token): file, target, error."""
+    _authorize_peer_call(db, x_pool_token, x_pool_hub, authorization, control=False)
+    return enrich_jobs(db, transfers_core.list_jobs(db, job_status, POOL_JOB_LIMIT))
+
+
+@router.post("/jobs/{job_id}/retry", response_model=TransferJobOut)
+def pool_retry_job(
+    job_id: int,
+    x_pool_token: str | None = Header(default=None, alias="X-Pool-Token"),
+    x_pool_hub: str | None = Header(default=None, alias="X-Pool-Hub"),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> TransferJobOut:
+    """A hub re-queues one job here — only with a "control" token."""
+    caller = _authorize_peer_call(db, x_pool_token, x_pool_hub, authorization, control=True)
+    try:
+        job = transfers_core.retry_job(db, job_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    out = enrich_jobs(db, [job])[0]
+    detail = f"{out.media_filename} → {out.provider_name} – {caller}"
+    audit(db, None, "pool.remote_retry_job", detail)
+    return out
 
 
 # --- Access tokens this node issues, one per hub ---------------------------
@@ -255,6 +308,19 @@ def delete_peer(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _enabled_peer(db: Session, peer_id: int) -> PoolPeer:
+    peer = db.get(PoolPeer, peer_id)
+    if peer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peer not found")
+    if not peer.enabled:
+        raise HTTPException(status_code=409, detail="Peer ist deaktiviert")
+    return peer
+
+
+def _peer_error(peer: PoolPeer, exc: pool_core.PeerControlError) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail=f"{peer.name}: {exc}")
+
+
 @router.post("/peers/{peer_id}/control", response_model=TransferControlOut)
 def control_peer(
     peer_id: int,
@@ -263,18 +329,47 @@ def control_peer(
     db: Session = Depends(get_db),
 ) -> TransferControlOut:
     """Forward one transfer action to a peer (it must have allowed control)."""
-    peer = db.get(PoolPeer, peer_id)
-    if peer is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peer not found")
-    if not peer.enabled:
-        raise HTTPException(status_code=409, detail="Peer ist deaktiviert")
+    peer = _enabled_peer(db, peer_id)
     try:
         data = pool_core.control_peer(peer, payload.action)
     except pool_core.PeerControlError as exc:
-        raise HTTPException(status_code=exc.status, detail=f"{peer.name}: {exc}") from exc
+        raise _peer_error(peer, exc) from exc
     result = TransferControlOut(**data)
     audit(db, admin, f"pool.peer_{payload.action}", f"{peer.name}: {result.message}")
     return result
+
+
+@router.get("/peers/{peer_id}/jobs", response_model=list[TransferJobOut])
+def peer_jobs(
+    peer_id: int,
+    job_status: TransferStatus | None = Query(default=None, alias="status"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[TransferJobOut]:
+    """A peer's transfer jobs, fetched live through its token."""
+    peer = _enabled_peer(db, peer_id)
+    try:
+        rows = pool_core.peer_jobs(peer, job_status.value if job_status else None)
+    except pool_core.PeerControlError as exc:
+        raise _peer_error(peer, exc) from exc
+    return [TransferJobOut(**row) for row in rows]
+
+
+@router.post("/peers/{peer_id}/jobs/{job_id}/retry", response_model=TransferJobOut)
+def retry_peer_job(
+    peer_id: int,
+    job_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> TransferJobOut:
+    """Re-queue one job on a peer (its token for this hub needs "control")."""
+    peer = _enabled_peer(db, peer_id)
+    try:
+        job = TransferJobOut(**pool_core.retry_peer_job(peer, job_id))
+    except pool_core.PeerControlError as exc:
+        raise _peer_error(peer, exc) from exc
+    audit(db, admin, "pool.peer_retry_job", f"{peer.name}: {job.media_filename}")
+    return job
 
 
 # --- Aggregated overview --------------------------------------------------

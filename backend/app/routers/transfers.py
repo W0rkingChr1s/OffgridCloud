@@ -20,7 +20,8 @@ router = APIRouter(
 )
 
 
-def _enrich(db: Session, jobs: list[TransferJob]) -> list[TransferJobOut]:
+def enrich_jobs(db: Session, jobs: list[TransferJob]) -> list[TransferJobOut]:
+    """Add file, target and folder names for display (also used by the pool)."""
     media_map = dict(db.execute(select(MediaItem.id, MediaItem.filename)).all())
     folder_map = dict(db.execute(select(MediaItem.id, MediaItem.folder_id)).all())
     provider_map = dict(db.execute(select(CloudProvider.id, CloudProvider.name)).all())
@@ -52,10 +53,7 @@ def list_transfers(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> list[TransferJobOut]:
-    stmt = select(TransferJob).order_by(TransferJob.updated_at.desc()).limit(200)
-    if status_filter is not None:
-        stmt = stmt.where(TransferJob.status == status_filter)
-    return _enrich(db, list(db.scalars(stmt)))
+    return enrich_jobs(db, transfers_core.list_jobs(db, status_filter))
 
 
 @router.get("/control", response_model=TransferControlOut)
@@ -83,15 +81,10 @@ def retry_transfer(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> TransferJobOut:
-    job = db.get(TransferJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-    if job.status == TransferStatus.RUNNING:
-        raise HTTPException(status_code=400, detail="Job läuft bereits")
-    job.status = TransferStatus.QUEUED
-    job.attempts = 0
-    job.last_error = ""
-    job.next_attempt_at = None
-    db.commit()
-    db.refresh(job)
-    return _enrich(db, [job])[0]
+    try:
+        job = transfers_core.retry_job(db, job_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return enrich_jobs(db, [job])[0]

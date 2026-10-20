@@ -160,6 +160,35 @@ def recompute_media_status(db: Session, media_id: int) -> None:
 # --- Manual control (local admin or a pool hub with control rights) ------
 
 CONTROL_ACTIONS = ("pause", "resume", "retry_failed")
+JOB_LIST_LIMIT = 200
+
+
+def list_jobs(
+    db: Session, status: TransferStatus | None = None, limit: int = JOB_LIST_LIMIT
+) -> list[TransferJob]:
+    """Most recently updated jobs first, optionally only one status."""
+    stmt = select(TransferJob).order_by(TransferJob.updated_at.desc()).limit(limit)
+    if status is not None:
+        stmt = stmt.where(TransferJob.status == status)
+    return list(db.scalars(stmt))
+
+
+def retry_job(db: Session, job_id: int) -> TransferJob:
+    """Re-queue one job now. Raises LookupError if unknown, ValueError if running."""
+    job = db.get(TransferJob, job_id)
+    if job is None:
+        raise LookupError(job_id)
+    if job.status == TransferStatus.RUNNING:
+        raise ValueError("Job läuft bereits")
+    job.status = TransferStatus.QUEUED
+    job.attempts = 0
+    job.last_error = ""
+    job.next_attempt_at = None
+    db.flush()
+    recompute_media_status(db, job.media_id)
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 def control_state(db: Session) -> dict:

@@ -38,8 +38,11 @@ angezeigt — kopieren. Ohne Token ist die Box nicht abfragbar (Standard).
 
 | Recht | Darf |
 |-------|------|
-| **Nur lesen** (Standard) | Status abfragen |
-| **Lesen + Transfers steuern** | zusätzlich Uploads pausieren/fortsetzen, Fehlgeschlagene neu anstoßen |
+| **Nur lesen** (Standard) | Status abfragen, Job-Liste mit Dateinamen, Ziel und Fehlertext ansehen |
+| **Lesen + Transfers steuern** | zusätzlich Uploads pausieren/fortsetzen, Fehlgeschlagene neu anstoßen — alle auf einmal oder einzeln |
+
+Auch *nur lesen* zeigt damit **Dateinamen** der Box. Wer einem Hub nicht einmal
+die zeigen will, gibt ihm kein Token.
 
 Fragen mehrere Hubs dieselbe Box ab, bekommt **jeder sein eigenes Token**. Die
 Liste zeigt pro Token, wann und von welchem Hub (Hostname) es zuletzt benutzt
@@ -72,9 +75,22 @@ Vom Hub aus lassen sich auf jeder Box, deren Token für diesen Hub das Recht
   kurz freigeben, weil eine andere Wichtigeres zu senden hat.
 - **Fehlgeschlagene Transfers erneut anstoßen** — alle auf einmal, Zähler und
   Fehlertext werden zurückgesetzt.
+- **Einzelne Jobs erneut anstoßen** — über die Job-Liste (siehe unten).
 
 Die Buttons stehen direkt auf der Kachel des Knotens. Die eigene Box lässt sich
 immer steuern; dieselben Aktionen gibt es lokal auf der Seite **Transfers**.
+
+### Job-Liste eines Peers
+
+**„Jobs ansehen“** auf einer Kachel klappt darunter die Transfers dieser Box auf:
+Datei, Ziel, Versuche, Zeitpunkt und bei Fehlschlägen der **Fehlertext** — also
+*warum* eine Box nicht hochlädt (Zugangsdaten falsch, Ziel voll, Netz weg …).
+Filter: Fehlgeschlagen (Standard), Wartend, Läuft, Alle. Pro Peer werden die 100
+zuletzt geänderten Jobs gezeigt, live vom Peer geholt.
+
+Mit Recht *steuern* hat jeder fehlgeschlagene oder wartende Job einen Button
+**„Erneut“**. Das ist der richtige Weg, wenn nur ein Job hängt und man nicht
+alle anderen Fehlschläge gleich mit neu anstoßen will.
 
 ### Erlauben (auf der Peer-Box)
 
@@ -118,9 +134,9 @@ Hostnamen des Hubs.
 
 ## Grenzen
 
-- Kein zentrales Verschieben/Umsortieren von Medien zwischen Boxen und keine
-  Steuerung einzelner Jobs — jede Box verwaltet ihre Uploads selbst; der Hub kann
-  sie nur anhalten, fortsetzen und Fehlgeschlagene neu anstoßen.
+- Kein zentrales Verschieben/Umsortieren von Medien zwischen Boxen — jede Box
+  verwaltet ihre Uploads selbst; der Hub kann sie nur anhalten, fortsetzen und
+  Jobs neu anstoßen, nicht löschen oder umpriorisieren.
 - Pausieren bricht laufende Uploads nicht ab.
 - Der Hub aggregiert nur **aktive** Peers; ein nicht erreichbarer Peer erscheint
   rot mit Fehlergrund (Timeout, `Pool-Token ungültig`, …).
@@ -131,7 +147,10 @@ Hostnamen des Hubs.
 |----------------|-------|
 | `GET /api/pool/status` | Kompakter Status dieser Box (Admin **oder** `X-Pool-Token`). |
 | `POST /api/pool/control` | Transfer-Aktion auf dieser Box (Admin **oder** `X-Pool-Token` mit Recht *steuern*). Body: `{"action": "pause" \| "resume" \| "retry_failed"}`. |
+| `GET /api/pool/jobs?status=…` | Transfer-Jobs dieser Box, max. 100 (Admin **oder** `X-Pool-Token`). |
+| `POST /api/pool/jobs/{id}/retry` | Einen Job neu einreihen (Admin **oder** `X-Pool-Token` mit Recht *steuern*). |
 | `POST /api/pool/peers/{id}/control` | Hub leitet eine Aktion an einen Peer weiter (Admin). |
+| `GET /api/pool/peers/{id}/jobs?status=…` · `POST /api/pool/peers/{id}/jobs/{job}/retry` | Hub holt die Job-Liste eines Peers bzw. stößt dort einen Job neu an (Admin). |
 | `GET/POST /api/transfers/control` | Dieselben Aktionen lokal (Admin). |
 | `GET /api/pool/overview` | Hub-Sicht: diese Box + alle Peers + Summen (Admin). |
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
@@ -163,7 +182,7 @@ Koordination vor dem Relay.
 
 | Baustein | Nutzen | Aufwand |
 |---|---|---|
-| **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
+| ☑ **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
 | ☑ **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
 | **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
 | **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |

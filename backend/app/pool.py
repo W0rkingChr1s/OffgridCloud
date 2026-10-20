@@ -21,6 +21,7 @@ import secrets
 import socket
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -204,38 +205,75 @@ def _peer_headers(peer: PoolPeer) -> dict[str, str]:
 
 
 class PeerControlError(Exception):
-    """A control request the peer refused or never answered."""
+    """A request to a peer that it refused or never answered."""
 
     def __init__(self, message: str, status: int = 502) -> None:
         super().__init__(message)
         self.status = status
 
 
-def control_peer(peer: PoolPeer, action: str) -> dict:
-    """Send one transfer action to a peer; returns its new control state."""
-    url = f"{normalize_base_url(peer.base_url)}/api/pool/control"
-    headers = {**_peer_headers(peer), "Content-Type": "application/json"}
-    body = json.dumps({"action": action}).encode("utf-8")
+def _http_detail(exc: urllib.error.HTTPError) -> str:
+    """The FastAPI ``detail`` of an error response, if there is one."""
     try:
-        req = urllib.request.Request(url, data=body, headers=headers, method="POST")  # noqa: S310
+        body = json.loads(exc.read().decode("utf-8"))
+    except (ValueError, OSError, AttributeError):
+        return ""
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return detail if isinstance(detail, str) else ""
+
+
+def _peer_call(peer: PoolPeer, method: str, path: str, payload: dict | None = None):
+    """JSON request to a peer with its token. Errors become PeerControlError."""
+    url = f"{normalize_base_url(peer.base_url)}{path}"
+    headers = _peer_headers(peer)
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)  # noqa: S310
         with urllib.request.urlopen(req, timeout=PEER_TIMEOUT) as resp:  # noqa: S310
-            data = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
+        detail = _http_detail(exc)
         if exc.code == 401:
             raise PeerControlError("Pool-Token ungültig") from exc
         if exc.code == 403:
             raise PeerControlError(
                 "Token dieses Hubs hat auf dem Peer nur Leserechte", status=409
             ) from exc
+        if exc.code == 404 and detail == "Job not found":
+            raise PeerControlError("Job auf dem Peer nicht (mehr) vorhanden", status=404) from exc
         if exc.code in (404, 405):
             # Older peer without the endpoint.
-            raise PeerControlError("Peer unterstützt keine Fernsteuerung (Update nötig)") from exc
+            raise PeerControlError("Peer unterstützt das noch nicht (Update nötig)") from exc
+        if exc.code == 400 and detail:
+            raise PeerControlError(detail, status=409) from exc
         raise PeerControlError(f"HTTP {exc.code}") from exc
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as exc:
         raise PeerControlError(_explain_error(exc)) from exc
-    if not isinstance(data, dict):
+
+
+def _expect(data, kind: type):
+    if not isinstance(data, kind):
         raise PeerControlError("Unerwartete Antwort")
     return data
+
+
+def control_peer(peer: PoolPeer, action: str) -> dict:
+    """Send one transfer action to a peer; returns its new control state."""
+    return _expect(_peer_call(peer, "POST", "/api/pool/control", {"action": action}), dict)
+
+
+def peer_jobs(peer: PoolPeer, status: str | None = None) -> list:
+    """A peer's transfer jobs, most recently updated first."""
+    path = "/api/pool/jobs" + (f"?status={urllib.parse.quote(status)}" if status else "")
+    return _expect(_peer_call(peer, "GET", path), list)
+
+
+def retry_peer_job(peer: PoolPeer, job_id: int) -> dict:
+    """Re-queue one job on a peer; returns the updated job."""
+    return _expect(_peer_call(peer, "POST", f"/api/pool/jobs/{int(job_id)}/retry", {}), dict)
 
 
 def poll_peer(peer: PoolPeer) -> dict:

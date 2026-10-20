@@ -107,6 +107,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ **Multi-Server / Pooling**: mehrere Mini-Server als Flotte im Blick — ein Hub fragt die hinterlegten Peers (`/api/pool/status`, Shared-Token) periodisch ab und zeigt eine gemeinsame Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher). Read-only-Aggregation, keine verteilte Koordination — Pi-tauglich. Verwaltung im Web-UI unter **Pool** ([docs/MULTI-SERVER-POOL.md](MULTI-SERVER-POOL.md)).
 - ☑ **Pool-Fernsteuerung**: Hub pausiert/setzt Uploads fort und stößt Fehlgeschlagene neu an — nur mit einem Token mit Recht „steuern“; Audit auf beiden Seiten.
 - ☑ **Pool-Tokens pro Hub**: jeder Hub ein eigenes, einzeln sperrbares Token (lesen/steuern), auf der Box nur als Hash gespeichert; das alte gemeinsame Token wird automatisch übernommen.
+- ☑ **Pool-Job-Liste**: Hub zeigt die Transfers eines Peers mit Fehlertext und stößt einzelne Jobs neu an (Recht „steuern“).
 - ☐ **Pool-Ausbau** (Lastverteilung, Relay, Spiegelung …): siehe [Ausbauplan](MULTI-SERVER-POOL.md#ausbauplan).
 - ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
 

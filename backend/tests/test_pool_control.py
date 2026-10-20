@@ -175,3 +175,106 @@ def test_hub_name_header_is_ascii(monkeypatch):
     monkeypatch.setattr(pool_core, "_node_name", lambda: "Box – Ölwehr")
     headers = pool_core._peer_headers(PoolPeer(name="p", base_url="http://x", token_encrypted=""))
     headers["X-Pool-Hub"].encode("ascii")  # must not raise
+
+
+# --- Job list of a peer ------------------------------------------------------
+
+
+def _hub(client, admin_auth, scope):
+    created = client.post(
+        "/api/pool/tokens", headers=admin_auth, json={"name": f"Hub-{scope}", "scope": scope}
+    ).json()
+    return {"X-Pool-Token": created["token"], "X-Pool-Hub": "hub-pi"}
+
+
+def test_read_token_lists_jobs_with_details(client, admin_auth, only_these_jobs):  # noqa: F811
+    job_id = only_these_jobs(client, admin_auth, 32)
+    _fail(job_id)
+    hub = _hub(client, admin_auth, "read")
+
+    assert client.get("/api/pool/jobs").status_code == 401
+    failed = client.get("/api/pool/jobs?status=failed", headers=hub).json()
+    mine = next(j for j in failed if j["id"] == job_id)
+    assert mine["last_error"] == "boom" and mine["media_filename"]
+    assert all(j["status"] == "failed" for j in failed)
+    queued = client.get("/api/pool/jobs?status=queued", headers=hub).json()
+    assert job_id not in {j["id"] for j in queued}
+
+
+def test_retrying_a_single_job_needs_control(client, admin_auth, only_these_jobs):  # noqa: F811
+    job_id = only_these_jobs(client, admin_auth, 32)
+    _fail(job_id)
+    path = f"/api/pool/jobs/{job_id}/retry"
+
+    resp = client.post(path, headers=_hub(client, admin_auth, "read"))
+    assert resp.status_code == 403
+
+    resp = client.post(path, headers=_hub(client, admin_auth, "control"))
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "queued" and resp.json()["attempts"] == 0
+    event = _last_audit()
+    assert event.action == "pool.remote_retry_job"
+    assert "Hub-control" in event.detail
+
+    control = _hub(client, admin_auth, "control")
+    assert client.post("/api/pool/jobs/999999/retry", headers=control).status_code == 404
+    with SessionLocal() as db:
+        db.get(TransferJob, job_id).status = TransferStatus.RUNNING
+        db.commit()
+    resp = client.post(path, headers=control)
+    assert resp.status_code == 400 and "läuft" in resp.json()["detail"]
+    _fail(job_id)  # leave it in a state other tests don't trip over
+
+
+def _job(**extra):
+    return {
+        "id": 7, "media_id": 1, "provider_id": 1, "status": "failed", "progress": 0.0,
+        "bytes_transferred": 0, "attempts": 5, "last_error": "boom",
+        "created_at": "2026-10-20T10:00:00", "updated_at": "2026-10-20T10:00:00",
+        "media_filename": "drohne.mp4", "provider_name": "S3", "folder_id": 1, **extra,
+    }
+
+
+def test_hub_lists_and_retries_peer_jobs(client, admin_auth, monkeypatch):
+    peer = _add_peer(client, admin_auth)
+    calls = []
+    monkeypatch.setattr(
+        pool_core, "peer_jobs", lambda p, status: calls.append(("list", status)) or [_job()]
+    )
+    monkeypatch.setattr(
+        pool_core,
+        "retry_peer_job",
+        lambda p, job_id: calls.append(("retry", job_id)) or _job(status="queued", attempts=0),
+    )
+    jobs = client.get(f"/api/pool/peers/{peer['id']}/jobs?status=failed", headers=admin_auth)
+    assert jobs.status_code == 200
+    assert jobs.json()[0]["media_filename"] == "drohne.mp4"
+    resp = client.post(f"/api/pool/peers/{peer['id']}/jobs/7/retry", headers=admin_auth)
+    assert resp.json()["status"] == "queued"
+    assert calls == [("list", "failed"), ("retry", 7)]
+    assert _last_audit().action == "pool.peer_retry_job"
+    client.delete(f"/api/pool/peers/{peer['id']}", headers=admin_auth)
+
+
+@pytest.mark.parametrize(
+    ("code", "body", "hub_status", "text"),
+    [
+        (404, b'{"detail":"Job not found"}', 404, "nicht (mehr) vorhanden"),
+        (404, b'{"detail":"Not Found"}', 502, "Update"),
+        (400, '{"detail":"Job läuft bereits"}'.encode(), 409, "läuft bereits"),
+        (403, b"", 409, "Leserechte"),
+    ],
+)
+def test_hub_explains_peer_job_errors(
+    client, admin_auth, monkeypatch, code, body, hub_status, text
+):
+    peer = _add_peer(client, admin_auth)
+
+    def refuse(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, code, "x", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(pool_core.urllib.request, "urlopen", refuse)
+    resp = client.post(f"/api/pool/peers/{peer['id']}/jobs/7/retry", headers=admin_auth)
+    assert resp.status_code == hub_status
+    assert text in resp.json()["detail"]
+    client.delete(f"/api/pool/peers/{peer['id']}", headers=admin_auth)

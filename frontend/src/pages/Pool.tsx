@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -10,6 +10,8 @@ import {
   type PoolTokenScope,
   type TransferAction,
   type TransferControl,
+  type TransferJob,
+  type TransferStatus,
 } from "../api";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
@@ -35,12 +37,16 @@ function NodeCard({
   node,
   isSelf,
   busy,
+  jobsOpen,
   onAction,
+  onToggleJobs,
 }: {
   node: PoolNodeStatus;
   isSelf?: boolean;
   busy?: boolean;
+  jobsOpen?: boolean;
   onAction: (node: PoolNodeStatus, action: TransferAction) => void;
+  onToggleJobs: (node: PoolNodeStatus) => void;
 }) {
   const diskPct = node.disk_total ? (1 - node.disk_free / node.disk_total) * 100 : 0;
   // Our own box is always controllable; a peer only if its admin allowed it.
@@ -105,28 +111,196 @@ function NodeCard({
         <div className="mt-3 text-sm text-red-300">{node.error || "nicht erreichbar"}</div>
       )}
 
-      {canControl ? (
+      {node.reachable && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/5 pt-3">
           <button
-            disabled={busy}
-            onClick={() => onAction(node, node.uploads_paused ? "resume" : "pause")}
-            className={btn}
+            onClick={() => onToggleJobs(node)}
+            aria-expanded={jobsOpen}
+            className={`${btn} ${jobsOpen ? "bg-white/10" : ""}`}
           >
-            {node.uploads_paused ? "Uploads fortsetzen" : "Uploads pausieren"}
+            {jobsOpen ? "Jobs ausblenden" : "Jobs ansehen"}
           </button>
-          {node.failed_transfers > 0 && (
-            <button disabled={busy} onClick={() => onAction(node, "retry_failed")} className={btn}>
-              Fehlgeschlagene erneut ({node.failed_transfers})
-            </button>
+          {canControl && (
+            <>
+              <button
+                disabled={busy}
+                onClick={() => onAction(node, node.uploads_paused ? "resume" : "pause")}
+                className={btn}
+              >
+                {node.uploads_paused ? "Uploads fortsetzen" : "Uploads pausieren"}
+              </button>
+              {node.failed_transfers > 0 && (
+                <button
+                  disabled={busy}
+                  onClick={() => onAction(node, "retry_failed")}
+                  className={btn}
+                >
+                  Fehlgeschlagene erneut ({node.failed_transfers})
+                </button>
+              )}
+            </>
+          )}
+          {!canControl && (
+            <span className="text-xs text-slate-500">
+              Nur Lesezugriff — das Token dieses Hubs darf hier nicht steuern
+            </span>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+const JOB_FILTERS: { key: TransferStatus | ""; label: string }[] = [
+  { key: "failed", label: "Fehlgeschlagen" },
+  { key: "queued", label: "Wartend" },
+  { key: "running", label: "Läuft" },
+  { key: "", label: "Alle" },
+];
+
+const JOB_STATUS: Record<TransferStatus, { label: string; cls: string }> = {
+  queued: { label: "wartet", cls: "bg-slate-500/20 text-slate-300" },
+  running: { label: "läuft", cls: "bg-ogc-teal/20 text-ogc-teal" },
+  done: { label: "fertig", cls: "bg-emerald-500/20 text-emerald-300" },
+  failed: { label: "fehlgeschlagen", cls: "bg-red-500/20 text-red-300" },
+};
+
+/** Transfer jobs of one node — this box via the local API, a peer via the hub. */
+function NodeJobs({
+  node,
+  onClose,
+  onChanged,
+}: {
+  node: PoolNodeStatus;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const isSelf = node.peer_id === null;
+  const canControl = isSelf || node.control_enabled;
+  const [filter, setFilter] = useState<TransferStatus | "">("failed");
+  const [jobs, setJobs] = useState<TransferJob[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyJob, setBusyJob] = useState<number | null>(null);
+  const toast = useToast();
+  const panel = useRef<HTMLDivElement>(null);
+
+  // On phones the panel sits below every card — bring it into view on open.
+  useEffect(() => {
+    panel.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  const load = useCallback(() => {
+    const url = isSelf
+      ? `/api/transfers${filter ? `?status_filter=${filter}` : ""}`
+      : `/api/pool/peers/${node.peer_id}/jobs${filter ? `?status=${filter}` : ""}`;
+    setError(null);
+    api<TransferJob[]>(url)
+      .then(setJobs)
+      .catch((e) => {
+        setJobs([]);
+        setError(e instanceof ApiError ? e.message : "Fehler");
+      });
+  }, [isSelf, node.peer_id, filter]);
+
+  useEffect(() => {
+    setJobs(null);
+    load();
+  }, [load]);
+
+  async function retry(job: TransferJob) {
+    setBusyJob(job.id);
+    try {
+      await api(
+        isSelf
+          ? `/api/transfers/${job.id}/retry`
+          : `/api/pool/peers/${node.peer_id}/jobs/${job.id}/retry`,
+        { method: "POST" },
+      );
+      toast.success(node.name, `„${job.media_filename}" neu eingereiht`);
+      load();
+      onChanged();
+    } catch (e) {
+      toast.error(node.name, e instanceof ApiError ? e.message : "Fehlgeschlagen");
+    } finally {
+      setBusyJob(null);
+    }
+  }
+
+  return (
+    <div ref={panel} className="mb-8 scroll-mt-4 rounded-2xl bg-slate-800/40 p-4 ring-1 ring-white/10">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-semibold text-white">Jobs auf {node.name}</h3>
+        <div className="flex flex-wrap items-center gap-1">
+          {JOB_FILTERS.map((f) => (
+            <button
+              key={f.key || "all"}
+              onClick={() => setFilter(f.key)}
+              className={`rounded-lg px-2.5 py-1 text-xs ${
+                filter === f.key ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          <button
+            onClick={load}
+            className="ml-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs hover:bg-white/5"
+          >
+            Aktualisieren
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Schließen"
+            className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-white/5"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="mb-2 text-sm text-red-300">{error}</div>}
+      {jobs === null ? (
+        <p className="text-sm text-slate-500">Lädt …</p>
+      ) : jobs.length === 0 ? (
+        !error && <p className="text-sm text-slate-500">Keine Jobs in dieser Ansicht.</p>
       ) : (
-        node.reachable &&
-        !isSelf && (
-          <div className="mt-3 text-xs text-slate-500">
-            Nur Lesezugriff — das Token dieses Hubs darf hier nicht steuern
-          </div>
-        )
+        <ul className="divide-y divide-white/5">
+          {jobs.map((j) => {
+            const st = JOB_STATUS[j.status] ?? JOB_STATUS.queued;
+            return (
+              <li key={j.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium text-white">{j.media_filename}</div>
+                  <div className="text-xs text-slate-500">
+                    → {j.provider_name}
+                    {j.attempts > 0 && ` · ${j.attempts} Versuche`}
+                    {` · ${new Date(j.updated_at + "Z").toLocaleString()}`}
+                  </div>
+                  {j.status === "failed" && j.last_error && (
+                    <div className="mt-0.5 wrap-break-word text-xs text-red-300">{j.last_error}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`whitespace-nowrap rounded-sm px-2 py-0.5 text-xs ${st.cls}`}>
+                    {st.label}
+                  </span>
+                  {canControl && (j.status === "failed" || j.status === "queued") && (
+                    <button
+                      disabled={busyJob === j.id}
+                      onClick={() => retry(j)}
+                      className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5 disabled:opacity-50"
+                    >
+                      Erneut
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {jobs !== null && jobs.length >= 100 && (
+        <p className="mt-2 text-xs text-slate-500">Es werden nur die neuesten Jobs angezeigt.</p>
       )}
     </div>
   );
@@ -146,6 +320,7 @@ export default function Pool() {
   const [tokenScope, setTokenScope] = useState<PoolTokenScope>("read");
   const [addingPeer, setAddingPeer] = useState(false);
   const [busyNode, setBusyNode] = useState<string | null>(null);
+  const [jobsFor, setJobsFor] = useState<string | null>(null);
   const toast = useToast();
 
   const loadPeers = useCallback(() => {
@@ -211,7 +386,7 @@ export default function Pool() {
       !window.confirm(`Uploads auf „${node.name}" pausieren? Laufende Uploads laufen noch zu Ende.`)
     )
       return;
-    const key = node.peer_id === null ? "self" : String(node.peer_id);
+    const key = nodeKey(node);
     setBusyNode(key);
     try {
       const res = await api<TransferControl>(
@@ -267,6 +442,22 @@ export default function Pool() {
     if (revealedToken?.id === t.id) setRevealedToken(null);
     loadPeers();
   }
+
+  function nodeKey(node: PoolNodeStatus) {
+    return node.peer_id === null ? "self" : String(node.peer_id);
+  }
+
+  function toggleJobs(node: PoolNodeStatus) {
+    const key = nodeKey(node);
+    setJobsFor((cur) => (cur === key ? null : key));
+  }
+
+  // Resolved from the latest overview, so scope changes show up on refresh.
+  const jobsNode = !overview
+    ? null
+    : jobsFor === "self"
+      ? overview.self
+      : (overview.peers.find((p) => String(p.peer_id) === jobsFor && p.reachable) ?? null);
 
   const field =
     "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-hidden focus:border-ogc-teal/50";
@@ -326,7 +517,9 @@ export default function Pool() {
             node={overview.self}
             isSelf
             busy={busyNode === "self"}
+            jobsOpen={jobsFor === "self"}
             onAction={controlNode}
+            onToggleJobs={toggleJobs}
           />
         )}
         {nodeSort.sorted.map((p) => (
@@ -334,10 +527,21 @@ export default function Pool() {
             key={p.peer_id ?? p.name}
             node={p}
             busy={busyNode === String(p.peer_id)}
+            jobsOpen={jobsFor === String(p.peer_id)}
             onAction={controlNode}
+            onToggleJobs={toggleJobs}
           />
         ))}
       </div>
+
+      {jobsNode && (
+        <NodeJobs
+          key={jobsFor}
+          node={jobsNode}
+          onClose={() => setJobsFor(null)}
+          onChanged={loadOverview}
+        />
+      )}
 
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
