@@ -13,6 +13,7 @@ import {
 import Collapsible from "../components/Collapsible";
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
+import TelegramWizard from "../components/TelegramWizard";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 import { useToast } from "../toast";
 import { formatBytes } from "../upload";
@@ -125,7 +126,7 @@ export default function System() {
         </div>
       </div>
 
-      {status && <NotificationsCard status={status} save={save} />}
+      {status && <NotificationsCard status={status} save={save} onStatus={setStatus} />}
 
       {status && <PowerCard status={status} />}
 
@@ -468,11 +469,14 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
 function NotificationsCard({
   status,
   save,
+  onStatus,
 }: {
   status: SystemStatus;
   save: (patch: Record<string, unknown>) => Promise<void>;
+  onStatus: (s: SystemStatus) => void;
 }) {
   const toast = useToast();
+  const [wizard, setWizard] = useState(false);
   const [chatId, setChatId] = useState(status.telegram_chat_id);
   const [token, setToken] = useState("");
   const [testing, setTesting] = useState(false);
@@ -559,8 +563,23 @@ function NotificationsCard({
 
       <div className="grid gap-2">
         <Collapsible nested title="Telegram" summary={configured(status.telegram_configured && !!status.telegram_chat_id)}>
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-ogc-teal/5 px-3 py-2 ring-1 ring-ogc-teal/20">
+            <span className="min-w-0 flex-1 text-xs text-slate-400">
+              {status.telegram_configured && status.telegram_chat_id
+                ? "Anderen Bot oder Chat? Der Assistent führt in einer Minute durch."
+                : "Neu hier? Der Assistent schlägt Bot-Namen vor, prüft den Token und findet den Chat von selbst."}
+            </span>
+            <button
+              type="button"
+              onClick={() => setWizard(true)}
+              className={status.telegram_configured && status.telegram_chat_id ? "rounded-lg px-3 py-2 text-sm text-slate-300 ring-1 ring-white/10 hover:bg-white/5" : btnCls}
+            >
+              🧭 Einrichtungsassistent
+            </button>
+          </div>
+          {wizard && <TelegramWizard status={status} onClose={() => setWizard(false)} onSaved={onStatus} />}
           <p className="mb-3 flex items-center gap-1.5 text-xs text-slate-500">
-            Bot bei @BotFather anlegen, Token eintragen, Chat-ID per /id beim Bot erfragen.
+            Manuell: Bot bei @BotFather anlegen, Token eintragen, Chat-ID per /id beim Bot erfragen.
             <InfoTip text="Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin (Infos ändern, Anheften), benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Befehle: /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart, /reboot, /shutdown und /update (jeweils mit Bestätigung per Button), /hilfe – kein eigener Server und kein offener Port nötig. Jede Box braucht ihren eigenen Bot: Telegram lässt pro Bot-Token nur eine Box Befehle abholen." />
           </p>
           {status.telegram_conflict && (

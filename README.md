@@ -93,6 +93,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 ### Benachrichtigungen & Telegram
 
 - 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail**: Speicher-knapp-Warnung, ausführliche **Start-Meldung** (Zeit, Speicher, verbundene Cloud-Ziele, VPN, externe/interne IP, Warteschlange, Bandbreite, Pool-Geräte), **Wieder-online-Ping** nach Verbindungsabbruch und **Senden pausiert/fortgesetzt** bei Bandbreiten-Drosselung
+- 🧭 **Telegram-Einrichtungsassistent** — schlägt Bot-Namen für @BotFather vor, prüft den Token und findet den Chat von selbst (Privatchat oder Gruppe per Klick übernehmen, keine Chat-ID abtippen)
 - 🤖 **Telegram-Bot mit Befehlen** — nach dem Hinterlegen meldet sich der Bot mit „OffgridCloud verbunden“, richtet Befehlsmenü & Beschreibung ein und brandet Gruppen/Kanäle (Name „OffgridCloud · &lt;Box&gt;“, Beschreibung, Logo, angepinnte Begrüßung – sofern der Bot Admin ist). Im freigeschalteten Chat:
   - **Abfragen:** `/status`, `/queue`, `/speicher`, `/fehler`, `/retry`, `/netz`, `/ping`, `/hilfe`
   - **Messen:** `/speedtest` (max. eine Messung alle 5 min, `OGC_TELEGRAM_SPEEDTEST_COOLDOWN`)

@@ -39,6 +39,14 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Umstieg ohne Ausfall:** Das bisherige gemeinsame Token wird beim Start als „Bisheriges Token“ (*nur lesen*) übernommen, Hubs damit laufen weiter. Empfehlung: jedem Hub ein eigenes Token ausstellen und das bisherige danach löschen.
 - **API:** `/api/pool/token` und `/api/pool/self` entfallen, neu ist `/api/pool/tokens`. Die Konsole an der Box ist angepasst.
 
+### 🧭 Telegram: Einrichtungsassistent
+
+- **Geführte Einrichtung** unter **System → Benachrichtigungen → Telegram → Einrichtungsassistent**, in vier Schritten: Bot anlegen, Token, Chat, fertig.
+- **Namensvorschläge für @BotFather:** Aus dem Namen der Box (oder einem eingegebenen Team-/Box-Namen wie „Boot Nord“) schlägt der Assistent Anzeigenamen und Benutzernamen vor, die Telegrams Regeln einhalten (5–32 Zeichen, a–z/0–9/_, endet auf `bot`, Umlaute werden umschrieben). Weil Benutzernamen weltweit eindeutig sind, ist immer eine Variante mit kurzem, box-stabilem Zusatz dabei (`ogc_boot_nord_d735_bot`). Nichtssagende Hostnamen (`raspberrypi`, Docker-Container-ID …) werden dafür nicht verwendet. Jeder Schritt bei @BotFather hat einen Kopieren-Knopf, funktioniert auch über einfaches HTTP.
+- **Token-Prüfung** per `getMe`, bevor gespeichert wird: zeigt, zu welchem Bot der Token gehört, und erkennt Tippfehler, unbekannte Tokens und gesperrte Gruppen. Offline lässt er sich trotzdem ungeprüft speichern.
+- **Chat per Klick statt Chat-ID abtippen:** Der Assistent verlinkt direkt auf den Bot (Privatchat) bzw. „zu Gruppe hinzufügen“ und listet live alle Chats, die dem Bot gerade geschrieben oder ihn hinzugefügt haben. Ein Klick auf „Übernehmen“ speichert den Chat, der Bot begrüßt ihn sofort. Die Chat-ID von Hand einzutragen geht weiterhin.
+- Neue Token- oder Chat-Einstellungen gelten sofort: Der Bot wartet nicht mehr bis zu 30 s (bzw. 5 min nach einem falschen Token), bis er sie übernimmt.
+
 ## [0.7.1] – 2026-10-20
 
 Mehrere Boxen mit Telegram vertragen sich jetzt: Die Box erkennt einen geteilten Bot, und Befehle lassen sich gezielt an eine Box richten.

@@ -445,6 +445,38 @@ class TelegramTestResult(BaseModel):
     message: str
 
 
+class TelegramNameSuggestions(BaseModel):
+    box_name: str
+    label: str
+    display_names: list[str]
+    usernames: list[str]
+
+
+class TelegramTokenCheckIn(BaseModel):
+    # Omitted/empty: check the token already stored on the box.
+    token: str = ""
+
+
+class TelegramTokenCheck(BaseModel):
+    ok: bool
+    message: str
+    username: str = ""
+    name: str = ""
+
+
+class TelegramChatOut(BaseModel):
+    id: str
+    type: str
+    title: str
+    seen_at: float
+
+
+class TelegramChatsOut(BaseModel):
+    configured: bool
+    conflict: bool
+    chats: list[TelegramChatOut]
+
+
 class SystemSettingsUpdate(BaseModel):
     delete_local_after_upload: bool | None = None
     delete_remote_on_local_delete: bool | None = None

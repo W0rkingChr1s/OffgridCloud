@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,11 @@ from ..schemas import (
     PowerActionResult,
     SystemSettingsUpdate,
     SystemStatusOut,
+    TelegramChatsOut,
+    TelegramNameSuggestions,
     TelegramTestResult,
+    TelegramTokenCheck,
+    TelegramTokenCheckIn,
 )
 
 router = APIRouter(prefix="/api/system", tags=["system"], dependencies=[Depends(require_admin)])
@@ -155,6 +159,7 @@ def update_settings(
         db.commit()
         audit(db, admin, "system.update", ", ".join(changed))
     if (row.telegram_bot_token_encrypted, row.telegram_chat_id) != telegram_before:
+        telegram_bot.wake_poller()
         _greet_telegram(row)
     return _status(db)
 
@@ -182,6 +187,36 @@ def telegram_test(
     except Exception as exc:  # noqa: BLE001 - surface Telegram's reason to the UI
         return TelegramTestResult(sent=False, message=f"Senden fehlgeschlagen: {exc}")
     return TelegramTestResult(sent=True, message="Nachricht gesendet – schau in den Chat.")
+
+
+@router.get("/telegram/names", response_model=TelegramNameSuggestions)
+def telegram_names(label: str = Query("", max_length=64)) -> TelegramNameSuggestions:
+    """Bot name / @username ideas for the setup wizard, derived from the box."""
+    return TelegramNameSuggestions(**telegram_bot.name_suggestions(label))
+
+
+@router.post("/telegram/check-token", response_model=TelegramTokenCheck)
+def telegram_check_token(
+    payload: TelegramTokenCheckIn, db: Session = Depends(get_db)
+) -> TelegramTokenCheck:
+    """Validate a bot token with Telegram before (or after) saving it."""
+    token = payload.token.strip() or decrypt(get_system_settings(db).telegram_bot_token_encrypted)
+    if not token:
+        raise HTTPException(status_code=409, detail="Kein Bot-Token angegeben.")
+    result = telegram_bot.check_token(token)
+    return TelegramTokenCheck(
+        ok=result.ok, message=result.message, username=result.username, name=result.name
+    )
+
+
+@router.get("/telegram/chats", response_model=TelegramChatsOut)
+def telegram_chats(db: Session = Depends(get_db)) -> TelegramChatsOut:
+    """Chats that recently wrote to the bot or added it — for one-click pick."""
+    return TelegramChatsOut(
+        configured=bool(get_system_settings(db).telegram_bot_token_encrypted),
+        conflict=telegram_bot.poll_conflict(),
+        chats=telegram_bot.seen_chats(),
+    )
 
 
 def _apply_notify_settings(

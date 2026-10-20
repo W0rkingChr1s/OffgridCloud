@@ -705,6 +705,33 @@ export interface SetupResult {
   finish_started: boolean;
 }
 
+export interface TelegramNames {
+  box_name: string;
+  label: string;
+  display_names: string[];
+  usernames: string[];
+}
+
+export interface TelegramTokenCheck {
+  ok: boolean;
+  message: string;
+  username: string;
+  name: string;
+}
+
+export interface TelegramChat {
+  id: string;
+  type: "private" | "group" | "supergroup" | "channel" | string;
+  title: string;
+  seen_at: number;
+}
+
+export interface TelegramChats {
+  configured: boolean;
+  conflict: boolean;
+  chats: TelegramChat[];
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -744,5 +771,7 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  // Some endpoints answer 201 without a body — res.json() would throw on that.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
