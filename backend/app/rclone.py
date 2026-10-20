@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .bonding import apply_proxy
 from .config import get_settings
 
 
@@ -55,13 +56,20 @@ class TestResult:
 
 
 _REMOTE = "ogctest"
+# Not an rclone option: carries the net-merge proxy (see app/bonding.py) from
+# the transfer worker to this one rclone run, so the upload-function signature
+# the worker and its tests share stays unchanged.
+PROXY_OPTION = "_ogc_proxy"
 
 
 def _remote_env(options: dict[str, str]) -> dict[str, str]:
     """Build RCLONE_CONFIG_* env vars so secrets never touch disk."""
     env = dict(os.environ)
     for key, value in options.items():
+        if key == PROXY_OPTION:
+            continue
         env[f"RCLONE_CONFIG_{_REMOTE.upper()}_{key.upper()}"] = str(value)
+    apply_proxy(env, _REMOTE, options, options.get(PROXY_OPTION, ""))
     return env
 
 

@@ -19,8 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from . import bandwidth, network
-from . import bandwidth, buffers
+from . import bandwidth, buffers, network
 from .config import get_settings
 from .crypto import decrypt
 from .db import SessionLocal
@@ -33,7 +32,7 @@ from .models import (
     TransferStatus,
 )
 from .providers_registry import get_type
-from .rclone import DeleteResult, UploadResult, delete_remote, run_upload
+from .rclone import PROXY_OPTION, DeleteResult, UploadResult, delete_remote, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
 
@@ -175,16 +174,41 @@ def _rclone_upload_fn(
     return run_upload(local_path, options, dest, bwlimit_kbps, on_progress)
 
 
+_last_route = [""]  # last bundling decision, so changes are logged once
+
+
+def _bonding_proxy(db: Session, options: dict) -> str:
+    """net-merge proxy for this upload, or ``""`` to go direct (see app/bonding.py)."""
+    from . import bonding
+    from . import vpn as vpnsvc
+
+    policy = bandwidth.get_policy(db)
+    decision = bonding.decide(
+        enabled=True,
+        options=options,
+        metered_mode=policy.metered_mode,
+        metered_present=network.metered_link_present(),
+        openvpn_active=vpnsvc.active_type() == "openvpn",
+    )
+    route = "gebündelt" if decision.proxy else f"direkt ({decision.reason})"
+    if route != _last_route[0]:
+        _last_route[0] = route
+        logger.info("Leitungsbündelung: Uploads %s", route)
+    return decision.proxy
+
+
 def process_job(
     db: Session,
     job: TransferJob,
     upload_fn: UploadFn = _rclone_upload_fn,
     bwlimit_kbps: int = 0,
     metered: bool = False,
+    bonding: bool = False,
 ) -> TransferJob:
     """Run one transfer job through its state machine. Commits its own changes.
 
     With ``metered`` the bytes sent count against today's metered data budget.
+    With ``bonding`` the upload goes through net-merge when that is safe.
     """
     media = db.get(MediaItem, job.media_id)
     provider = db.get(CloudProvider, job.provider_id)
@@ -228,6 +252,10 @@ def process_job(
     except json.JSONDecodeError:
         config = {}
     options = pt.to_rclone_options(config)
+    if bonding:
+        proxy = _bonding_proxy(db, options)
+        if proxy:
+            options[PROXY_OPTION] = proxy
     dest = _build_dest(dest_path, media.filename)
 
     job_id = job.id
@@ -764,7 +792,9 @@ def process_one() -> bool:
             policy.bwlimit_kbps,
             datetime.now(),
         )
-        process_job(db, job, bwlimit_kbps=bwlimit, metered=metered)
+        process_job(
+            db, job, bwlimit_kbps=bwlimit, metered=metered, bonding=policy.bonding_enabled
+        )
         return True
 
 

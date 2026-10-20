@@ -88,6 +88,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("bandwidth_policy", "metered_budget_mb", "INTEGER NOT NULL DEFAULT 500"),
     ("bandwidth_policy", "metered_used_bytes", "BIGINT NOT NULL DEFAULT 0"),
     ("bandwidth_policy", "metered_day", "VARCHAR(10) NOT NULL DEFAULT ''"),
+    # Link bundling via net-merge (all uplinks at once).
+    ("bandwidth_policy", "bonding_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 

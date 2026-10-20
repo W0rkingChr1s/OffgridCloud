@@ -153,6 +153,70 @@ erkennen, die Regel bleibt dann wirkungslos.
 Powerbank kann dabei in Unterspannung geraten (`vcgencmd get_throttled`). Im
 Zweifel das Handy separat laden oder ein Netzteil mit genug Reserve nehmen.
 
+## Leitungsbündelung (net-merge)
+
+Normalerweise trägt genau ein Uplink die Uploads: der mit der besten Routen-
+Metrik. Mit der Leitungsbündelung nutzt die Box **alle Uplinks gleichzeitig**,
+z. B. WLAN und ein per USB angestecktes LTE-Handy. Dafür sorgt
+[net-merge](https://github.com/rohit267/net-merge) (MIT-Lizenz) von Rohit Mahto.
+
+**Wie es eingebaut ist:** net-merge läuft als eigener Dienst
+`offgridcloud-netmerge` und stellt einen SOCKS5-Proxy auf `127.0.0.1:1080`
+bereit. Nur rclone wird über diesen Proxy geschickt. Systemweit ändert sich
+nichts: Kein virtueller Netzwerkadapter, keine neuen Routen. Web-UI,
+Rückfall-WLAN, VPN und die Geräte im Feld laufen wie bisher. Fällt net-merge
+aus, gehen die Uploads automatisch direkt raus, statt fehlzuschlagen.
+
+**Einrichten:**
+
+```bash
+sudo /opt/offgridcloud/deploy/netmerge/install.sh
+```
+
+Das Skript installiert net-merge (auf Raspberry Pi OS/Debian aus dessen signiertem
+apt-Repository, der Schlüssel-Fingerabdruck wird geprüft, sonst aus dem
+Release-Tarball), startet den Dienst und trägt `OGC_NETMERGE_PROXY` in die `.env`
+ein. Beim Installer `deploy/install.sh` ist es der Punkt „Leitungsbündelung“
+(bzw. `OGC_WITH_NETMERGE=1`). Danach unter **Bandbreite → Leitungsbündelung**
+den Schalter „Uploads über alle Leitungen bündeln“ setzen. Dort steht auch, welche
+Leitungen net-merge sieht und warum andere übersprungen werden.
+
+**Was es bringt und was nicht:**
+
+- net-merge verteilt **Verbindungen**, keine einzelnen Pakete. Ein Upload über eine
+  einzige Verbindung (WebDAV/Nextcloud, SFTP, kleine Dateien) bleibt auf einer
+  Leitung. Schneller werden vor allem **große Dateien zu S3, Azure Blob und B2**:
+  rclone schickt deren Teile über mehrere Verbindungen parallel, und die landen
+  dann auf verschiedenen Leitungen.
+- Es hilft nur, wenn die Leitungen **unabhängig** ins Internet gehen (WLAN + LTE).
+  Kabel und WLAN am selben Router teilen sich eine Leitung, da kommt nichts dazu.
+- net-merge prüft jede Leitung auf echten Internetzugang. Ein Handy ohne Daten
+  oder ein WLAN mit Captive Portal bekommt keine Verbindungen.
+
+**Wann die Box trotz Schalter direkt sendet:**
+
+- Das Ziel liegt im **LAN oder hinter dem VPN** (der Hostname löst auf eine
+  private Adresse auf oder gar nicht). net-merge bindet seine Verbindungen an die
+  physischen Leitungen, so ein NAS wäre darüber nicht erreichbar.
+- Ein **OpenVPN**-Tunnel ist aktiv. Er kann die Standard-Route tragen, und die
+  Bündelung würde die Uploads an ihm vorbeischicken. WireGuard ist bei
+  OffgridCloud immer Split-Tunnel, damit klappt die Bündelung.
+- Ein **getaktetes Handy** hängt an der Box und die Regel für getaktete
+  Verbindungen steht auf „bis zum Tagesvolumen“ oder „pausieren“. net-merge würde
+  sonst einen Teil jedes Uploads übers Handy schicken, und das Tagesvolumen ließe
+  sich nicht mehr zählen. Mit „normal senden“ wird das Handy mitgebündelt.
+- Der Zieltyp kann keinen Proxy (SMB).
+
+Welche Entscheidung gerade gilt, steht im Log (`journalctl -u offgridcloud`,
+„Leitungsbündelung: Uploads …“). Telegram `/netz` zeigt die gebündelten
+Leitungen.
+
+**Docker:** Nicht vorgesehen. Wer es trotzdem will, startet net-merge auf dem Host
+und setzt `OGC_NETMERGE_PROXY` auf eine Adresse, die der Container erreicht.
+
+**Entfernen:** `deploy/uninstall.sh` nimmt den Dienst mit. Das Paket selbst bleibt
+(`sudo apt remove net-merge`).
+
 ## Sicherheit & Grenzen
 
 - **Klartext-Passwörter:** `network.json` enthält die WLAN-Passwörter im Klartext

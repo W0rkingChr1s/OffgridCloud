@@ -16,6 +16,7 @@ export default function Bandwidth() {
   const [schedule, setSchedule] = useState<BandwidthWindow[]>([]);
   const [meteredMode, setMeteredMode] = useState<MeteredMode>("allow");
   const [budgetMb, setBudgetMb] = useState(500);
+  const [bonding, setBonding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -27,6 +28,7 @@ export default function Bandwidth() {
     setSchedule(s.schedule);
     setMeteredMode(s.metered_mode);
     setBudgetMb(s.metered_budget_mb);
+    setBonding(s.bonding_enabled);
   }
 
   function load() {
@@ -59,6 +61,8 @@ export default function Bandwidth() {
           schedule,
           metered_mode: meteredMode,
           metered_budget_mb: budgetMb,
+          // Only sent once net-merge is installed — the API refuses it otherwise.
+          bonding_enabled: status?.bonding_available ? bonding : undefined,
         }),
       });
       apply(s);
@@ -221,6 +225,63 @@ export default function Bandwidth() {
               </label>
             )}
           </div>
+        </div>
+
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-300">Leitungsbündelung (net-merge)</span>
+            {status && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  !status.bonding_available
+                    ? "bg-white/5 text-slate-400"
+                    : status.bonding_enabled && status.bonding_running
+                      ? "bg-emerald-500/20 text-emerald-200"
+                      : status.bonding_enabled
+                        ? "bg-red-500/20 text-red-200"
+                        : "bg-white/5 text-slate-400"
+                }`}
+              >
+                {!status.bonding_available
+                  ? "nicht installiert"
+                  : !status.bonding_enabled
+                    ? "aus"
+                    : status.bonding_running
+                      ? "aktiv"
+                      : "net-merge läuft nicht – Uploads gehen direkt"}
+              </span>
+            )}
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Verteilt Uploads auf alle Leitungen gleichzeitig – Kabel, WLAN und Handy. Bringt nur etwas,
+            wenn die Leitungen unabhängig ins Internet gehen (z. B. WLAN + LTE-Handy), und vor allem bei
+            großen Dateien zu S3, Azure oder B2, die in mehreren Teilen parallel hochgeladen werden. Ziele
+            im LAN oder hinter dem VPN gehen weiter direkt. Ein angestecktes Handy wird nur mitgenutzt,
+            wenn getaktete Verbindungen auf „normal senden“ stehen.
+          </p>
+          {status && !status.bonding_available ? (
+            <p className="text-xs text-slate-400">
+              Einrichten an der Box mit{" "}
+              <code className="rounded-sm bg-slate-900/60 px-1">sudo /opt/offgridcloud/deploy/netmerge/install.sh</code>
+            </p>
+          ) : (
+            <label className="flex items-center gap-3">
+              <input type="checkbox" checked={bonding} onChange={(e) => setBonding(e.target.checked)} />
+              <span className="text-sm text-slate-200">Uploads über alle Leitungen bündeln</span>
+            </label>
+          )}
+          {status && status.bonding_links.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs">
+              {status.bonding_links.map((l) => (
+                <li key={l.name} className="flex flex-wrap gap-2">
+                  <span className={l.used ? "font-semibold text-emerald-300" : "text-slate-500"}>
+                    {l.used ? "✓" : "–"} {l.name}
+                  </span>
+                  <span className="text-slate-500">{l.detail}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="mt-6 flex items-center gap-3">

@@ -1,0 +1,31 @@
+# Link bundling for OffgridCloud uploads: net-merge as a SOCKS5 proxy on
+# loopback. Only rclone is pointed at it (OGC_NETMERGE_PROXY), so routing for
+# the rest of the box — web UI, fallback AP, VPN — stays untouched.
+# Installed by deploy/netmerge/install.sh; see docs/NETZWERK-REDUNDANZ.md.
+[Unit]
+Description=OffgridCloud - net-merge link bundling (SOCKS5 on 127.0.0.1:1080)
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=offgrid
+Group=offgrid
+RuntimeDirectory=offgridcloud-netmerge
+# -ipv6 off: IPv4 works on every uplink (a phone often has no IPv6), so flows
+# never pile up on the one link that happens to have IPv6.
+ExecStart=/usr/bin/net-merge socks -listen 127.0.0.1:1080 -ipv6 off -stats 0 -state-dir /run/offgridcloud-netmerge
+# net-merge exits while no link has a default route (e.g. right after boot,
+# or while the box hosts its own AP); come back once there is one.
+Restart=always
+RestartSec=10
+# Pinning sockets to a link needs no privilege on Linux >= 5.7; older kernels
+# want CAP_NET_RAW for SO_BINDTODEVICE. (No CapabilityBoundingSet: the Debian
+# package gives the binary file capabilities, and a bounding set without them
+# would make execve fail.)
+AmbientCapabilities=CAP_NET_RAW
+MemoryMax=120M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

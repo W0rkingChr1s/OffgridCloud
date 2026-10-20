@@ -515,13 +515,23 @@ def _cmd_netz(db: Session) -> str:
         lines.append(
             f"Verbindung: {html.escape(uplink)}" + (" · getaktet" if status.metered else "")
         )
+    policy = get_policy(db)
+    if policy.bonding_enabled:
+        from . import bonding
+
+        bond = bonding.get_status()
+        used = [link.name for link in bond.links if link.used]
+        if bond.running:
+            lines.append(f"Bündelung: an · {html.escape(', '.join(used) or 'keine Leitung')}")
+        else:
+            lines.append("Bündelung: an, net-merge läuft nicht — Uploads gehen direkt")
     return "\n".join(
         [
             *lines,
             f"Externe IP: {html.escape(netinfo.external_ip() or 'unbekannt')}",
             f"Interne IP: {html.escape(netinfo.internal_ip() or 'unbekannt')}",
             f"VPN: {'verbunden' if _vpn_connected() else 'getrennt'}",
-            f"Bandbreite: {format_kbps(get_policy(db).last_kbps)}",
+            f"Bandbreite: {format_kbps(policy.last_kbps)}",
         ]
     )
 

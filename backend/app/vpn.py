@@ -580,6 +580,13 @@ def active_id() -> int | None:
     return marker.get("id")
 
 
+def active_type() -> str | None:
+    """``"wireguard"``/``"openvpn"`` while a tunnel is up, else ``None``."""
+    if active_id() is None:
+        return None
+    return _read_marker().get("type")
+
+
 def status() -> TunnelStatus:
     """Live status of the active tunnel (if any)."""
     marker = _read_marker()
