@@ -9,11 +9,14 @@ export function TagEditor({
   mediaId,
   tags,
   editable = true,
+  quietAdd = false,
   onChange,
 }: {
   mediaId: number;
   tags: string[];
   editable?: boolean;
+  /** In long lists: on pointer devices, show "+ Tag" only while the row (`group`) is hovered. */
+  quietAdd?: boolean;
   onChange?: (tags: string[]) => void;
 }) {
   const [items, setItems] = useState<string[]>(tags);
@@ -89,7 +92,9 @@ export function TagEditor({
             type="button"
             disabled={busy}
             onClick={() => setAdding(true)}
-            className="rounded-full border border-white/15 px-2 py-0.5 text-xs text-slate-400 hover:border-white/30 hover:text-white disabled:opacity-50"
+            className={`rounded-full border border-white/15 px-2 py-0.5 text-xs text-slate-400 hover:border-white/30 hover:text-white focus-visible:opacity-100 disabled:opacity-50 ${
+              quietAdd ? "[@media(hover:hover)]:opacity-0 group-hover:opacity-100" : ""
+            }`}
           >
             + Tag
           </button>

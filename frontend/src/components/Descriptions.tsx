@@ -6,6 +6,7 @@ import {
   getToken,
   type MediaDescription,
 } from "../api";
+import MoreMenu from "./MoreMenu";
 
 function sidecarDownloadUrl(id: number): string {
   return `/api/media/${id}/download?token=${encodeURIComponent(getToken() ?? "")}`;
@@ -191,17 +192,20 @@ export function DescriptionsList({
                 <div className="flex shrink-0 items-center gap-2 text-xs">
                   <button
                     onClick={() => onEdit(d)}
-                    className="rounded-sm border border-white/10 px-2 py-1 text-slate-200 hover:bg-white/5"
+                    className="rounded-lg border border-white/10 px-2.5 py-1.5 leading-none text-slate-200 hover:bg-white/5"
                   >
                     Bearbeiten
                   </button>
-                  <button
-                    onClick={() => remove(d)}
-                    disabled={busyId === d.id}
-                    className="rounded-sm border border-red-500/30 px-2 py-1 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                  >
-                    {busyId === d.id ? "…" : "Löschen"}
-                  </button>
+                  <MoreMenu
+                    items={[
+                      {
+                        label: busyId === d.id ? "Lösche …" : "Löschen …",
+                        danger: true,
+                        disabled: busyId !== null,
+                        onClick: () => remove(d),
+                      },
+                    ]}
+                  />
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
