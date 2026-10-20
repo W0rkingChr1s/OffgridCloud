@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🖥️ Konsole an der Box überarbeitet
+
+- **Neuer Tab „Speicher“:** Laufwerke und Speicherkarten einhängen, aushängen, auswerfen und formatieren, als Cache-Laufwerk markieren, Karteninhalte in einen Ordner hochladen oder ohne Netz aufs Cache-Laufwerk sichern. Laufende Vorgänge erscheinen mit Live-Fortschritt, Kartensicherungen lassen sich ansehen und löschen. Die Konsole kann damit dasselbe wie die Speicher-Seite der Web-UI.
+- **Updates:** Mit „Nach Updates suchen“ fragt die Konsole sofort neu bei GitHub nach, statt den Cache zu nutzen. Nach „Jetzt aktualisieren“ zeigt sie den **Fortschritt live** an: Status, Versionen, Dauer und das Ende des Protokolls. Den Neustart mitten im Update überbrückt sie und blendet danach das Ergebnis ein. Ist One-Click aus, steht der passende Befehl da (auch für Docker).
+- **Behoben: Dienst-Neustart per SSH ging nicht.** Ohne root rief die Konsole `systemctl` direkt auf, und das schlug fehl. Jetzt versucht sie `sudo -n` und nimmt sonst die API (wie der Knopf in der Web-UI). Außerdem blockiert der Neustart die Konsole nicht mehr (`--no-block`), und eine Warte-Anzeige läuft, bis der Dienst wieder antwortet.
+- Die Tab-Leiste passt jetzt auch auf 80 Spalten (dann mit Kurznamen). Mehrzeilige Hinweise in Menüs. Ein abgelaufenes Login führt beim nächsten Schritt zu einer neuen Anmeldung statt zu Fehlermeldungen.
+
 ### 🌗 Neu: Hell-Modus
 
 - Im Menü unter **Darstellung**: Dunkel (Standard), Hell oder System (folgt der Einstellung des Geräts und wechselt live mit). Die Wahl wird pro Browser gespeichert und vor dem ersten Rendern angewendet, deshalb blitzt nichts dunkel auf.

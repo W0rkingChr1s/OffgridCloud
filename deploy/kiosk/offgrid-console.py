@@ -37,7 +37,9 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -119,6 +121,11 @@ def _run(cmd: list[str], timeout: float = 5.0) -> str:
 def service_state(name: str) -> str:
     state = _run(["systemctl", "is-active", name]) or "unknown"
     return state
+
+
+def service_since(name: str) -> str:
+    """Monotonic timestamp of the unit's last start — changes on every restart."""
+    return _run(["systemctl", "show", "-p", "ActiveEnterTimestampMonotonic", "--value", name])
 
 
 def ip_addresses() -> list[str]:
@@ -234,6 +241,8 @@ class Api:
                 raw = resp.read()
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:
+            if exc.code == 401 and auth:
+                self.token = None  # expired / restarted with a new key: log in again
             detail = str(exc.reason)
             try:
                 detail = json.loads(exc.read()).get("detail", detail)
@@ -366,12 +375,70 @@ class Api:
     def set_group_members(self, group_id: int, user_ids: list) -> dict:
         return self._request("PUT", f"/api/groups/{group_id}/members", {"user_ids": user_ids})
 
+    def power(self, action: str) -> dict:
+        return self._request("POST", f"/api/system/power/{action}")
+
     # Updates
-    def get_update_info(self) -> dict:
-        return self._request("GET", "/api/updates")
+    def get_update_info(self, force: bool = False) -> dict:
+        return self._request("GET", "/api/updates" + ("?force=true" if force else ""))
 
     def apply_update(self) -> dict:
         return self._request("POST", "/api/updates/apply", {})
+
+    def get_update_progress(self) -> dict:
+        return self._request("GET", "/api/updates/progress")
+
+    def dismiss_update(self) -> dict:
+        return self._request("POST", "/api/updates/dismiss")
+
+    # Storage media (cards, USB drives, cache drives)
+    def get_storage(self) -> dict:
+        return self._request("GET", "/api/storage")
+
+    def storage_action(self, action: str, device: str) -> dict:
+        """mount | unmount | eject — all take just the device path."""
+        return self._request("POST", f"/api/storage/{action}", {"device": device})
+
+    def storage_format(self, device: str, fstype: str, label: str, confirm: str) -> dict:
+        return self._request("POST", "/api/storage/format",
+                             {"device": device, "fstype": fstype, "label": label,
+                              "confirm": confirm})
+
+    def storage_browse(self, device: str, path: str = "") -> dict:
+        query = urllib.parse.urlencode({"device": device, "path": path})
+        return self._request("GET", f"/api/storage/browse?{query}")
+
+    def get_imports(self) -> list:
+        return self._request("GET", "/api/storage/imports")
+
+    def start_import(self, payload: dict) -> dict:
+        return self._request("POST", "/api/storage/imports", payload)
+
+    def cancel_import(self, job_id: str) -> dict:
+        return self._request("POST", f"/api/storage/imports/{urllib.parse.quote(job_id)}/cancel")
+
+    def clear_imports(self) -> dict:
+        return self._request("DELETE", "/api/storage/imports")
+
+    def get_caches(self) -> list:
+        return self._request("GET", "/api/storage/caches")
+
+    def mark_cache(self, device: str) -> dict:
+        return self._request("POST", "/api/storage/caches", {"device": device})
+
+    def unmark_cache(self, uuid: str) -> dict:
+        return self._request("DELETE", f"/api/storage/caches/{urllib.parse.quote(uuid)}")
+
+    def cache_backup(self, payload: dict) -> dict:
+        return self._request("POST", "/api/storage/caches/backup", payload)
+
+    def delete_snapshot(self, uuid: str, name: str) -> dict:
+        return self._request("DELETE", f"/api/storage/caches/{urllib.parse.quote(uuid)}"
+                                       f"/snapshots/{urllib.parse.quote(name)}")
+
+    # Upload folders (import target)
+    def get_folders(self) -> list:
+        return self._request("GET", "/api/folders")
 
 
 # System settings, grouped. ("group", title) is a non-selectable header; every
@@ -427,15 +494,33 @@ BANDWIDTH_FIELDS = [
     ("min_bandwidth_kbps", "Mindest-Bandbreite-Gate (KiB/s)", "int"),
 ]
 
-# Top-level tabs. The dashboard is the landing view (also shown on SSH login).
+# Top-level tabs: (key, label, short label). The dashboard is the landing view
+# (also shown on SSH login). The short labels kick in when the full tab bar would
+# not fit, e.g. on an 80-column console.
 TABS = [
-    ("dashboard", "Dashboard"),
-    ("providers", "Provider"),
-    ("network", "Netz & Verbindung"),
-    ("pool", "Pool"),
-    ("users", "Benutzer & Gruppen"),
-    ("system", "System"),
+    ("dashboard", "Dashboard", "Status"),
+    ("providers", "Provider", "Cloud"),
+    ("storage", "Speicher", "Speicher"),
+    ("network", "Netz & Verbindung", "Netz"),
+    ("pool", "Pool", "Pool"),
+    ("users", "Benutzer & Gruppen", "Benutzer"),
+    ("system", "System", "System"),
 ]
+
+# Power actions: key -> (API slug, local command, confirmation question).
+# Restart uses --no-block so the console never hangs while the service stops;
+# the wait screen then watches it come back.
+POWER_ACTIONS = {
+    "restart": ("restart-service", ["systemctl", "--no-block", "restart", SERVICE_NAME],
+                "OffgridCloud-Dienst neu starten?"),
+    "reboot": ("reboot", ["systemctl", "reboot"], "Box wirklich NEU STARTEN?"),
+    "shutdown": ("shutdown", ["systemctl", "poweroff"], "Box wirklich HERUNTERFAHREN?"),
+}
+
+JOB_STATUS = {"pending": "wartet", "running": "läuft", "done": "fertig",
+              "failed": "fehlgeschlagen", "cancelled": "abgebrochen"}
+UPDATE_PHASE = {"running": "läuft", "success": "erfolgreich", "failed": "fehlgeschlagen",
+                "unknown": "unbekannt", "idle": "—"}
 
 
 # --- Curses UI --------------------------------------------------------------
@@ -493,8 +578,10 @@ class Console:
 
     def _draw_tabbar(self, y, w):
         x = 1
-        for i, (_, label) in enumerate(TABS):
-            seg = f" {i + 1} {label} "
+        full = sum(len(f" {i + 1} {t[1]} ") + 1 for i, t in enumerate(TABS))
+        col = 1 if full <= w - 2 else 2
+        for i, tab in enumerate(TABS):
+            seg = f" {i + 1} {tab[col]} "
             active = i == self.tab
             self._addstr(y, x, seg,
                          (curses.A_REVERSE | curses.A_BOLD) if active else self.color(1))
@@ -524,7 +611,7 @@ class Console:
         self._center(y + 1, "OS · Lokale Konsole", self.color(4))
         y = self._draw_status(y + 3, w)
         self._addstr(y + 1, max(2, (w - 64) // 2),
-                     "Tabs: ←/→ oder 1–6 · Details öffnen: Tab wählen, ↑↓/Enter",
+                     f"Tabs: ←/→ oder 1–{len(TABS)} · Details öffnen: Tab wählen, ↑↓/Enter",
                      curses.A_DIM)
 
     def _draw_status(self, y, w):
@@ -569,6 +656,11 @@ class Console:
         key = TABS[self.tab][0]
         if key == "providers":
             return [("providers", "Cloud-Ziele verwalten")]
+        if key == "storage":
+            return [("drives", "Laufwerke & Speicherkarten"),
+                    ("jobs", "Vorgänge (Upload & Sicherung)"),
+                    ("caches", "Kartensicherungen (Cache-Laufwerke)"),
+                    ("buffer", "Puffer-Belegung")]
         if key == "network":
             return [("wifi", "WLAN & Fallback-AP"), ("bandwidth", "Bandbreite"), ("vpn", "VPN")]
         if key == "pool":
@@ -579,7 +671,6 @@ class Console:
             return [("users", "Benutzer"), ("groups", "Gruppen")]
         if key == "system":
             acts = [("updates", "Version & Updates"),
-                    ("storage", "Speicherbelegung"),
                     ("syscfg", "Systemeinstellungen & Benachrichtigungen"),
                     ("restart", "OffgridCloud-Dienst neu starten"),
                     ("reboot", "Box neu starten"),
@@ -633,13 +724,8 @@ class Console:
         no_auth = {"restart", "reboot", "shutdown", "shell", "browser", "quit"}
         if key not in no_auth and not self._ensure_login():
             return
-        if key == "restart":
-            self._power("restart", "OffgridCloud-Dienst neu starten?",
-                        ["systemctl", "restart", SERVICE_NAME])
-        elif key == "reboot":
-            self._power("reboot", "Box wirklich NEU STARTEN?", ["systemctl", "reboot"])
-        elif key == "shutdown":
-            self._power("shutdown", "Box wirklich HERUNTERFAHREN?", ["systemctl", "poweroff"])
+        if key in POWER_ACTIONS:
+            self._power(key)
         elif key == "quit":
             self.running = False
         elif key == "syscfg":
@@ -657,7 +743,10 @@ class Console:
                 "users": self._users_area,
                 "groups": self._groups_area,
                 "updates": self._updates_area,
-                "storage": self._storage_view,
+                "drives": self._drives_area,
+                "jobs": self._jobs_view,
+                "caches": self._caches_area,
+                "buffer": self._storage_view,
                 "browser": self._launch_browser,
                 "shell": self._drop_to_shell,
             }.get(key)
@@ -699,20 +788,125 @@ class Console:
         answer = self._prompt(f"{question} [j/N]")
         return bool(answer) and answer.strip().lower() in ("j", "ja", "y", "yes")
 
-    def _power(self, _key, question, cmd):
+    def _busy(self, text):
+        """Show a one-line "working …" note at the bottom of the current screen."""
+        h, w = self.scr.getmaxyx()
+        self._addstr(h - 2, 1, " " * (w - 2))
+        self._addstr(h - 2, 1, text[: w - 2], self.color(4))
+        self.scr.refresh()
+
+    @staticmethod
+    def _run_local(cmd):
+        """Run a privileged command; returns an error text or None on success."""
+        try:
+            # Capture output so a chatty command can't bleed onto the curses screen.
+            proc = subprocess.run(cmd, capture_output=True, text=True,  # noqa: S603
+                                  timeout=30, check=False)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return str(exc)
+        if proc.returncode == 0:
+            return None
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        return f"Code {proc.returncode}: {detail[-1] if detail else 'journalctl -xe'}"
+
+    def _power(self, key):
+        """Restart the service / reboot / power off.
+
+        As root (the tty1 kiosk) we call systemctl directly. An SSH session runs
+        as a normal user, where a bare systemctl fails — there we try
+        ``sudo -n`` (Pi OS users usually have passwordless sudo) and otherwise
+        fall back to the API, which runs the same action through the service's
+        own sudoers rules (needs the admin login)."""
+        api_action, cmd, question = POWER_ACTIONS[key]
         if not self._confirm(question):
             self.message = "Abgebrochen."
             return
         self.message = "Aktion läuft …"
         self.draw()
-        # Capture output so a chatty command can't bleed onto the curses screen.
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
-        if proc.returncode != 0:
-            detail = (proc.stderr or "").strip().splitlines()
-            hint = detail[-1] if detail else "journalctl -xe"
-            self.message = f"Fehlgeschlagen (Code {proc.returncode}): {hint}"
+        since = service_since(SERVICE_NAME)
+        if os.geteuid() == 0:
+            err = self._run_local(cmd)
         else:
-            self.message = "Erledigt."
+            err = self._run_local(["sudo", "-n", *cmd])
+            if err is not None:
+                err = self._power_via_api(api_action, err)
+                if err == "":  # login cancelled
+                    self.message = "Abgebrochen."
+                    return
+        if err is not None:
+            self.message = f"Fehlgeschlagen ({err}). Tipp: sudo offgrid-console"
+            return
+        if key == "restart":
+            self._wait_for_service(since)
+        else:
+            self.message = ("Box startet neu …" if key == "reboot"
+                            else "Box fährt herunter …")
+
+    def _power_via_api(self, action, sudo_err):
+        """Power action through the local API; returns an error text, "" if the
+        login was cancelled, or None on success."""
+        if health(read_env().get("OGC_PORT", "8000")) is None:
+            return f"kein root, sudo: {sudo_err}; API nicht erreichbar"
+        if not self._ensure_login():
+            return ""
+        try:
+            self.api.power(action)
+        except ApiError as exc:
+            return exc.detail
+        return None
+
+    def _wait_for_service(self, since_before, timeout=180):
+        """Live screen while the service restarts; returns when it answers again."""
+        port = read_env().get("OGC_PORT", "8000")
+        start = time.monotonic()
+        saw_down = False
+        spinner = "|/-\\"
+        self.scr.timeout(1000)
+        try:
+            while True:
+                elapsed = time.monotonic() - start
+                state = service_state(SERVICE_NAME)
+                since = service_since(SERVICE_NAME)
+                hz = health(port)
+                # "unknown" = no systemctl to ask; then the API alone decides.
+                up = hz is not None and state in ("active", "unknown")
+                if not up:
+                    saw_down = True
+                restarted = saw_down or (since and since_before and since != since_before)
+                if restarted and up:
+                    self.status = gather_status()
+                    self.message = (f"Dienst läuft wieder (Version {hz.get('version', '?')}, "
+                                    f"nach {elapsed:.0f} s).")
+                    return
+                if state == "failed":
+                    self.message = ("Dienst startet nicht (failed) — "
+                                    "Logs: journalctl -u offgridcloud -n 50")
+                    return
+                if elapsed > timeout:
+                    self.message = (f"Dienst nach {timeout} s noch nicht erreichbar "
+                                    f"(Status: {state}).")
+                    return
+                self.scr.erase()
+                h, w = self.scr.getmaxyx()
+                self._center(1, "OffgridCloud-Dienst wird neu gestartet",
+                             curses.A_BOLD | self.color(1))
+                x = max(2, (w - 56) // 2)
+                self._addstr(4, x, f"Dienst      : {state}",
+                             self.color(2 if state == "active" else 4))
+                self._addstr(5, x, f"API         : {'erreichbar' if hz else 'nicht erreichbar'}",
+                             self.color(2 if hz else 4))
+                self._addstr(6, x, f"Vergangen   : {elapsed:.0f} s  "
+                                   f"{spinner[int(elapsed) % len(spinner)]}")
+                self._addstr(8, x, "Warte, bis der Dienst wieder antwortet …", curses.A_DIM)
+                self._addstr(h - 1, 1, "Esc: nicht mehr warten (Neustart läuft weiter)",
+                             curses.A_DIM)
+                self.scr.noutrefresh()
+                curses.doupdate()
+                if self.scr.getch() in (27, ord("q"), ord("Q")):
+                    self.message = "Neustart läuft im Hintergrund weiter."
+                    return
+        finally:
+            self.scr.timeout(5000)
 
     def _launch_browser(self):
         if not (CHROMIUM_LAUNCHER.exists() and _has_chromium()):
@@ -793,8 +987,8 @@ class Console:
                     attr = curses.A_REVERSE | curses.A_BOLD if is_sel else 0
                     self._addstr(y, x, f"{marker}{label}", attr)
                     y += 1
-                if hint:
-                    self._addstr(y + 1, x, hint, curses.A_DIM)
+                for i, line in enumerate(hint.splitlines() if hint else []):
+                    self._addstr(y + 1 + i, x, line, curses.A_DIM)
                 if self.message:
                     self._addstr(h - 2, 1, self.message[: w - 2], self.color(4))
                 self._addstr(h - 1, 1, "↑↓ · Enter: wählen · Esc: zurück", curses.A_DIM)
@@ -1564,44 +1758,552 @@ class Console:
         finally:
             self.scr.timeout(5000)
 
-    # -- System: updates + storage --
-    def _updates_area(self):
+    # -- System: updates --
+    def _update_progress(self) -> dict:
         try:
-            info = self.api.get_update_info()
-        except ApiError as exc:
-            self.message = f"Konnte Update-Info nicht laden: {exc.detail}"
+            return self.api.get_update_progress()
+        except ApiError:
+            return {}
+
+    def _updates_area(self):
+        force = False
+        selected = 0
+        while True:
+            if force:
+                self._busy("Suche nach Updates …")
+            try:
+                info = self.api.get_update_info(force=force)
+            except ApiError as exc:
+                self.message = f"Konnte Update-Info nicht laden: {exc.detail}"
+                return
+            prog = self._update_progress()
+            phase = prog.get("phase", "idle")
+            avail = info.get("update_available")
+            latest = info.get("latest") or "—"
+            if force:
+                if info.get("error"):
+                    self.message = f"Prüfung fehlgeschlagen: {info['error']}"
+                elif avail:
+                    self.message = f"Neue Version verfügbar: {latest}."
+                else:
+                    self.message = "Keine neue Version — die Box ist aktuell."
+            force = False
+
+            cur = info.get("current", "?")
+            if info.get("channel") == "main":
+                commit = (info.get("commit") or "")[:7]
+                cur += f" (main @ {commit})" if commit else " (main)"
+            behind = info.get("behind_by") or 0
+            hint = [f"Installiert : {cur}",
+                    f"Verfügbar   : {latest}" + (f" ({behind} neue Commits)" if behind else ""),
+                    "Status      : " + ("UPDATE VERFÜGBAR" if avail else
+                                        "Prüfung fehlgeschlagen" if info.get("error") else
+                                        "aktuell")]
+            if avail and not info.get("self_update_enabled"):
+                hint.append("One-Click-Update ist aus. Auf der Box ausführen:")
+                hint.append("  docker compose pull && docker compose up -d" if info.get("in_docker")
+                            else "  sudo /opt/offgridcloud/src/deploy/update.sh")
+            if phase == "running":
+                hint.append("Ein Update läuft gerade.")
+
+            items = []
+            if phase == "running":
+                items.append(("progress", "Update-Fortschritt ansehen (läuft)"))
+            items.append(("check", "Nach Updates suchen"))
+            items.append(("info", "Details / Release-Notes"))
+            if avail and info.get("self_update_enabled") and phase != "running":
+                items.append(("apply", f"Jetzt aktualisieren ({latest})"))
+            if phase in ("success", "failed", "unknown"):
+                items.append(("progress", f"Letztes Update: {UPDATE_PHASE.get(phase, phase)}"
+                                          " — Protokoll"))
+            items.append(("back", "Zurück"))
+            sel = self._submenu("Version & Updates", items, min(selected, len(items) - 1),
+                                hint="\n".join(hint))
+            if sel is None:
+                return
+            selected = sel
+            key = items[sel][0]
+            if key == "back":
+                return
+            if key == "check":
+                force = True
+            elif key == "info":
+                self._update_details(info, cur, latest, avail)
+            elif key == "progress":
+                self._update_progress_view()
+            elif key == "apply":
+                if not self._confirm(f"Auf {latest} aktualisieren? Der Dienst startet neu."):
+                    self.message = "Abgebrochen."
+                    continue
+                try:
+                    self.api.apply_update()
+                except ApiError as exc:
+                    self.message = f"Update fehlgeschlagen: {exc.detail}"
+                    continue
+                self._update_progress_view()
+
+    def _update_details(self, info, cur, latest, avail):
+        lines = [f"Installiert: {cur}", f"Verfügbar:   {latest}",
+                 f"Status:      {'Update verfügbar' if avail else 'aktuell'}"]
+        for lbl, k in [("Release", "release_name"), ("Datum", "published_at"),
+                       ("Link", "release_url"), ("Hinweis", "error")]:
+            if info.get(k):
+                lines.append(f"{lbl + ':':<12} {info[k]}")
+        if info.get("notes"):
+            lines += ["", "Release-Notes:"] + info["notes"].splitlines()
+        self._show_text("Version & Updates", lines)
+
+    def _update_progress_view(self):
+        """Live view of the self-update: phase, versions, elapsed time, log tail.
+
+        The update restarts the service, so the API vanishes for a while — we
+        keep the last log on screen and poll until it answers again."""
+        prog = {}
+        api_up = True
+        self.scr.timeout(2000)
+        try:
+            while True:
+                try:
+                    prog = self.api.get_update_progress()
+                    api_up = True
+                except ApiError as exc:
+                    if exc.code == 401:
+                        self.message = "Sitzung abgelaufen — bitte erneut anmelden."
+                        return
+                    api_up = False
+                phase = prog.get("phase", "running" if not api_up else "idle")
+                running = phase == "running" or not api_up
+                self.scr.erase()
+                h, w = self.scr.getmaxyx()
+                self._center(0, "Update-Fortschritt", curses.A_BOLD | self.color(1))
+                x = 2
+                attr = self.color({"success": 2, "failed": 3}.get(phase, 4))
+                self._addstr(2, x, f"Status    : {UPDATE_PHASE.get(phase, phase)}", attr)
+                frm, to = prog.get("from_version"), prog.get("to_version")
+                if frm or to:
+                    self._addstr(3, x, f"Version   : {frm or '?'} → {to or '?'}")
+                started = prog.get("started_at") or 0
+                if started:
+                    end = prog.get("finished_at") or time.time()
+                    self._addstr(4, x, f"Dauer     : {_duration(end - started)}")
+                note = prog.get("message", "")
+                if not api_up:
+                    note = "Dienst startet neu — warte auf die API …"
+                elif phase == "success":
+                    note += " Konsole neu öffnen, um ihre neue Version zu laden."
+                self._addstr(5, x, note[: w - 4], self.color(4) if not api_up else 0)
+                log = (prog.get("log") or "").splitlines()
+                view = max(1, h - 9)
+                self._addstr(7, x, "Protokoll (Ende):", curses.A_DIM)
+                for i, line in enumerate(log[-view:]):
+                    self._addstr(8 + i, x, line[: w - 4], curses.A_DIM)
+                if running:
+                    foot = "Esc: zurück — das Update läuft im Hintergrund weiter"
+                else:
+                    foot = "Enter: Verstanden (Ergebnis ausblenden) · Esc: zurück"
+                self._addstr(h - 1, 1, foot[: w - 2], curses.A_DIM)
+                self.scr.noutrefresh()
+                curses.doupdate()
+                ch = self.scr.getch()
+                if ch in (27, ord("q"), ord("Q")):
+                    break
+                if ch in (curses.KEY_ENTER, 10, 13) and not running:
+                    try:
+                        self.api.dismiss_update()
+                    except ApiError:
+                        pass
+                    break
+            if prog.get("phase") == "success":
+                self.message = f"Update erfolgreich: {prog.get('to_version') or 'neue Version'}."
+            elif prog.get("phase") == "failed":
+                self.message = f"Update fehlgeschlagen: {prog.get('message', '')}"
+            self.status = gather_status()
+        finally:
+            self.scr.timeout(5000)
+
+    # -- Storage media: drives, cards, imports, cache drives --
+    def _drives_area(self):
+        selected = 0
+        while True:
+            try:
+                ov = self.api.get_storage()
+            except ApiError as exc:
+                self.message = f"Konnte Laufwerke nicht laden: {exc.detail}"
+                return
+            rows = []  # (key, label, disk, partition-or-None)
+            for d in ov.get("disks", []):
+                if not d.get("partitions"):
+                    rows.append((d["path"], f"{_disk_title(d)} · keine Partition", d, None))
+                for part in d.get("partitions", []):
+                    rows.append((part["path"],
+                                 f"{_disk_title(d)} › {part.get('label') or part['name']}"
+                                 f"  {_part_state(part)}", d, part))
+            items = [(r[0], r[1]) for r in rows] + [("__refresh__", "Aktualisieren"),
+                                                     ("__back__", "Zurück")]
+            buf = ov.get("buffer") or {}
+            hint = [f"Puffer: {_h(buf.get('free', 0))} frei von {_h(buf.get('total', 0))}"]
+            if not rows:
+                hint.append("Kein Laufwerk erkannt — Karte oder USB-Laufwerk einstecken.")
+            if not ov.get("manage_enabled"):
+                hint.append("Verwaltung nicht eingerichtet (install.sh) — nur Anzeige.")
+            if ov.get("error"):
+                hint.append(ov["error"])
+            sel = self._submenu("Laufwerke & Speicherkarten", items,
+                                min(selected, len(items) - 1), hint="\n".join(hint))
+            if sel is None or items[sel][0] == "__back__":
+                return
+            selected = sel
+            if items[sel][0] == "__refresh__":
+                continue
+            _, _, disk, part = rows[sel]
+            self._drive_actions(ov, disk, part)
+
+    def _drive_actions(self, ov, disk, part):
+        manage = ov.get("manage_enabled")
+        if disk.get("protected") or (part and part.get("protected")):
+            self.message = "System- bzw. Pufferlaufwerk — hier nicht verwaltbar."
             return
-        cur = info.get("current", "?")
-        if info.get("channel") == "main":
-            cur += " (main)"
-        latest = info.get("latest") or "—"
-        avail = info.get("update_available")
-        hint = f"Installiert {cur} · verfügbar {latest} · " + \
-               ("UPDATE VERFÜGBAR" if avail else "aktuell")
-        items = [("info", "Details / Release-Notes")]
-        if avail and info.get("self_update_enabled"):
-            items.append(("apply", f"Jetzt aktualisieren ({latest})"))
-        items.append(("back", "Zurück"))
-        sel = self._submenu("Version & Updates", items, 0, hint=hint)
+        acts = []
+        if part:
+            mounted = bool(part.get("mountpoint"))
+            if part.get("browsable") and not part.get("cache"):
+                acts.append(("import", "In einen Ordner hochladen"))
+                acts.append(("backup", "Auf Cache-Laufwerk sichern"))
+            if manage and not mounted and part.get("fstype"):
+                acts.append(("mount", "Einhängen"))
+            if manage and mounted:
+                acts.append(("unmount", "Aushängen"))
+            if part.get("cache"):
+                acts.append(("unmark", "Cache-Markierung entfernen"))
+            elif mounted and part.get("uuid") and not part.get("read_only"):
+                acts.append(("mark", "Als Cache-Laufwerk markieren"))
+            if manage:
+                acts.append(("format_part", "Partition formatieren"))
+        if manage:
+            acts.append(("eject", "Laufwerk auswerfen"))
+            acts.append(("format_disk", "Ganzes Laufwerk formatieren"))
+        acts.append(("back", "Zurück"))
+        if part:
+            title = f"{_disk_title(disk)} › {part.get('label') or part['name']}"
+            hint = [f"Gerät: {part['path']} · {part.get('fstype') or 'kein Dateisystem'}"
+                    f" · {_h(part.get('size', 0))}"]
+            if part.get("mountpoint"):
+                hint.append(f"Eingehängt: {part['mountpoint']} · {_h(part.get('used', 0))} "
+                            f"belegt, {_h(part.get('free', 0))} frei")
+            if part.get("busy"):
+                hint.append("Auf diesem Medium läuft gerade ein Vorgang.")
+        else:
+            title = _disk_title(disk)
+            hint = [f"Gerät: {disk['path']} · keine Partition — zum Nutzen formatieren."]
+        sel = self._submenu(title, acts, 0, hint="\n".join(hint))
         if sel is None:
             return
-        key = items[sel][0]
-        if key == "info":
-            lines = [f"Installiert: {cur}", f"Verfügbar:   {latest}",
-                     f"Status:      {'Update verfügbar' if avail else 'aktuell'}"]
-            for lbl, k in [("Release", "release_name"), ("Datum", "published_at"),
-                           ("Hinweis", "error")]:
-                if info.get(k):
-                    lines.append(f"{lbl + ':':<12} {info[k]}")
-            if info.get("notes"):
-                lines += ["", "Release-Notes:"] + info["notes"].splitlines()
-            self._show_text("Version & Updates", lines)
-        elif key == "apply" and self._confirm(f"Auf {latest} aktualisieren? Der Dienst startet neu."):
+        key = acts[sel][0]
+        try:
+            if key == "import":
+                self._import_wizard(part)
+            elif key == "backup":
+                self._backup_wizard(part)
+            elif key in ("mount", "unmount"):
+                self._busy("Einhängen …" if key == "mount" else "Aushängen …")
+                r = self.api.storage_action(key, part["path"])
+                self.message = (f"Eingehängt unter {r.get('mountpoint', '?')}." if key == "mount"
+                                else f"{part['path']} ausgehängt.")
+            elif key == "eject" and self._confirm(f"{_disk_title(disk)} auswerfen?"):
+                self._busy("Auswerfen …")
+                self.api.storage_action("eject", disk["path"])
+                self.message = f"{_disk_title(disk)} kann jetzt entfernt werden."
+            elif key == "mark":
+                self.api.mark_cache(part["path"])
+                self.message = f"{part['path']} ist jetzt Cache-Laufwerk für Kartensicherungen."
+            elif key == "unmark" and self._confirm("Cache-Markierung entfernen? "
+                                                   "(Sicherungen bleiben auf dem Laufwerk)"):
+                self.api.unmark_cache(part["uuid"])
+                self.message = "Cache-Markierung entfernt."
+            elif key in ("format_part", "format_disk"):
+                target = part if key == "format_part" else disk
+                self._format_wizard(ov, target["path"])
+        except ApiError as exc:
+            self.message = f"Fehlgeschlagen: {exc.detail}"
+
+    def _format_wizard(self, ov, device):
+        filesystems = ov.get("filesystems") or ["exfat"]
+        items = [(f, f) for f in filesystems] + [("__cancel__", "Abbrechen")]
+        sel = self._submenu(f"{device} formatieren — Dateisystem", items, 0,
+                            hint="exFAT: Kameras/PCs · ext4: nur Linux (Cache-Laufwerk)")
+        if sel is None or items[sel][0] == "__cancel__":
+            return
+        fstype = items[sel][0]
+        max_len = (ov.get("label_max") or {}).get(fstype, 11)
+        label = self._prompt(f"Bezeichnung (A–Z, 0–9, _ -, max. {max_len}):", default="OFFGRID")
+        if label is None:
+            return
+        name = device.rsplit("/", 1)[-1]
+        confirm = self._prompt(f"ALLE DATEN auf {device} werden gelöscht! Zur Bestätigung "
+                               f"„{name}“ eingeben:")
+        if confirm is None or confirm.strip() != name:
+            self.message = "Abgebrochen — nichts formatiert."
+            return
+        self._busy(f"Formatiere {device} als {fstype} …")
+        try:
+            self.api.storage_format(device, fstype, label.strip(), confirm.strip())
+            self.message = f"{device} als {fstype} „{label.strip()}“ formatiert."
+        except ApiError as exc:
+            self.message = f"Formatieren fehlgeschlagen: {exc.detail}"
+
+    def _pick_source(self, part):
+        """Choose what to copy: the whole medium or one folder on it.
+        Returns a relative path ("" = whole medium) or None if cancelled."""
+        device = part["path"]
+        path = ""
+        while True:
             try:
-                r = self.api.apply_update()
-                self.message = f"Update: {r.get('message', 'gestartet')}"
+                br = self.api.storage_browse(device, path)
             except ApiError as exc:
-                self.message = f"Update fehlgeschlagen: {exc.detail}"
+                self.message = f"Konnte Medium nicht lesen: {exc.detail}"
+                return None
+            dirs = [e for e in br.get("entries", []) if e.get("is_dir")]
+            files = [e for e in br.get("entries", []) if not e.get("is_dir")]
+            media = sum(1 for e in files if e.get("is_media"))
+            where = "/" + (br.get("path") or "")
+            items = [("__pick__", f"✓ Diesen Ordner nehmen ({where})")]
+            if br.get("parent") is not None:
+                items.append(("__up__", ".. (eine Ebene höher)"))
+            items += [(e["path"], f"▸ {e['name']}/") for e in dirs]
+            items.append(("__cancel__", "Abbrechen"))
+            hint = f"Hier: {len(dirs)} Ordner, {len(files)} Dateien ({media} Medien)"
+            sel = self._submenu("Quelle wählen", items, 0, hint=hint)
+            if sel is None or items[sel][0] == "__cancel__":
+                return None
+            key = items[sel][0]
+            if key == "__pick__":
+                return br.get("path") or ""
+            path = (br.get("parent") or "") if key == "__up__" else key
+
+    def _import_wizard(self, part):
+        try:
+            folders = self.api.get_folders()
+        except ApiError as exc:
+            self.message = f"Konnte Ordner nicht laden: {exc.detail}"
+            return
+        if not folders:
+            self.message = "Noch kein Upload-Ordner — erst in der Web-Oberfläche anlegen."
+            return
+        items = [(str(f["id"]), f"{f['name']}  ({f.get('media_count', 0)} Dateien)")
+                 for f in folders] + [("__cancel__", "Abbrechen")]
+        sel = self._submenu("Ziel-Ordner wählen", items, 0)
+        if sel is None or items[sel][0] == "__cancel__":
+            return
+        folder = folders[sel]
+        src = self._pick_source(part)
+        if src is None:
+            return
+        vals = self._collect_form(f"Hochladen nach „{folder['name']}“", [
+            {"key": "media_only", "label": "Nur Fotos/Videos/Audio", "type": "bool",
+             "default": "true"},
+            {"key": "skip_duplicates", "label": "Schon Vorhandenes überspringen",
+             "type": "bool", "default": "true"},
+            {"key": "tags", "label": "Schlagwörter (Komma-getrennt)", "type": "text"},
+        ])
+        if vals is None:
+            return
+        tags = [t.strip() for t in str(vals["tags"]).split(",") if t.strip()]
+        self._busy("Dateien werden gezählt …")
+        try:
+            job = self.api.start_import({
+                "device": part["path"], "paths": [src], "folder_id": folder["id"],
+                "media_only": bool(vals["media_only"]),
+                "skip_duplicates": bool(vals["skip_duplicates"]), "tags": tags,
+            })
+        except ApiError as exc:
+            self.message = f"Hochladen fehlgeschlagen: {exc.detail}"
+            return
+        self.message = f"Upload gestartet: {job.get('total_files', 0)} Dateien."
+        self._jobs_view()
+
+    def _backup_wizard(self, part):
+        try:
+            caches = [c for c in self.api.get_caches() if c.get("device")]
+        except ApiError as exc:
+            self.message = f"Konnte Cache-Laufwerke nicht laden: {exc.detail}"
+            return
+        if not caches:
+            self.message = ("Kein Cache-Laufwerk angeschlossen — ein Laufwerk unter "
+                            "„Laufwerke“ als Cache markieren.")
+            return
+        cache = caches[0]
+        if len(caches) > 1:
+            items = [(c["uuid"], f"{c['label']}  ({_h(c.get('free', 0))} frei)")
+                     for c in caches] + [("__cancel__", "Abbrechen")]
+            sel = self._submenu("Cache-Laufwerk wählen", items, 0)
+            if sel is None or items[sel][0] == "__cancel__":
+                return
+            cache = caches[sel]
+        src = self._pick_source(part)
+        if src is None:
+            return
+        vals = self._collect_form(f"Sichern auf „{cache['label']}“", [
+            {"key": "media_only", "label": "Nur Fotos/Videos/Audio", "type": "bool",
+             "default": "true"},
+            {"key": "only_new", "label": "Nur Neues kopieren", "type": "bool",
+             "default": "true"},
+            {"key": "eject_after", "label": "Karte danach auswerfen", "type": "bool",
+             "default": "false"},
+        ])
+        if vals is None:
+            return
+        self._busy("Dateien werden gezählt …")
+        try:
+            job = self.api.cache_backup({
+                "device": part["path"], "paths": [src] if src else [],
+                "cache_uuid": cache["uuid"], "media_only": bool(vals["media_only"]),
+                "only_new": bool(vals["only_new"]), "eject_after": bool(vals["eject_after"]),
+            })
+        except ApiError as exc:
+            self.message = f"Sicherung fehlgeschlagen: {exc.detail}"
+            return
+        self.message = f"Sicherung gestartet: {job.get('total_files', 0)} Dateien."
+        self._jobs_view()
+
+    def _jobs_view(self):
+        """Live list of imports / cache backups with progress; c cancels, x clears."""
+        jobs = []
+        err = ""
+        pos = 0
+        top = 0
+        self.scr.timeout(1500)
+        try:
+            while True:
+                try:
+                    jobs = self.api.get_imports()
+                    err = ""
+                except ApiError as exc:
+                    err = f"Aktualisieren fehlgeschlagen: {exc.detail}"
+                if jobs:
+                    pos = min(pos, len(jobs) - 1)
+                self.scr.erase()
+                h, w = self.scr.getmaxyx()
+                self._center(0, "Vorgänge (Upload & Sicherung)", curses.A_BOLD | self.color(1))
+                x = 2
+                block = 4
+                per_page = max(1, (h - 4) // block)
+                if pos < top:
+                    top = pos
+                elif pos >= top + per_page:
+                    top = pos - per_page + 1
+                if not jobs:
+                    self._addstr(2, x, "Keine Vorgänge.", curses.A_DIM)
+                for i, j in enumerate(jobs[top: top + per_page]):
+                    idx = top + i
+                    y = 2 + i * block
+                    cache = j.get("kind") == "cache"
+                    target = (j.get("target", "").split("::")[-1] if cache
+                              else f"„{j.get('folder_name', '')}“")
+                    head = (f"{'▶' if idx == pos else ' '} "
+                            f"{'Cache-Sicherung' if cache else 'Upload'} {j.get('device', '')}"
+                            f" → {target}")
+                    status = JOB_STATUS.get(j.get("status"), j.get("status", ""))
+                    self._addstr(y, x, head[: w - 20], curses.A_REVERSE if idx == pos else 0)
+                    self._addstr(y, max(x, w - 18), status,
+                                 self.color({"done": 2, "failed": 3}.get(j.get("status"), 4)))
+                    done, total = j.get("done_bytes", 0), j.get("total_bytes", 0)
+                    if j.get("status") == "done":
+                        done = total = 1
+                    self._addstr(y + 1, x + 2,
+                                 f"{_bar(done, total)} {j.get('done_files', 0)}/"
+                                 f"{j.get('total_files', 0)} Dateien · "
+                                 f"{_h(j.get('done_bytes', 0))}/{_h(j.get('total_bytes', 0))}")
+                    detail = (f"{j.get('imported', 0)} {'kopiert' if cache else 'übernommen'} · "
+                              f"{j.get('skipped', 0)} übersprungen · "
+                              f"{j.get('failed', 0)} fehlgeschlagen")
+                    if j.get("status") == "running" and j.get("current"):
+                        detail += f" · {j['current']}"
+                    elif j.get("error"):
+                        detail += f" · {j['error']}"
+                    self._addstr(y + 2, x + 2, detail[: w - x - 4], curses.A_DIM)
+                if err:
+                    self._addstr(h - 2, 1, err[: w - 2], self.color(3))
+                self._addstr(h - 1, 1, "↑↓ · Enter: Fehler · c: abbrechen · "
+                                       "x: Erledigte entfernen · Esc: zurück", curses.A_DIM)
+                self.scr.noutrefresh()
+                curses.doupdate()
+                ch = self.scr.getch()
+                if ch in (27, ord("q"), ord("Q")):
+                    return
+                if ch in (curses.KEY_UP, ord("k")) and jobs:
+                    pos = (pos - 1) % len(jobs)
+                elif ch in (curses.KEY_DOWN, ord("j")) and jobs:
+                    pos = (pos + 1) % len(jobs)
+                elif ch in (ord("c"), ord("C")) and jobs:
+                    j = jobs[pos]
+                    if j.get("status") in ("pending", "running") and \
+                            self._confirm("Diesen Vorgang abbrechen?"):
+                        try:
+                            self.api.cancel_import(j["id"])
+                        except ApiError as exc:
+                            err = f"Abbrechen fehlgeschlagen: {exc.detail}"
+                    self.scr.timeout(1500)
+                elif ch in (ord("x"), ord("X")):
+                    try:
+                        self.api.clear_imports()
+                    except ApiError as exc:
+                        err = f"Entfernen fehlgeschlagen: {exc.detail}"
+                elif ch in (curses.KEY_ENTER, 10, 13) and jobs:
+                    errors = jobs[pos].get("errors") or []
+                    self._show_text("Fehlerdetails", errors or ["Keine Fehler."])
+                    self.scr.timeout(1500)
+        finally:
+            self.scr.timeout(5000)
+
+    def _caches_area(self):
+        while True:
+            try:
+                caches = self.api.get_caches()
+            except ApiError as exc:
+                self.message = f"Konnte Cache-Laufwerke nicht laden: {exc.detail}"
+                return
+            items = []
+            for c in caches:
+                where = (f"{c['device']} · {_h(c.get('free', 0))} frei von {_h(c.get('total', 0))}"
+                         if c.get("device") and not c.get("error") else c.get("error") or "—")
+                items.append((c["uuid"], f"{c['label']}  {where} · "
+                                         f"{len(c.get('snapshots', []))} Sicherungen"))
+            items.append(("__back__", "Zurück"))
+            hint = ("" if caches else
+                    "Noch kein Cache-Laufwerk. Unter „Laufwerke & Speicherkarten“\n"
+                    "ein Laufwerk als Cache markieren — dann lassen sich Karten\n"
+                    "auch ohne Netz darauf sichern.")
+            sel = self._submenu("Kartensicherungen (Cache-Laufwerke)", items, 0, hint=hint)
+            if sel is None or items[sel][0] == "__back__":
+                return
+            self._cache_actions(caches[sel])
+
+    def _cache_actions(self, cache):
+        while True:
+            snaps = cache.get("snapshots", [])
+            items = [(s["name"], f"{s['name']}  · {s.get('files', 0)} Dateien · "
+                                 f"{_h(s.get('size', 0))}") for s in snaps]
+            items += [("__unmark__", "Cache-Markierung entfernen"), ("__back__", "Zurück")]
+            hint = "Enter auf einer Sicherung: löschen" if snaps else "Noch keine Sicherungen."
+            sel = self._submenu(f"Cache: {cache['label']}", items, 0, hint=hint)
+            if sel is None or items[sel][0] == "__back__":
+                return
+            key = items[sel][0]
+            try:
+                if key == "__unmark__":
+                    if self._confirm("Markierung entfernen? (Sicherungen bleiben erhalten)"):
+                        self.api.unmark_cache(cache["uuid"])
+                        self.message = "Cache-Markierung entfernt."
+                        return
+                elif self._confirm(f"Sicherung „{key}“ endgültig löschen?"):
+                    self.api.delete_snapshot(cache["uuid"], key)
+                    self.message = f"Sicherung „{key}“ gelöscht."
+                    cache = next((c for c in self.api.get_caches()
+                                  if c["uuid"] == cache["uuid"]), None)
+                    if cache is None:
+                        return
+            except ApiError as exc:
+                self.message = f"Fehlgeschlagen: {exc.detail}"
 
     def _storage_view(self):
         try:
@@ -1616,6 +2318,42 @@ class Console:
                  f"Auslastung:  {d.get('percent_used', 0):.0f} %",
                  f"Wenig Speicher: {'JA' if d.get('low_space') else 'nein'}"]
         self._show_text("Speicherbelegung (Puffer)", lines)
+
+
+def _disk_title(disk: dict) -> str:
+    name = " ".join(x for x in (disk.get("vendor", ""), disk.get("model", "")) if x).strip()
+    return f"{name or disk.get('name', '?')} ({_h(disk.get('size', 0))})"
+
+
+def _part_state(part: dict) -> str:
+    if part.get("system"):
+        state = "System"
+    elif part.get("buffer"):
+        state = "Puffer"
+    elif part.get("mountpoint"):
+        state = f"{part.get('fstype') or 'eingehängt'} · {_h(part.get('free', 0))} frei"
+    elif part.get("fstype"):
+        state = f"{part['fstype']} · nicht eingehängt"
+    else:
+        state = "kein Dateisystem"
+    if part.get("cache"):
+        state += " · Cache"
+    if part.get("read_only"):
+        state += " · schreibgeschützt"
+    if part.get("busy"):
+        state += " · in Arbeit"
+    return state
+
+
+def _bar(done: float, total: float, width: int = 20) -> str:
+    frac = min(1.0, done / total) if total else 0.0
+    filled = int(frac * width)
+    return f"[{'#' * filled}{'-' * (width - filled)}] {frac * 100:3.0f} %"
+
+
+def _duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    return f"{seconds // 60} min {seconds % 60:02d} s" if seconds >= 60 else f"{seconds} s"
 
 
 def _has_chromium() -> bool:

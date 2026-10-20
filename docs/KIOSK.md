@@ -21,7 +21,8 @@ lässt sich die **volle Web-Oberfläche im Vollbild-Chromium** öffnen (Pi 4/5).
 
 ## Dashboard & Tabs
 
-Oben läuft eine **Tab-Leiste**; gewechselt wird mit **←/→** oder den Zahlen **1–6**.
+Oben läuft eine **Tab-Leiste**; gewechselt wird mit **←/→** oder den Zahlen **1–7**.
+Auf schmalen Bildschirmen (80 Spalten) zeigt sie automatisch Kurznamen.
 Innerhalb eines Tabs: **↑/↓** wählen, **Enter** öffnen, **Esc** zurück.
 
 - **1 · Dashboard** — Live-Status (ohne Login): Gerät/IP, **Web-URL**, Dienst-Status,
@@ -29,18 +30,28 @@ Innerhalb eines Tabs: **↑/↓** wählen, **Enter** öffnen, **Esc** zurück.
 - **2 · Provider** — Cloud-Ziele anzeigen, **testen**, **löschen**, **neu anlegen**
   (Formular dynamisch aus dem Provider-Katalog: S3, MinIO, Azure, WebDAV, SFTP,
   Nextcloud … alle Typen der Web-UI, inkl. der passenden Felder & Passwörter).
-- **3 · Netz & Verbindung** — **WLAN & Fallback-AP** (AP/Watchdog, bekannte WLANs
+- **3 · Speicher** — **Laufwerke & Speicherkarten** (einhängen/aushängen/auswerfen,
+  formatieren mit Bestätigung per Gerätename, als **Cache-Laufwerk** markieren),
+  **In einen Ordner hochladen** (ganzes Medium oder ein Ordner darauf, optional nur
+  Medien, Duplikate überspringen, Schlagwörter), **Auf Cache-Laufwerk sichern**
+  (Kartensicherung ohne Netz, nur Neues, Karte danach auswerfen), **Vorgänge** mit
+  Live-Fortschritt (abbrechen, Erledigte entfernen, Fehlerdetails),
+  **Kartensicherungen** (Sicherungen je Cache-Laufwerk ansehen/löschen) und
+  **Puffer-Belegung**.
+- **4 · Netz & Verbindung** — **WLAN & Fallback-AP** (AP/Watchdog, bekannte WLANs
   hinzufügen/löschen, Scan, „Anwenden"), **Bandbreite** (Limit + Mindest-Gate) und
   **VPN** (Profile verbinden/trennen/löschen, neues Profil aus `.conf`/`.ovpn`).
-- **4 · Pool** — Pool-Übersicht (dieser Knoten + Peers), diesen Knoten **teilbar**
+- **5 · Pool** — Pool-Übersicht (dieser Knoten + Peers), diesen Knoten **teilbar**
   machen (Token erzeugen/anzeigen/entfernen), **Peers** (andere Boxen) verwalten.
-- **5 · Benutzer & Gruppen** — Benutzer anlegen/löschen, Passwort zurücksetzen,
+- **6 · Benutzer & Gruppen** — Benutzer anlegen/löschen, Passwort zurücksetzen,
   aktivieren/deaktivieren, Rolle wechseln; Gruppen anlegen/löschen und **Mitglieder**
   per Häkchenliste verwalten.
-- **6 · System** — **Version & Updates** (prüfen und, wenn eingerichtet, per
-  One-Click aktualisieren), **Speicherbelegung**, **Systemeinstellungen &
+- **7 · System** — **Version & Updates** („Nach Updates suchen" fragt GitHub
+  sofort neu ab; One-Click-Update mit **Live-Fortschritt** inkl. Protokoll, das auch
+  den Dienst-Neustart mitten im Update überbrückt), **Systemeinstellungen &
   Benachrichtigungen** (Lösch-/Sync-Regeln, Bandbreiten-Mess-URL, Webhook/Telegram/
-  SMTP + alle Ereignis-Schalter), **Dienst neu starten / Neustart / Herunterfahren**,
+  SMTP + alle Ereignis-Schalter), **Dienst neu starten** (mit Warte-Anzeige, bis der Dienst wieder antwortet)
+  **/ Neustart / Herunterfahren**,
   optional **Browser**, und **Zur Raspberry-Pi-Shell (PIN)**.
 
 ## Admin-Login & Sicherheit
@@ -190,10 +201,12 @@ sudo offgrid-console --set-pin
 ```
 
 Weil das Programm seinen echten Pfad selbst auflöst, funktioniert der Befehl auch
-über den Symlink korrekt (findet `.env` und die PIN-Datei). Hinweis: Geräte-
-Aktionen (Dienst-Neustart, Reboot, Shutdown) brauchen root — per SSH also
-`sudo offgrid-console`. Die Verwaltung (Provider, Netz, Pool, Benutzer, System)
-läuft über den Admin-Login der API und funktioniert auch ohne root.
+über den Symlink korrekt (findet `.env` und die PIN-Datei). Geräte-Aktionen
+(Dienst-Neustart, Reboot, Shutdown) funktionieren auch **ohne root**: Die Konsole
+versucht zuerst `sudo -n` (Pi-OS-Benutzer haben meist passwortloses sudo) und
+geht sonst über die API, die dieselben sudoers-Regeln wie der Knopf in der
+Web-UI nutzt (dafür fragt sie nach dem Admin-Login). Die Verwaltung (Provider,
+Speicher, Netz, Pool, Benutzer, System) läuft immer über den Admin-Login der API.
 
 ### Raspberry Pi Connect
 
