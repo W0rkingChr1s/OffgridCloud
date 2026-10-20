@@ -9,12 +9,6 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    ignore:
-      # Tailwind 4 needs a migration (@tailwindcss/postcss + CSS-based config);
-      # a plain version bump breaks the build (see #109). Minor/patch of 3.x
-      # still come in. Remove once the v4 migration has landed.
-      - dependency-name: "tailwindcss"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/deploy"
