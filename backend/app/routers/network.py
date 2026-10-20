@@ -56,6 +56,8 @@ def _settings_out(row) -> NetworkSettingsOut:
         country_code=row.country_code,
         check_interval=row.check_interval,
         fail_threshold=row.fail_threshold,
+        ap_probe_interval=row.ap_probe_interval,
+        ap_blind_probe_interval=row.ap_blind_probe_interval,
         ap_has_password=bool(row.ap_psk_encrypted),
     )
 
@@ -134,6 +136,12 @@ def update_settings(
     if payload.fail_threshold is not None:
         row.fail_threshold = payload.fail_threshold
         changed.append("fail_threshold")
+    if payload.ap_probe_interval is not None:
+        row.ap_probe_interval = payload.ap_probe_interval
+        changed.append("ap_probe_interval")
+    if payload.ap_blind_probe_interval is not None:
+        row.ap_blind_probe_interval = payload.ap_blind_probe_interval
+        changed.append("ap_blind_probe_interval")
 
     if changed:
         db.commit()

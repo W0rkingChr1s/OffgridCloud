@@ -430,6 +430,11 @@ class NetworkSettings(Base):
     # consecutive failures flip the box into AP mode.
     check_interval: Mapped[int] = mapped_column(default=20)
     fail_threshold: Mapped[int] = mapped_column(default=3)
+    # While hosting the AP (single radio → no client link): how often to scan
+    # for a known network without interrupting the AP, and how often to drop
+    # the AP briefly to scan as a client (drivers that can't scan in AP mode).
+    ap_probe_interval: Mapped[int] = mapped_column(default=120)
+    ap_blind_probe_interval: Mapped[int] = mapped_column(default=600)
 
 
 class KnownNetwork(Base):
