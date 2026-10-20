@@ -96,7 +96,7 @@ export default function Transfers() {
                     <td className="px-4 py-3 font-medium text-white">{j.media_filename}</td>
                     <td className="px-4 py-3 text-slate-300">{j.provider_name}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
+                      <span className={`rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                       {j.status === "done" && j.bytes_transferred > 0 && (
                         <span className="ml-2 text-xs text-slate-500">{formatBytes(j.bytes_transferred)}</span>
                       )}
@@ -104,7 +104,7 @@ export default function Transfers() {
                         <div className="mt-1.5 w-48">
                           <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue transition-all"
+                              className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue transition-all"
                               style={{ width: `${Math.round((active[j.id].progress || 0) * 100)}%` }}
                             />
                           </div>
@@ -121,7 +121,7 @@ export default function Transfers() {
                     <td className="px-4 py-3 text-slate-400">{j.attempts}</td>
                     <td className="px-4 py-3 text-right">
                       {(j.status === "failed" || j.status === "queued") && (
-                        <button onClick={() => retry(j.id)} className="rounded border border-white/10 px-3 py-1 text-xs hover:bg-white/5">
+                        <button onClick={() => retry(j.id)} className="rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5">
                           Erneut
                         </button>
                       )}

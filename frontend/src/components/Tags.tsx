@@ -82,7 +82,7 @@ export function TagEditor({
             }}
             placeholder="Tag"
             maxLength={64}
-            className="w-24 rounded bg-slate-700 px-2 py-0.5 text-xs text-white outline-none ring-1 ring-ogc-teal/40"
+            className="w-24 rounded-sm bg-slate-700 px-2 py-0.5 text-xs text-white outline-hidden ring-1 ring-ogc-teal/40"
           />
         ) : (
           <button

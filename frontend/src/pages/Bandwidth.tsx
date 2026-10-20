@@ -66,7 +66,7 @@ export default function Bandwidth() {
     setSchedule((s) => s.filter((_, idx) => idx !== i));
   }
 
-  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+  const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
   return (
     <Layout>
@@ -81,7 +81,7 @@ export default function Bandwidth() {
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Tile title="Aktuelles Limit" value={status.effective_bwlimit_kbps === 0 ? "unbegrenzt" : `${status.effective_bwlimit_kbps} KB/s`} />
           <div className="rounded-2xl bg-slate-800/60 p-5 shadow-lg ring-1 ring-white/5">
-            <div className="mb-3 h-1.5 w-12 rounded-full bg-gradient-to-r from-ogc-blue to-ogc-indigo" />
+            <div className="mb-3 h-1.5 w-12 rounded-full bg-linear-to-r from-ogc-blue to-ogc-indigo" />
             <div className="text-sm font-medium text-slate-400">Zuletzt gemessen</div>
             <div className="mt-1 text-2xl font-bold text-white">
               {status.last_kbps > 0 ? `${status.last_kbps.toFixed(0)} KB/s` : "—"}
@@ -129,7 +129,7 @@ export default function Bandwidth() {
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-300">Zeitfenster</span>
-            <button type="button" onClick={addWindow} className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5">
+            <button type="button" onClick={addWindow} className="rounded-sm border border-white/10 px-2 py-1 text-xs hover:bg-white/5">
               + Fenster
             </button>
           </div>
@@ -161,7 +161,7 @@ export default function Bandwidth() {
         </div>
 
         <div className="mt-6 flex items-center gap-3">
-          <button type="submit" className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 font-semibold text-white">
+          <button type="submit" className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 font-semibold text-white">
             Speichern
           </button>
           {saved && <span className="text-sm text-emerald-300">Gespeichert.</span>}
@@ -184,7 +184,7 @@ function Tile({
 }) {
   return (
     <div className="rounded-2xl bg-slate-800/60 p-5 shadow-lg ring-1 ring-white/5">
-      <div className={`mb-3 h-1.5 w-12 rounded-full bg-gradient-to-r ${accent}`} />
+      <div className={`mb-3 h-1.5 w-12 rounded-full bg-linear-to-r ${accent}`} />
       <div className="text-sm font-medium text-slate-400">{title}</div>
       <div className="mt-1 text-2xl font-bold text-white">{value}</div>
       {hint && <div className="mt-1 text-xs text-slate-500">{hint}</div>}

@@ -75,7 +75,7 @@ export default function Search() {
   }, [query]);
 
   const field =
-    "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-none focus:border-ogc-teal/50";
+    "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-hidden focus:border-ogc-teal/50";
 
   const sort = useSort(results, RESULT_SORT, { key: "name" });
 
@@ -160,7 +160,7 @@ export default function Search() {
                 <a
                   href={downloadUrl(m.id)}
                   download
-                  className="shrink-0 self-start rounded border border-white/10 px-3 py-1 text-xs hover:bg-white/5 sm:self-center"
+                  className="shrink-0 self-start rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5 sm:self-center"
                 >
                   Download
                 </a>

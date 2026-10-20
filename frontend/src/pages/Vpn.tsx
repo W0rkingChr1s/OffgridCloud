@@ -99,7 +99,7 @@ export default function Vpn() {
             setEditing(null);
             setShowForm(true);
           }}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           + VPN
         </button>
@@ -177,7 +177,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       >
                         {active ? "verbunden" : "getrennt"}
                       </span>
-                      <span className="rounded bg-white/5 px-2 py-0.5 text-xs text-slate-400">
+                      <span className="rounded-sm bg-white/5 px-2 py-0.5 text-xs text-slate-400">
                         {TYPE_LABEL[t.type]}
                       </span>
                     </div>
@@ -200,7 +200,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       <button
                         onClick={() => disconnect(t)}
                         disabled={busyId === t.id}
-                        className="rounded border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-50"
+                        className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-50"
                       >
                         Trennen
                       </button>
@@ -208,7 +208,7 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                       <button
                         onClick={() => connect(t)}
                         disabled={busyId === t.id || (caps ? !caps.ready : false)}
-                        className="rounded bg-gradient-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+                        className="rounded-sm bg-linear-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         {busyId === t.id ? "…" : "Verbinden"}
                       </button>
@@ -218,13 +218,13 @@ docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
                         setEditing(t);
                         setShowForm(true);
                       }}
-                      className="rounded border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                      className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
                     >
                       Bearbeiten
                     </button>
                     <button
                       onClick={() => remove(t)}
-                      className="rounded border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10"
+                      className="rounded-sm border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10"
                     >
                       Löschen
                     </button>
@@ -297,7 +297,7 @@ function VpnForm({
   }
 
   const input =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
   const placeholder =
     type === "wireguard"
       ? "[Interface]\nPrivateKey = …\nAddress = 10.0.0.2/32\n\n[Peer]\nPublicKey = …\nEndpoint = deinanschluss.myfritz.net:51820\nAllowedIPs = 192.168.178.0/24"
@@ -377,7 +377,7 @@ function VpnForm({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {editing ? "Speichern" : "Anlegen"}
         </button>
