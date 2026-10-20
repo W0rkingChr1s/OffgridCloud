@@ -9,7 +9,10 @@ import {
   type NetworkStatus,
   type SystemNetwork,
 } from "../api";
+import Collapsible from "../components/Collapsible";
+import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 
 const NETWORK_SORT: SortOption<KnownNetwork>[] = [
@@ -112,7 +115,7 @@ export default function Network() {
 
       {data && (
         <>
-          <FallbackSettings settings={data.settings} onSaved={load} onError={report} />
+          <FallbackCard settings={data.settings} onSaved={load} onError={report} />
           <KnownNetworks
             networks={data.known_networks}
             systemNetworks={data.system_networks ?? []}
@@ -161,6 +164,61 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FallbackCard({
+  settings,
+  onSaved,
+  onError,
+}: {
+  settings: NetworkSettings;
+  onSaved: () => void;
+  onError: (e: unknown) => void;
+}) {
+  async function toggle(enabled: boolean) {
+    try {
+      await api<NetworkSettings>("/api/network/settings", {
+        method: "PUT",
+        body: JSON.stringify({ fallback_enabled: enabled }),
+      });
+      onSaved();
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={settings.fallback_enabled}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+        <span className="text-sm">
+          <span className="inline-flex items-center gap-1.5 font-medium text-white">
+            Rückfall-WLAN
+            <InfoTip text="Ist kein hinterlegtes Netzwerk erreichbar, öffnet die Box automatisch ihren eigenen Access Point, damit das Feld-Team weiter hochladen kann. Sobald ein hinterlegtes Netzwerk wieder erreichbar ist, verlässt sie den AP." />
+          </span>
+          <span className="mt-0.5 block text-xs text-slate-500">
+            {settings.fallback_enabled
+              ? "Eigenes WLAN, wenn kein bekanntes Netz erreichbar ist."
+              : "Aus – ohne bekanntes Netz ist die Box nicht erreichbar."}
+          </span>
+        </span>
+      </label>
+      <div className="mt-4">
+        <Collapsible
+          nested
+          title="AP-Einstellungen"
+          summary={`${settings.ap_ssid} · ${settings.ap_has_password ? "mit Passwort" : "offen"} · ${settings.ap_address}`}
+        >
+          <FallbackSettings settings={settings} onSaved={onSaved} onError={onError} />
+        </Collapsible>
+      </div>
+    </div>
+  );
+}
+
 function FallbackSettings({
   settings,
   onSaved,
@@ -191,23 +249,7 @@ function FallbackSettings({
   }
 
   return (
-    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-      <label className="mb-4 flex items-start gap-3">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={form.fallback_enabled}
-          onChange={(e) => save({ fallback_enabled: e.target.checked })}
-        />
-        <span className="text-sm">
-          <span className="font-medium text-white">Rückfall-WLAN aktivieren</span>
-          <span className="mt-0.5 block text-xs text-slate-500">
-            Ist kein hinterlegtes Netzwerk erreichbar, öffnet die Box automatisch ihren eigenen
-            Access Point, damit das Feld-Team weiter hochladen kann.
-          </span>
-        </span>
-      </label>
-
+    <div>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm">
           <span className="mb-1 block text-slate-400">AP-Name (SSID)</span>
@@ -357,6 +399,7 @@ function KnownNetworks({
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [priority, setPriority] = useState(0);
+  const [adding, setAdding] = useState(false);
   const sort = useSort(networks, NETWORK_SORT, { key: "priority", dir: "desc" });
 
   async function add() {
@@ -369,6 +412,7 @@ function KnownNetworks({
       setSsid("");
       setPassword("");
       setPriority(0);
+      setAdding(false);
       onChanged();
     } catch (e) {
       onError(e);
@@ -386,55 +430,75 @@ function KnownNetworks({
 
   return (
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-      <div className="mb-1 text-sm font-medium text-white">Hinterlegte Netzwerke</div>
-      <p className="mb-4 text-xs text-slate-500">
-        WLANs, mit denen sich die Box automatisch verbindet. Höhere Priorität wird bevorzugt. Ist
-        eines erreichbar, verlässt die Box den Rückfall-AP.
-      </p>
-
-      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
-        <input
-          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
-          placeholder="SSID"
-          value={ssid}
-          onChange={(e) => setSsid(e.target.value)}
-        />
-        <input
-          type="password"
-          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
-          placeholder="Passwort (leer = offen)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <input
-          type="number"
-          min={0}
-          className="w-24 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
-          placeholder="Prio"
-          value={priority}
-          onChange={(e) => setPriority(Number(e.target.value))}
-        />
-        <button
-          type="button"
-          onClick={add}
-          className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-white/5"
-        >
-          Hinzufügen
-        </button>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-white">
+          Hinterlegte Netzwerke
+          <InfoTip text="WLANs, mit denen sich die Box automatisch verbindet. Höhere Priorität wird bevorzugt. Ist eines erreichbar, verlässt die Box den Rückfall-AP. „System“-Netzwerke stammen aus der Betriebssystem-Einrichtung (z. B. Raspberry Pi Imager); sie lassen sich hier nicht bearbeiten, nur per nmtui/nmcli auf der Box." />
+        </div>
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5"
+          >
+            + Netzwerk hinzufügen
+          </button>
+        )}
       </div>
+
+      {adding && (
+        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto]">
+          <input
+            className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
+            placeholder="SSID"
+            autoFocus
+            value={ssid}
+            onChange={(e) => setSsid(e.target.value)}
+          />
+          <input
+            type="password"
+            className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
+            placeholder="Passwort (leer = offen)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <input
+            type="number"
+            min={0}
+            className="w-24 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
+            placeholder="Prio"
+            value={priority}
+            onChange={(e) => setPriority(Number(e.target.value))}
+          />
+          <button
+            type="button"
+            onClick={add}
+            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-white/5"
+          >
+            Hinzufügen
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(false)}
+            className="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white"
+          >
+            Abbrechen
+          </button>
+        </div>
+      )}
 
       {networks.length === 0 && systemNetworks.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Netzwerke hinterlegt.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
+        <div className="overflow-x-auto rounded-xl ring-1 ring-white/10">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
                 <SortTh sort={sort} field="ssid" className="py-2!">SSID</SortTh>
                 <SortTh sort={sort} field="priority" className="py-2!">Priorität</SortTh>
-                <SortTh sort={sort} field="password" className="py-2!">Passwort</SortTh>
-                <SortTh sort={sort} field="auto" className="py-2!">Auto</SortTh>
-                <th className="px-4 py-2"></th>
+                <SortTh sort={sort} field="password" className="hidden py-2! sm:table-cell">Passwort</SortTh>
+                <SortTh sort={sort} field="auto" className="hidden py-2! sm:table-cell">Auto</SortTh>
+                <th className="px-4 py-2" aria-label="Aktionen" />
               </tr>
             </thead>
             <tbody>
@@ -442,16 +506,14 @@ function KnownNetworks({
                 <tr key={n.id} className="border-t border-white/5 bg-slate-900/40">
                   <td className="px-4 py-2 font-medium text-white">{n.ssid}</td>
                   <td className="px-4 py-2 text-slate-400">{n.priority}</td>
-                  <td className="px-4 py-2 text-slate-400">{n.has_password ? "🔒" : "offen"}</td>
-                  <td className="px-4 py-2 text-slate-400">{n.autoconnect ? "ja" : "nein"}</td>
-                  <td className="px-4 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => remove(n.id)}
-                      className="rounded-lg px-2 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                    >
-                      Entfernen
-                    </button>
+                  <td className="hidden px-4 py-2 text-slate-400 sm:table-cell">{n.has_password ? "🔒" : "offen"}</td>
+                  <td className="hidden px-4 py-2 text-slate-400 sm:table-cell">{n.autoconnect ? "ja" : "nein"}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex justify-end">
+                      <MoreMenu
+                        items={[{ label: `„${n.ssid}“ entfernen`, danger: true, onClick: () => remove(n.id) }]}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -472,21 +534,14 @@ function KnownNetworks({
                     )}
                   </td>
                   <td className="px-4 py-2 text-slate-400">{n.priority}</td>
-                  <td className="px-4 py-2 text-slate-400">{n.has_password ? "🔒" : "offen"}</td>
-                  <td className="px-4 py-2 text-slate-400">{n.autoconnect ? "ja" : "nein"}</td>
-                  <td className="px-4 py-2 text-right text-xs text-slate-500">vom System</td>
+                  <td className="hidden px-4 py-2 text-slate-400 sm:table-cell">{n.has_password ? "🔒" : "offen"}</td>
+                  <td className="hidden px-4 py-2 text-slate-400 sm:table-cell">{n.autoconnect ? "ja" : "nein"}</td>
+                  <td className="px-4 py-2" />
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
-      {systemNetworks.length > 0 && (
-        <p className="mt-3 text-xs text-slate-500">
-          „System“-Netzwerke stammen aus der Betriebssystem-Einrichtung (z. B. Raspberry Pi Imager)
-          und werden ebenfalls automatisch verbunden. Sie lassen sich hier nicht bearbeiten — nur
-          per <code>nmtui</code>/<code>nmcli</code> auf der Box.
-        </p>
       )}
     </div>
   );
