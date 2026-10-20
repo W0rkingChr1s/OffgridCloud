@@ -48,6 +48,7 @@ def _status(db: Session) -> SystemStatusOut:
         notify_on_bandwidth=settings_row.notify_on_bandwidth,
         telegram_chat_id=settings_row.telegram_chat_id,
         telegram_configured=bool(settings_row.telegram_bot_token_encrypted),
+        telegram_conflict=telegram_bot.poll_conflict(),
         smtp_host=settings_row.smtp_host,
         smtp_port=settings_row.smtp_port,
         smtp_username=settings_row.smtp_username,

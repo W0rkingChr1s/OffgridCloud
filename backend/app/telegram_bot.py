@@ -55,6 +55,10 @@ POLL_TIMEOUT = 20  # seconds Telegram holds a getUpdates long-poll open
 IDLE_INTERVAL = 30.0  # no token configured -> re-check settings this often
 ERROR_BACKOFF = 30.0  # network/server error -> wait before the next poll
 AUTH_BACKOFF = 300.0  # 401: token revoked/wrong -> don't hammer the API
+# 409 from another getUpdates: a second box polls with the same token. Telegram
+# allows only one poller per bot, so back off far enough that the other box gets
+# a clean run instead of both stealing each other's updates.
+CONFLICT_BACKOFF = 120.0
 # Commands queued while the box was offline are still answered once it is back,
 # but only if they are reasonably fresh — a "/retry" from yesterday is noise.
 MAX_COMMAND_AGE = 15 * 60
@@ -987,8 +991,9 @@ def request_speedtest(now: float | None = None) -> Reply:
 
 def reset_state() -> None:
     """Forget pending power prompts / speedtest lock + cooldown (used by tests)."""
-    global _speedtest_last_start
+    global _speedtest_last_start, _poll_conflict
     _speedtest_last_start = None
+    _poll_conflict = False
     with _pending_lock:
         _pending_power.clear()
     if _speedtest_lock.locked():
@@ -1038,6 +1043,26 @@ def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | 
 # --- Polling loop ---------------------------------------------------------
 
 
+# Set while Telegram rejects our getUpdates because another instance polls with
+# the same token. Read by the portal status, so the admin sees the cause.
+_poll_conflict = False
+
+
+def poll_conflict() -> bool:
+    """``True`` if the last poll round lost to another poller on the same bot."""
+    return _poll_conflict
+
+
+def _set_poll_conflict(value: bool) -> None:
+    global _poll_conflict
+    if value and not _poll_conflict:
+        logger.warning(
+            "Telegram: another instance polls with the same bot token — "
+            "give every box its own bot (@BotFather)"
+        )
+    _poll_conflict = value
+
+
 class BotPoller:
     """Long-polls ``getUpdates`` and answers commands. Re-reads the token and
     chat ID from the settings each round, so portal changes apply live."""
@@ -1061,11 +1086,13 @@ class BotPoller:
         token, chat_id = self._credentials()
         if not token:
             self._token = ""
+            _set_poll_conflict(False)
             return IDLE_INTERVAL
         if token != self._token:
             # New/changed bot: reset the cursor and (re)install the profile so
             # existing installs get the command menu after an update too.
             self._token, self._offset = token, None
+            _set_poll_conflict(False)
             setup_profile(token, chat_id)
         try:
             report_update_result(token)
@@ -1084,9 +1111,14 @@ class BotPoller:
             if exc.code == 401:
                 logger.warning("Telegram token rejected (401) — check the bot token")
                 return AUTH_BACKOFF
+            if exc.code == 409 and "webhook" not in str(exc).lower():
+                # "terminated by other getUpdates request": a second box uses
+                # this bot. Deleting a webhook wouldn't help; say what's wrong.
+                _set_poll_conflict(True)
+                return CONFLICT_BACKOFF
             if exc.code == 409:
-                # A webhook is set (or another poller runs): we can only poll
-                # without one. Pending updates are kept.
+                # A webhook is set: we can only poll without one. Pending
+                # updates are kept.
                 logger.info("Telegram webhook active — removing it to allow polling")
                 try:
                     api_call(token, "deleteWebhook", {"drop_pending_updates": False})
@@ -1099,6 +1131,7 @@ class BotPoller:
             logger.debug("getUpdates failed: %s", exc)
             return ERROR_BACKOFF
 
+        _set_poll_conflict(False)
         now = time.time() if now is None else now
         for update in updates or []:
             self._offset = int(update["update_id"]) + 1

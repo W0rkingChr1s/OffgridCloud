@@ -556,8 +556,15 @@ function NotificationsCard({
         <Collapsible nested title="Telegram" summary={configured(status.telegram_configured && !!status.telegram_chat_id)}>
           <p className="mb-3 flex items-center gap-1.5 text-xs text-slate-500">
             Bot bei @BotFather anlegen, Token eintragen, Chat-ID per /id beim Bot erfragen.
-            <InfoTip text="Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin (Infos ändern, Anheften), benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Befehle: /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart, /reboot, /shutdown und /update (jeweils mit Bestätigung per Button), /hilfe – kein eigener Server und kein offener Port nötig." />
+            <InfoTip text="Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin (Infos ändern, Anheften), benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Befehle: /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart, /reboot, /shutdown und /update (jeweils mit Bestätigung per Button), /hilfe – kein eigener Server und kein offener Port nötig. Jede Box braucht ihren eigenen Bot: Telegram lässt pro Bot-Token nur eine Box Befehle abholen." />
           </p>
+          {status.telegram_conflict && (
+            <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300 ring-1 ring-amber-500/30">
+              Eine andere Box nutzt denselben Bot-Token. Telegram erlaubt pro Bot nur einen
+              Empfänger, deshalb kommen Befehle und Buttons hier nicht zuverlässig an. Lege bei
+              @BotFather für jede Box einen eigenen Bot an. Meldungen werden weiter gesendet.
+            </p>
+          )}
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-1 block text-slate-400">Bot-Token</span>
