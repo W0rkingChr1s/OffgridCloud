@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import pool as pool_core
-from . import pool_priority
+from . import pool_priority, pool_share
 from .admin_ops import LOW_SPACE_FRACTION, LOW_SPACE_MIN_BYTES
 from .models import PoolPeer
 
@@ -129,7 +129,7 @@ _states: dict[int, PeerState] = {}
 
 
 def check_once(db: Session) -> list[str]:
-    """Poll the enabled peers, update state, apply priorities, send one bundled alert."""
+    """Poll the peers, update state, apply priorities + fair share, send one alert."""
     peers = list(db.scalars(select(PoolPeer).where(PoolPeer.enabled.is_(True))))
     polled = pool_core.poll_peers(peers) if peers else {}
     lines: list[tuple[str, str]] = []  # (box key, alert line)
@@ -141,14 +141,22 @@ def check_once(db: Session) -> list[str]:
             _states[peer.id], peer_lines = evaluate(peer.name, _states.get(peer.id), status)
             lines += [(f"peer:{peer.id}", line) for line in peer_lines]
         # Priorities between boxes on a shared line act on what we just polled.
+        paused_now: dict[str, bool] = {}
         for key, line, paused in pool_priority.apply_round(db, peers, polled):
             if line.startswith("✋"):
                 # Says more than the plain "Uploads fortgesetzt" for the same box.
                 lines = [(k, x) for k, x in lines if not (k == key and x.startswith("▶️"))]
             lines.append((key, line))
+            if paused is not None:
+                paused_now[key] = paused
             state = _states.get(int(key.split(":")[1])) if key.startswith("peer:") else None
             if state is not None and paused is not None:
                 state.paused = paused  # our own doing: no extra "Uploads pausiert" next round
+        # Then split the line among the boxes still sending after that.
+        nodes = pool_priority.collect(db, peers, polled)
+        for node in nodes:
+            node.paused = paused_now.get(node.key, node.paused)
+        lines += [(key, line) for key, line, _ in pool_share.apply_round(db, peers, nodes)]
     texts = [line for _, line in lines]
     if texts:
         _send(db, texts)

@@ -398,6 +398,12 @@ class BandwidthPolicy(Base):
     # Manual stop: no new uploads start until an admin (or, if allowed, a pool
     # hub) resumes them. Uploads already running finish normally.
     uploads_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Share of a shared uplink assigned by a pool hub (KiB/s, 0 = none). Applies
+    # on top of bwlimit_kbps (the lower wins) and lapses at pool_limit_until
+    # unless the hub renews it, so a vanished hub never throttles us for good.
+    pool_limit_kbps: Mapped[int] = mapped_column(default=0)
+    pool_limit_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    pool_limit_by: Mapped[str] = mapped_column(String(100), default="")
 
 
 class SystemSettings(Base):
@@ -434,6 +440,9 @@ class SystemSettings(Base):
     pool_priority_self: Mapped[int] = mapped_column(default=0)  # 0 = not managed, 1 = high … 3
     # This box's uploads were paused by that rule (only the rule resumes them).
     pool_priority_paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Hub only: split this capacity (KiB/s) fairly among the ranked boxes (app.pool_share).
+    pool_share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    pool_share_kbps: Mapped[int] = mapped_column(default=0)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

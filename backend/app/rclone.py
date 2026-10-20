@@ -10,13 +10,20 @@ orchestration arrives in Phase 4.
 
 from __future__ import annotations
 
+import base64
 import json
+import logging
 import os
+import secrets
 import shutil
+import socket
 import subprocess
+import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .bonding import apply_proxy
 from .config import get_settings
@@ -148,6 +155,68 @@ def delete_remote(options: dict[str, str], dest: str) -> DeleteResult:
     return DeleteResult(False, tail or "Löschen fehlgeschlagen")
 
 
+logger = logging.getLogger(__name__)
+
+
+# --- Live bandwidth control (rclone rc) -------------------------------------
+# rclone takes --bwlimit when an upload starts. To change it while a long
+# upload runs (a pool hub re-splitting a shared line, a schedule window
+# starting), every upload also opens rclone's remote-control API on a free
+# localhost port with a one-off random password, passed via the environment so
+# it never shows up in `ps`. The worker then calls core/bwlimit on it.
+
+
+@dataclass
+class LiveUpload:
+    """A running upload whose bandwidth limit can be changed on the fly."""
+
+    url: str
+    user: str
+    password: str = field(repr=False)
+    kbps: int  # limit currently in effect, KiB/s (0 = unlimited)
+
+
+_live_lock = threading.Lock()
+_live: dict[int, LiveUpload] = {}  # id(LiveUpload) -> upload
+
+
+def live_uploads() -> list[LiveUpload]:
+    with _live_lock:
+        return list(_live.values())
+
+
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _rc_rate(kbps: int) -> str:
+    return f"{kbps}k" if kbps > 0 else "off"
+
+
+# Localhost only: never route the rc call through a configured HTTP proxy.
+_rc_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def set_live_limit(upload: LiveUpload, kbps: int, timeout: float = 2.0) -> bool:
+    """Change a running upload's limit via core/bwlimit. Never raises."""
+    token = base64.b64encode(f"{upload.user}:{upload.password}".encode()).decode()
+    req = urllib.request.Request(
+        f"{upload.url}/core/bwlimit",
+        data=json.dumps({"rate": _rc_rate(kbps)}).encode(),
+        headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with _rc_opener.open(req, timeout=timeout) as resp:
+            resp.read()
+    except (urllib.error.URLError, OSError, ValueError):
+        return False  # upload just ended, or rclone too old: the start limit stays
+    upload.kbps = kbps
+    return True
+
+
 @dataclass
 class UploadResult:
     ok: bool
@@ -174,6 +243,25 @@ def run_upload(
     if shutil.which(binary) is None:
         return UploadResult(False, 0, f"rclone ('{binary}') ist nicht installiert")
 
+    live = get_settings().rclone_live_limits
+    result = _run_copyto(binary, local_path, options, dest, bwlimit_kbps, on_progress, live)
+    if live and not result.ok and "address already in use" in result.message.lower():
+        # Someone took the rc port between picking and binding it: just go
+        # without live limits rather than failing the upload.
+        logger.info("rclone rc port taken, retrying upload without live limits")
+        result = _run_copyto(binary, local_path, options, dest, bwlimit_kbps, on_progress, False)
+    return result
+
+
+def _run_copyto(
+    binary: str,
+    local_path: str,
+    options: dict[str, str],
+    dest: str,
+    bwlimit_kbps: int,
+    on_progress: Callable[[int, int, float], None] | None,
+    live: bool,
+) -> UploadResult:
     cmd = [
         binary, "copyto", local_path, f"{_REMOTE}:{dest}",
         "--use-json-log", "--stats", "1s", "--stats-log-level", "NOTICE",
@@ -181,9 +269,19 @@ def run_upload(
     ]
     if bwlimit_kbps and bwlimit_kbps > 0:
         cmd += ["--bwlimit", f"{bwlimit_kbps}k"]
-    last_bytes = 0
-    last_speed = 0.0
-    err_tail = ""
+    env = _remote_env(options)
+    handle: LiveUpload | None = None
+    if live:
+        port = _free_port()
+        handle = LiveUpload(
+            url=f"http://127.0.0.1:{port}",
+            user="ogc",
+            password=secrets.token_urlsafe(24),
+            kbps=max(0, bwlimit_kbps or 0),
+        )
+        cmd += ["--rc", "--rc-addr", f"127.0.0.1:{port}"]
+        env["RCLONE_RC_USER"] = handle.user
+        env["RCLONE_RC_PASS"] = handle.password
     started = time.monotonic()
     try:
         proc = subprocess.Popen(
@@ -191,11 +289,29 @@ def run_upload(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
-            env=_remote_env(options),
+            env=env,
         )
     except OSError as exc:  # pragma: no cover
         return UploadResult(False, 0, str(exc))
+    if handle is not None:
+        with _live_lock:
+            _live[id(handle)] = handle
+    try:
+        return _follow(proc, started, on_progress)
+    finally:
+        if handle is not None:
+            with _live_lock:
+                _live.pop(id(handle), None)
 
+
+def _follow(
+    proc: subprocess.Popen,
+    started: float,
+    on_progress: Callable[[int, int, float], None] | None,
+) -> UploadResult:
+    last_bytes = 0
+    last_speed = 0.0
+    err_tail = ""
     assert proc.stderr is not None
     for line in proc.stderr:
         line = line.strip()
@@ -213,7 +329,8 @@ def run_upload(
             last_speed = float(stats.get("speed", last_speed) or last_speed)
             if on_progress:
                 on_progress(last_bytes, total, last_speed / 1024.0)
-        elif obj.get("level") == "error" and obj.get("msg"):
+        elif obj.get("level") in ("error", "critical", "fatal") and obj.get("msg"):
+            # rclone logs fatal startup problems (e.g. rc port taken) as "critical".
             err_tail = obj["msg"]
 
     proc.wait()

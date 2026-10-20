@@ -10,12 +10,14 @@ revoked without touching the others. Everything else is admin-only management
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import __version__
+from .. import __version__, bandwidth
 from .. import pool as pool_core
 from .. import transfers as transfers_core
 from ..admin_ops import audit, get_system_settings
@@ -36,6 +38,8 @@ from ..schemas import (
     PoolAccessTokenCreated,
     PoolAccessTokenOut,
     PoolAccessTokenUpdate,
+    PoolLimitIn,
+    PoolLimitOut,
     PoolNodeStatus,
     PoolOverviewOut,
     PoolPeerCreate,
@@ -140,6 +144,25 @@ def pool_control(
     message = transfers_core.apply_control(db, payload.action)
     audit(db, None, f"pool.remote_{payload.action}", f"{message} – {caller}")
     return TransferControlOut(**transfers_core.control_state(db), message=message)
+
+
+@router.post("/limit", response_model=PoolLimitOut)
+def pool_limit(
+    payload: PoolLimitIn,
+    x_pool_token: str | None = Header(default=None, alias="X-Pool-Token"),
+    x_pool_hub: str | None = Header(default=None, alias="X-Pool-Hub"),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> PoolLimitOut:
+    """A hub sets this box's share of a shared uplink (renewed every minute)."""
+    caller = _authorize_peer_call(db, x_pool_token, x_pool_hub, authorization, control=True)
+    now = datetime.utcnow()
+    changed = bandwidth.set_pool_limit(db, payload.kbps, caller, now)
+    if changed:  # renewals of the same value are not news
+        detail = f"{payload.kbps} KiB/s" if payload.kbps else "aufgehoben"
+        audit(db, None, "pool.remote_limit", f"Leitungsanteil {detail} – {caller}")
+    active = bandwidth.active_pool_limit(bandwidth.get_policy(db), now)
+    return PoolLimitOut(pool_limit_kbps=active, changed=changed)
 
 
 # Hubs show at most this many jobs per peer; the list is for spotting problems.
@@ -521,7 +544,12 @@ def get_priority(
     nodes = [own]
     for peer in db.scalars(select(PoolPeer).order_by(PoolPeer.name)):
         nodes.append(PoolPriorityNode(peer_id=peer.id, name=peer.name, level=peer.priority))
-    return PoolPriorityOut(enabled=row.pool_priority_enabled, nodes=nodes)
+    return PoolPriorityOut(
+        enabled=row.pool_priority_enabled,
+        nodes=nodes,
+        share_enabled=row.pool_share_enabled,
+        share_kbps=row.pool_share_kbps,
+    )
 
 
 @router.put("/priority", response_model=PoolPriorityOut)
@@ -531,6 +559,12 @@ def update_priority(
     """Rank boxes that share one uplink. Takes effect on the next watch round."""
     row = get_system_settings(db)
     row.pool_priority_enabled = payload.enabled
+    if payload.share_enabled is not None:
+        row.pool_share_enabled = payload.share_enabled
+    if payload.share_kbps is not None:
+        row.pool_share_kbps = payload.share_kbps
+    if row.pool_share_enabled and row.pool_share_kbps <= 0:
+        raise HTTPException(status_code=422, detail="Kapazität der Leitung angeben (KB/s)")
     for node in payload.nodes:
         if node.peer_id is None:
             row.pool_priority_self = node.level
@@ -542,7 +576,9 @@ def update_priority(
     db.commit()
     result = get_priority(admin, db)
     ranks = ", ".join(f"{n.name}={n.level}" for n in result.nodes if n.level)
-    audit(db, admin, "pool.priority", f"{'an' if row.pool_priority_enabled else 'aus'}: {ranks}")
+    share = f"{row.pool_share_kbps} KiB/s" if row.pool_share_enabled else "aus"
+    state = "an" if row.pool_priority_enabled else "aus"
+    audit(db, admin, "pool.priority", f"Vorrang {state}, fair teilen {share}: {ranks}")
     return result
 
 

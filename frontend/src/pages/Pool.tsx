@@ -77,6 +77,14 @@ function NodeCard({
                 diese Box
               </span>
             )}
+            {node.pool_limit_kbps > 0 && (
+              <span
+                title="Anteil an der gemeinsamen Leitung"
+                className="rounded-sm bg-ogc-teal/15 px-1.5 py-0.5 text-[10px] text-ogc-teal"
+              >
+                ≤ {node.pool_limit_kbps} KB/s
+              </span>
+            )}
             {node.priority > 0 && (
               <span
                 title="Rang bei gemeinsamer Leitung"
@@ -360,9 +368,10 @@ function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; o
   const ranked = prio.nodes.filter((n) => n.level > 0);
   // Only boxes below the top rank ever get paused — they need the "control" right.
   const top = Math.min(...ranked.map((n) => n.level));
+  // Fair sharing sets a limit on every ranked box, so then all of them need it.
   const readOnly = ranked.filter(
     (n) =>
-      n.level > top &&
+      (prio.share_enabled || (prio.enabled && n.level > top)) &&
       n.peer_id !== null &&
       overview?.peers.find((p) => p.peer_id === n.peer_id && p.reachable && !p.control_enabled),
   );
@@ -371,23 +380,58 @@ function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; o
     <div className="mb-8 rounded-2xl bg-slate-800/40 p-4 ring-1 ring-white/10">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Vorrang bei gemeinsamer Leitung
+          Gemeinsame Leitung
         </h3>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={prio.enabled}
-            onChange={(e) => update({ enabled: e.target.checked })}
-          />
-          aktiv
-        </label>
       </div>
       <p className="mb-3 text-sm text-slate-400">
         Nur für Boxen, die sich <strong>eine</strong> Leitung teilen (z. B. ein Starlink am
-        Einsatzort). Solange eine Box mit höherem Rang etwas sendet, pausiert der Hub Boxen mit
-        niedrigerem Rang und setzt sie danach fort. Boxen mit eigenem Uplink auf „nicht verwaltet“
+        Einsatzort): diesen Boxen einen Rang geben. Boxen mit eigenem Uplink auf „nicht verwaltet“
         lassen — sonst verschenken sie Bandbreite.
       </p>
+      <div className="mb-3 space-y-2 text-sm text-slate-300">
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={prio.enabled}
+            onChange={(e) => update({ enabled: e.target.checked })}
+          />
+          <span>
+            <strong>Vorrang</strong>: Solange eine Box mit höherem Rang etwas sendet, pausiert der
+            Hub Boxen mit niedrigerem Rang und setzt sie danach fort.
+          </span>
+        </label>
+        <label className="flex cursor-pointer flex-wrap items-start gap-2">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={prio.share_enabled}
+            onChange={(e) => update({ share_enabled: e.target.checked })}
+          />
+          <span className="flex-1">
+            <strong>Bandbreite fair teilen</strong>: Die sendenden Boxen teilen sich die
+            Kapazität der Leitung zu gleichen Teilen (jede Minute neu verteilt, wirkt auch auf
+            laufende Uploads).
+            {prio.share_enabled && (
+              <span className="mt-1 flex items-center gap-2">
+                Kapazität
+                <input
+                  type="number"
+                  min={1}
+                  className="w-28 rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white"
+                  value={prio.share_kbps || ""}
+                  onChange={(e) => update({ share_kbps: Number(e.target.value) })}
+                  aria-label="Kapazität der Leitung in KB/s"
+                />
+                KB/s
+                <span className="text-xs text-slate-500">
+                  (gemessener Upload der Leitung, besser etwas darunter)
+                </span>
+              </span>
+            )}
+          </span>
+        </label>
+      </div>
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {prio.nodes.map((n, i) => (
           <label
@@ -416,10 +460,10 @@ function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; o
           </label>
         ))}
       </div>
-      {prio.enabled && ranked.length === 1 && (
+      {(prio.enabled || prio.share_enabled) && ranked.length === 1 && (
         <p className="mb-2 text-xs text-amber-300">Mindestens zwei Boxen brauchen einen Rang.</p>
       )}
-      {prio.enabled && readOnly.length > 0 && (
+      {readOnly.length > 0 && (
         <p className="mb-2 text-xs text-amber-300">
           Wirkt nicht bei {readOnly.map((n) => n.name).join(", ")}: deren Token für diesen Hub darf
           nur lesen. Dort unter „Zugriff für Hubs“ auf „Lesen + steuern“ stellen.
@@ -427,7 +471,7 @@ function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; o
       )}
       <button
         onClick={save}
-        disabled={!dirty}
+        disabled={!dirty || (prio.share_enabled && !(prio.share_kbps > 0))}
         className="rounded-lg border border-white/10 px-4 py-1.5 text-sm hover:bg-white/5 disabled:opacity-40"
       >
         Speichern

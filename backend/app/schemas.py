@@ -391,6 +391,8 @@ class BandwidthStatusOut(BaseModel):
     parallel_uploads: int = 1  # uploads running at the same time (1-4)
     running_uploads: int = 0  # how many run right now
     uploads_paused: bool = False  # manually stopped (Transfers page or pool hub)
+    pool_limit_kbps: int = 0  # uplink share assigned by a pool hub (KiB/s, 0 = none)
+    pool_limit_by: str = ""  # which hub
 
 
 class DiskUsageOut(BaseModel):
@@ -750,6 +752,7 @@ class PoolNodeStatus(BaseModel):
     failed_transfers: int = 0
     control_enabled: bool = False  # the caller's token may control transfers here
     pending_transfers: int | None = None  # waiting + running; None from older peers
+    pool_limit_kbps: int = 0  # uplink share a hub assigned (KiB/s, 0 = none)
     # Hub view only: rank on a shared uplink and whether that rule paused it.
     priority: int = 0
     priority_paused: bool = False
@@ -886,17 +889,32 @@ class PoolPriorityNode(BaseModel):
 class PoolPriorityOut(BaseModel):
     enabled: bool
     nodes: list[PoolPriorityNode]
+    share_enabled: bool = False  # split share_kbps fairly among ranked boxes
+    share_kbps: int = 0  # capacity of the shared line, KiB/s
 
 
 class PoolPriorityIn(BaseModel):
     enabled: bool
     nodes: list[PoolPriorityNode] = []
+    share_enabled: bool | None = None
+    share_kbps: int | None = Field(default=None, ge=0, le=10_000_000)
 
 
 class TransferControlIn(BaseModel):
     """One manual transfer action, locally or sent by a pool hub."""
 
     action: Literal["pause", "resume", "retry_failed"]
+
+
+class PoolLimitIn(BaseModel):
+    """A hub assigns this box its share of a shared uplink (0 clears it)."""
+
+    kbps: int = Field(ge=0, le=10_000_000)
+
+
+class PoolLimitOut(BaseModel):
+    pool_limit_kbps: int
+    changed: bool
 
 
 class TransferControlOut(BaseModel):

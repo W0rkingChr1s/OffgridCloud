@@ -115,6 +115,8 @@ export interface BandwidthStatus {
   parallel_uploads: number;
   running_uploads: number;
   uploads_paused: boolean;
+  pool_limit_kbps: number; // share assigned by a pool hub (0 = none)
+  pool_limit_by: string;
 }
 
 /** A network link as net-merge sees it (link bundling). */
@@ -630,6 +632,7 @@ export interface PoolNodeStatus {
   pending_transfers: number | null;
   priority: number; // 0 = not managed, 1 = high … 3 = low (hub view)
   priority_paused: boolean;
+  pool_limit_kbps: number; // share of a shared line assigned by a hub (0 = none)
 }
 
 export interface PoolTotals {
@@ -700,6 +703,8 @@ export interface PoolPriorityNode {
 export interface PoolPriority {
   enabled: boolean;
   nodes: PoolPriorityNode[];
+  share_enabled: boolean;
+  share_kbps: number; // capacity of the shared line
 }
 
 export interface PairingCode {
