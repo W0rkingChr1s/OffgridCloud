@@ -5,11 +5,15 @@ import {
   type BandwidthStatus,
   type BandwidthWindow,
   type MeteredMode,
+  type NetworkStatus,
 } from "../api";
 import Layout from "../components/Layout";
+import UplinkDiagram from "../components/UplinkDiagram";
 
 export default function Bandwidth() {
   const [status, setStatus] = useState<BandwidthStatus | null>(null);
+  // Which links exist (cable, Wi-Fi, phone) — for the bundling diagram.
+  const [net, setNet] = useState<NetworkStatus | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [minKbps, setMinKbps] = useState(0);
   const [bwlimit, setBwlimit] = useState(0);
@@ -37,6 +41,7 @@ export default function Bandwidth() {
     api<BandwidthStatus>("/api/bandwidth")
       .then(apply)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Fehler"));
+    api<NetworkStatus>("/api/network/status").then(setNet).catch(() => setNet(null));
   }
   useEffect(load, []);
 
@@ -84,6 +89,12 @@ export default function Bandwidth() {
   function removeWindow(i: number) {
     setSchedule((s) => s.filter((_, idx) => idx !== i));
   }
+
+  const uplinks = net?.links ?? [];
+  // Interfaces net-merge reports that aren't uplinks in the diagram (wg0, docker0 …).
+  const otherBondingLinks = (status?.bonding_links ?? []).filter(
+    (l) => !uplinks.some((u) => u.device === l.name),
+  );
 
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
@@ -204,10 +215,16 @@ export default function Bandwidth() {
             {status && (
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  status.metered ? "bg-amber-500/20 text-amber-200" : "bg-white/5 text-slate-400"
+                  status.metered || net?.metered_present
+                    ? "bg-amber-500/20 text-amber-200"
+                    : "bg-white/5 text-slate-400"
                 }`}
               >
-                {status.metered ? `aktiv: ${status.uplink}` : "gerade nicht getaktet"}
+                {status.metered
+                  ? `aktiv: ${status.uplink}`
+                  : net?.metered_present
+                    ? "angeschlossen, nicht die Hauptleitung"
+                    : "gerade nicht getaktet"}
               </span>
             )}
           </div>
@@ -290,9 +307,25 @@ export default function Bandwidth() {
               <span className="text-sm text-slate-200">Uploads über alle Leitungen bündeln</span>
             </label>
           )}
-          {status && status.bonding_links.length > 0 && (
+          {status && uplinks.length > 0 && (
+            <div className="mt-4">
+              <UplinkDiagram
+                links={uplinks}
+                bonding={
+                  status.bonding_available
+                    ? {
+                        enabled: status.bonding_enabled,
+                        links: status.bonding_links,
+                        bypass: status.bonding_bypass ?? "",
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
+          {otherBondingLinks.length > 0 && (
             <ul className="mt-3 space-y-1 text-xs">
-              {status.bonding_links.map((l) => (
+              {otherBondingLinks.map((l) => (
                 <li key={l.name} className="flex flex-wrap gap-2">
                   <span className={l.used ? "font-semibold text-emerald-300" : "text-slate-500"}>
                     {l.used ? "✓" : "–"} {l.name}

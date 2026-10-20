@@ -30,7 +30,7 @@ import shutil
 import subprocess
 import threading
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from sqlalchemy import select
@@ -96,6 +96,18 @@ def validate_country(code: str) -> str:
 # Live status (nmcli)                                                          #
 # --------------------------------------------------------------------------- #
 @dataclass
+class Uplink:
+    """One connected link that can reach the internet (cable, Wi-Fi, phone)."""
+
+    device: str  # kernel name, e.g. eth0 / wlan0 / usb0 — what net-merge lists
+    kind: str  # ethernet | client | tether
+    label: str  # short German name for the UI, e.g. "WLAN MyRouter"
+    ip: str | None = None
+    metered: bool = False
+    primary: bool = False  # carries the default route (single-link uploads)
+
+
+@dataclass
 class NetworkStatus:
     """Snapshot of the box's connectivity for the admin UI."""
 
@@ -114,6 +126,7 @@ class NetworkStatus:
     metered: bool = False  # the uplink in use is metered (mobile data)
     metered_present: bool = False  # any connected link is metered, used or not
     uplink_ip: str | None = None  # IPv4 the box currently routes out through
+    links: list[Uplink] = field(default_factory=list)  # every uplink, primary first
     detail: str = ""  # human-readable note (why unsupported, etc.)
 
 
@@ -281,6 +294,25 @@ def build_status(
     if uplink is not None:
         details = info.get(uplink[1], {})
         status.metered = uplink[0] == "tether" or details.get("metered") == "yes"
+    for mode, dev in uplinks:
+        details = info.get(dev, {})
+        if mode == "tether":
+            label = TETHER_LABELS.get(status.tether or "", "Handy")
+        elif mode == "client":
+            label = "WLAN"
+        else:
+            label = "Kabel"
+        status.links.append(
+            Uplink(
+                device=dev,
+                kind=mode,
+                label=label,
+                ip=details.get("ip") or (status.wifi_ip if mode == "client" else None),
+                metered=mode == "tether" or details.get("metered") == "yes",
+                primary=(mode, dev) == uplink,
+            )
+        )
+    status.links.sort(key=lambda link: not link.primary)
     # Link bundling uses every link, not just the default route's — so it has
     # to know about a phone sitting in reserve too.
     status.metered_present = any(
@@ -368,6 +400,9 @@ def get_status(*, apply_wired: bool = False) -> NetworkStatus:
         ssid = _wifi_details(status.wifi_ssid).get("ssid")
         if ssid:
             status.wifi_ssid = ssid
+    for link in status.links:
+        if link.kind == "client" and status.wifi_ssid:
+            link.label = f"WLAN {status.wifi_ssid}"
     status.apply_wired = apply_wired
     return status
 

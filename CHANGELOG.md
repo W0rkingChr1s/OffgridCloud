@@ -14,6 +14,16 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Chat per Klick statt Chat-ID abtippen:** Der Assistent verlinkt direkt auf den Bot (Privatchat) bzw. „zu Gruppe hinzufügen“ und listet live alle Chats, die dem Bot gerade geschrieben oder ihn hinzugefügt haben. Ein Klick auf „Übernehmen“ speichert den Chat, der Bot begrüßt ihn sofort. Die Chat-ID von Hand einzutragen geht weiterhin.
 - Neue Token- oder Chat-Einstellungen gelten sofort: Der Bot wartet nicht mehr bis zu 30 s (bzw. 5 min nach einem falschen Token), bis er sie übernimmt.
 
+### 🔀 Leitungen auf einen Blick
+
+- **Schaubild „Box → Leitungen → Internet“** unter **Netzwerk** (sobald mehr als eine Leitung da ist) und unter **Bandbreite → Leitungsbündelung**: Jede Leitung (Kabel, WLAN, Handy) mit Status *aktiv*, *gebündelt*, *Reserve* oder *nicht gebündelt* samt Grund. Leitungen, über die gerade Uploads laufen, sind animiert.
+- **Bündelung ausgesetzt?** Das Schaubild sagt jetzt, warum Uploads trotz eingeschalteter Bündelung direkt gehen, z. B. weil ein Handy steckt und getaktete Verbindungen auf „pausieren“ oder „Tagesvolumen“ stehen.
+- **USB-Tethering ist nicht mehr zu übersehen:** Unter **Netzwerk** ein deutlicher Hinweis, ob das Handy die Box gerade online hält, mitgebündelt wird oder nur als Reserve steckt, inklusive der geltenden Upload-Regel. Im Dashboard erscheint ein Hinweis, solange Uploads über eine getaktete Verbindung laufen.
+
+### 🐛 Behoben
+
+- **`sudo /opt/offgridcloud/deploy/netmerge/install.sh`: command not found:** Die Bandbreiten-Seite verweist auf dieses Skript, der Installer hat es aber nur kopiert, wenn die Bündelung schon beim Installieren gewählt war. Es liegt jetzt immer dort (ausgeführt wird es weiterhin nur mit der Option).
+
 ## [0.7.1] – 2026-10-20
 
 Mehrere Boxen mit Telegram vertragen sich jetzt: Die Box erkennt einen geteilten Bot, und Befehle lassen sich gezielt an eine Box richten.
