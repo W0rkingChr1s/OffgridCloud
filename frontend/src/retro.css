@@ -28,7 +28,12 @@ html.retro [class*="bg-orange-"] {
   background: #0a0f0a !important;
 }
 
-html.retro [class*="bg-gradient"] {
+/* Tailwind 4 names gradients bg-linear-* / bg-radial-* / bg-conic-*
+   (v3: bg-gradient-to-*). */
+html.retro [class*="bg-gradient"],
+html.retro [class*="bg-linear"],
+html.retro [class*="bg-radial"],
+html.retro [class*="bg-conic"] {
   background: #0a1f0a !important;
 }
 
