@@ -724,5 +724,7 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  // Some endpoints answer 201 without a body — res.json() would throw on that.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
