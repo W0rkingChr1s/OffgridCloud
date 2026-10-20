@@ -45,6 +45,7 @@ PAGES: list[tuple[str, str, str, str, str]] = [
     ("VPN.md",                "VPN-Client",         "VPN-Client",         "🔐", "Ins Heimnetz einwählen (WireGuard/OpenVPN)"),
     ("MULTI-SERVER-POOL.md",  "Multi-Server-Pool",  "Multi-Server-Pool",  "🛰️", "Mehrere Boxen als Flotte"),
     ("CLIENT.md",             "Desktop-Client",     "Desktop-Client",     "💻", "Auto-Upload-Agent für macOS/Linux/Windows (Plan)"),
+    ("BLE-PROTOKOLL.md",      "BLE-Protokoll",      "BLE-Protokoll",      "📶", "Verwaltung per Bluetooth: GATT, Noise, Kopplung, RPC (Spezifikation)"),
     ("ENTWICKLUNGSPLAN.md",   "Entwicklungsplan",   "Entwicklungsplan",   "🗺️", "Roadmap in Phasen & Meilensteinen"),
 ]
 DOC_TO_PAGE = {doc: page for doc, page, _, _, _ in PAGES}
