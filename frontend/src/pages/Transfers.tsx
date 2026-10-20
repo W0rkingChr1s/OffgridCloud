@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type TransferJob } from "../api";
+import { api, ApiError, type TransferAction, type TransferControl, type TransferJob } from "../api";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 import { useEvents } from "../events";
@@ -24,11 +24,28 @@ export default function Transfers() {
   const snapshot = useEvents();
   const [jobs, setJobs] = useState<TransferJob[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [control, setControl] = useState<TransferControl | null>(null);
 
   function load() {
     api<TransferJob[]>("/api/transfers")
       .then(setJobs)
       .catch((e) => setError(e instanceof ApiError ? e.message : "Fehler"));
+    // Also catches a pause set remotely by a pool hub.
+    api<TransferControl>("/api/transfers/control").then(setControl).catch(() => setControl(null));
+  }
+
+  async function runControl(action: TransferAction) {
+    try {
+      setControl(
+        await api<TransferControl>("/api/transfers/control", {
+          method: "POST",
+          body: JSON.stringify({ action }),
+        }),
+      );
+      load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Fehler");
+    }
   }
   useEffect(() => {
     load();
@@ -60,17 +77,44 @@ export default function Transfers() {
 
   return (
     <Layout>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold">Transfers</h2>
-        <p className="text-sm text-slate-400">
-          Uploads in die Cloud · {jobs.length} Jobs
-          {Object.entries(counts).map(([s, n]) => (
-            <span key={s} className="ml-2">
-              {STATUS[s]?.label ?? s}: {n}
-            </span>
-          ))}
-        </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold">Transfers</h2>
+          <p className="text-sm text-slate-400">
+            Uploads in die Cloud · {jobs.length} Jobs
+            {Object.entries(counts).map(([s, n]) => (
+              <span key={s} className="ml-2">
+                {STATUS[s]?.label ?? s}: {n}
+              </span>
+            ))}
+          </p>
+        </div>
+        {control && (
+          <div className="flex flex-wrap gap-2">
+            {control.failed_transfers > 0 && (
+              <button
+                onClick={() => runControl("retry_failed")}
+                className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5"
+              >
+                Alle fehlgeschlagenen erneut ({control.failed_transfers})
+              </button>
+            )}
+            <button
+              onClick={() => runControl(control.uploads_paused ? "resume" : "pause")}
+              className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5"
+            >
+              {control.uploads_paused ? "Uploads fortsetzen" : "Uploads pausieren"}
+            </button>
+          </div>
+        )}
       </div>
+
+      {control?.uploads_paused && (
+        <div className="mb-4 rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
+          Uploads sind pausiert — es starten keine neuen, laufende werden noch fertig. Pausiert
+          von hier oder von einem Pool-Hub (siehe Audit-Log).
+        </div>
+      )}
 
       {error && <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>}
 

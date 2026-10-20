@@ -380,6 +380,7 @@ class BandwidthStatusOut(BaseModel):
     bonding_links: list[BondingLinkOut] = []  # what net-merge sees
     parallel_uploads: int = 1  # uploads running at the same time (1-4)
     running_uploads: int = 0  # how many run right now
+    uploads_paused: bool = False  # manually stopped (Transfers page or pool hub)
 
 
 class DiskUsageOut(BaseModel):
@@ -687,6 +688,11 @@ class PoolNodeStatus(BaseModel):
     throughput_kbps: float = 0.0
     disk_free: int = 0
     disk_total: int = 0
+    # Remote control. Peers on older versions omit these, so the defaults keep
+    # the hub from offering actions such a peer cannot perform.
+    uploads_paused: bool = False
+    failed_transfers: int = 0
+    control_enabled: bool = False  # this node lets a hub control its transfers
 
 
 class PoolTotals(BaseModel):
@@ -738,6 +744,23 @@ class PoolSelfOut(BaseModel):
 
     pool_token: str = ""
     token_set: bool = False
+    control_enabled: bool = False
+
+
+class PoolSelfUpdate(BaseModel):
+    control_enabled: bool
+
+
+class TransferControlIn(BaseModel):
+    """One manual transfer action, locally or sent by a pool hub."""
+
+    action: Literal["pause", "resume", "retry_failed"]
+
+
+class TransferControlOut(BaseModel):
+    uploads_paused: bool
+    failed_transfers: int
+    message: str = ""  # what the last action did, e.g. "3 … neu eingereiht"
 
 
 class PoolTokenOut(BaseModel):

@@ -1,4 +1,4 @@
-"""Transfer jobs: admin overview and manual retry."""
+"""Transfer jobs: admin overview, manual retry and pause/resume."""
 
 from __future__ import annotations
 
@@ -6,10 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import transfers as transfers_core
+from ..admin_ops import audit
 from ..db import get_db
 from ..deps import require_admin
 from ..models import CloudProvider, MediaItem, TransferJob, TransferStatus, User
-from ..schemas import TransferJobOut
+from ..schemas import TransferControlIn, TransferControlOut, TransferJobOut
 
 router = APIRouter(
     prefix="/api/transfers",
@@ -54,6 +56,25 @@ def list_transfers(
     if status_filter is not None:
         stmt = stmt.where(TransferJob.status == status_filter)
     return _enrich(db, list(db.scalars(stmt)))
+
+
+@router.get("/control", response_model=TransferControlOut)
+def get_control(
+    _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> TransferControlOut:
+    return TransferControlOut(**transfers_core.control_state(db))
+
+
+@router.post("/control", response_model=TransferControlOut)
+def post_control(
+    payload: TransferControlIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> TransferControlOut:
+    """Pause/resume new uploads or re-queue every failed job on this box."""
+    message = transfers_core.apply_control(db, payload.action)
+    audit(db, admin, f"transfers.{payload.action}", message)
+    return TransferControlOut(**transfers_core.control_state(db), message=message)
 
 
 @router.post("/{job_id}/retry", response_model=TransferJobOut)

@@ -16,7 +16,7 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from . import bandwidth, buffers, network
@@ -155,6 +155,50 @@ def recompute_media_status(db: Session, media_id: int) -> None:
         media.status = MediaStatus.DONE
     else:
         media.status = MediaStatus.FAILED
+
+
+# --- Manual control (local admin or a pool hub with control rights) ------
+
+CONTROL_ACTIONS = ("pause", "resume", "retry_failed")
+
+
+def control_state(db: Session) -> dict:
+    """Whether uploads are manually paused, and how many jobs have failed."""
+    failed = db.scalar(
+        select(func.count(TransferJob.id)).where(TransferJob.status == TransferStatus.FAILED)
+    )
+    return {
+        "uploads_paused": bandwidth.get_policy(db).uploads_paused,
+        "failed_transfers": int(failed or 0),
+    }
+
+
+def apply_control(db: Session, action: str) -> str:
+    """Apply one control action and return a short summary for the audit log.
+
+    Deliberately non-destructive: pausing only stops *new* uploads from starting
+    (running ones finish), and nothing here deletes data anywhere.
+    """
+    if action not in CONTROL_ACTIONS:
+        raise ValueError(f"unknown action: {action}")
+    if action in ("pause", "resume"):
+        policy = bandwidth.get_policy(db)
+        policy.uploads_paused = action == "pause"
+        db.commit()
+        return "Uploads pausiert" if policy.uploads_paused else "Uploads fortgesetzt"
+    jobs = list(
+        db.scalars(select(TransferJob).where(TransferJob.status == TransferStatus.FAILED))
+    )
+    for job in jobs:
+        job.status = TransferStatus.QUEUED
+        job.attempts = 0
+        job.last_error = ""
+        job.next_attempt_at = None
+    db.flush()
+    for media_id in {job.media_id for job in jobs}:
+        recompute_media_status(db, media_id)
+    db.commit()
+    return f"{len(jobs)} fehlgeschlagene Transfers neu eingereiht"
 
 
 # --- Job processing -------------------------------------------------------
@@ -764,6 +808,10 @@ def process_one() -> bool:
     """
     with SessionLocal() as db:
         policy = bandwidth.get_policy(db)
+        if policy.uploads_paused:
+            # Manual stop — not a bandwidth problem, so no gate announcement.
+            logger.debug("Upload gated: manually paused")
+            return False
         # Metered uplink first: if it blocks, don't even spend data on a probe.
         ok, reason, max_bytes, metered = _metered_check(db, policy)
         if ok:

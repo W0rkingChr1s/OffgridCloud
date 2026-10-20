@@ -258,7 +258,8 @@ class PoolPeer(Base):
     one node acts as a hub that periodically reads each peer's compact
     ``/api/pool/status`` (authenticated by the peer's shared pool token, stored
     here encrypted at rest). It is read-only aggregation — no distributed
-    coordination, no writes across nodes.
+    coordination. The only write is opt-in transfer control (pause/resume,
+    re-queue failed jobs), which the peer's admin must allow explicitly.
     """
 
     __tablename__ = "pool_peers"
@@ -361,6 +362,9 @@ class BandwidthPolicy(Base):
     # How many uploads run at the same time (1-4). More than one mainly pays
     # off together with bonding, or for many small files on a fast line.
     parallel_uploads: Mapped[int] = mapped_column(default=1)
+    # Manual stop: no new uploads start until an admin (or, if allowed, a pool
+    # hub) resumes them. Uploads already running finish normally.
+    uploads_paused: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class SystemSettings(Base):
@@ -387,6 +391,10 @@ class SystemSettings(Base):
     # node's ``/api/pool/status``. Empty = this node does not expose itself as a
     # poolable peer. Rotate/clear from the Pool admin page.
     pool_token: Mapped[str] = mapped_column(String(128), default="")
+    # Whether a hub holding the pool token may also *control* transfers here
+    # (pause/resume uploads, re-queue failed jobs) via ``POST /api/pool/control``.
+    # Off by default: the token alone only grants read access.
+    pool_control_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

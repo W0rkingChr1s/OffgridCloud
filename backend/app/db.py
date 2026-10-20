@@ -71,6 +71,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
+    ("system_settings", "pool_control_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
     # Operational status announcements (startup / reconnect / bandwidth gate).
     ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),
@@ -91,6 +92,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Link bundling via net-merge (all uplinks at once).
     ("bandwidth_policy", "bonding_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
     ("bandwidth_policy", "parallel_uploads", "INTEGER NOT NULL DEFAULT 1"),
+    # Manual upload stop (locally or by a pool hub with control rights).
+    ("bandwidth_policy", "uploads_paused", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 

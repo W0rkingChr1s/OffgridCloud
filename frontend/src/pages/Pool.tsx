@@ -6,10 +6,13 @@ import {
   type PoolOverview,
   type PoolPeer,
   type PoolSelf,
+  type TransferAction,
+  type TransferControl,
 } from "../api";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
+import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
 const NODE_SORT: SortOption<PoolNodeStatus>[] = [
@@ -26,8 +29,22 @@ const PEER_SORT: SortOption<PoolPeer>[] = [
   { key: "created", label: "Hinzugefügt", get: (p) => p.created_at },
 ];
 
-function NodeCard({ node, isSelf }: { node: PoolNodeStatus; isSelf?: boolean }) {
+function NodeCard({
+  node,
+  isSelf,
+  busy,
+  onAction,
+}: {
+  node: PoolNodeStatus;
+  isSelf?: boolean;
+  busy?: boolean;
+  onAction: (node: PoolNodeStatus, action: TransferAction) => void;
+}) {
   const diskPct = node.disk_total ? (1 - node.disk_free / node.disk_total) * 100 : 0;
+  // Our own box is always controllable; a peer only if its admin allowed it.
+  const canControl = node.reachable && (isSelf || node.control_enabled);
+  const btn =
+    "rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5 disabled:opacity-50";
   return (
     <div
       className={`rounded-2xl p-4 ring-1 ${
@@ -46,6 +63,11 @@ function NodeCard({ node, isSelf }: { node: PoolNodeStatus; isSelf?: boolean }) 
             {isSelf && (
               <span className="rounded-sm bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] text-ogc-teal">
                 diese Box
+              </span>
+            )}
+            {node.reachable && node.uploads_paused && (
+              <span className="rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">
+                Uploads pausiert
               </span>
             )}
           </div>
@@ -80,6 +102,28 @@ function NodeCard({ node, isSelf }: { node: PoolNodeStatus; isSelf?: boolean }) 
       ) : (
         <div className="mt-3 text-sm text-red-300">{node.error || "nicht erreichbar"}</div>
       )}
+
+      {canControl ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/5 pt-3">
+          <button
+            disabled={busy}
+            onClick={() => onAction(node, node.uploads_paused ? "resume" : "pause")}
+            className={btn}
+          >
+            {node.uploads_paused ? "Uploads fortsetzen" : "Uploads pausieren"}
+          </button>
+          {node.failed_transfers > 0 && (
+            <button disabled={busy} onClick={() => onAction(node, "retry_failed")} className={btn}>
+              Fehlgeschlagene erneut ({node.failed_transfers})
+            </button>
+          )}
+        </div>
+      ) : (
+        node.reachable &&
+        !isSelf && (
+          <div className="mt-3 text-xs text-slate-500">Fernsteuerung auf dieser Box nicht freigegeben</div>
+        )
+      )}
     </div>
   );
 }
@@ -95,6 +139,8 @@ export default function Pool() {
   const [token, setToken] = useState("");
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const [addingPeer, setAddingPeer] = useState(false);
+  const [busyNode, setBusyNode] = useState<string | null>(null);
+  const toast = useToast();
 
   const loadPeers = useCallback(() => {
     api<PoolPeer[]>("/api/pool/peers").then(setPeers).catch(() => setPeers([]));
@@ -149,6 +195,52 @@ export default function Pool() {
     await api(`/api/pool/peers/${peer.id}`, { method: "DELETE" });
     loadPeers();
     loadOverview();
+  }
+
+  async function controlNode(node: PoolNodeStatus, action: TransferAction) {
+    const isPeer = node.peer_id !== null;
+    if (
+      isPeer &&
+      action === "pause" &&
+      !window.confirm(`Uploads auf „${node.name}" pausieren? Laufende Uploads laufen noch zu Ende.`)
+    )
+      return;
+    const key = node.peer_id === null ? "self" : String(node.peer_id);
+    setBusyNode(key);
+    try {
+      const res = await api<TransferControl>(
+        isPeer ? `/api/pool/peers/${node.peer_id}/control` : "/api/transfers/control",
+        { method: "POST", body: JSON.stringify({ action }) },
+      );
+      toast.success(node.name, res.message);
+      loadOverview();
+    } catch (err) {
+      toast.error(node.name, err instanceof ApiError ? err.message : "Fehlgeschlagen");
+    } finally {
+      setBusyNode(null);
+    }
+  }
+
+  async function toggleControl() {
+    if (!self) return;
+    if (
+      !self.control_enabled &&
+      !window.confirm(
+        "Jeder Hub mit dem Pool-Token dieser Box darf dann Uploads pausieren/fortsetzen und " +
+          "fehlgeschlagene Transfers neu anstoßen. Freigeben?",
+      )
+    )
+      return;
+    try {
+      const res = await api<PoolSelf>("/api/pool/self", {
+        method: "PUT",
+        body: JSON.stringify({ control_enabled: !self.control_enabled }),
+      });
+      setSelf(res);
+      loadOverview();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Fehler");
+    }
   }
 
   async function rotateToken() {
@@ -216,9 +308,21 @@ export default function Pool() {
         </div>
       )}
       <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {overview && <NodeCard node={overview.self} isSelf />}
+        {overview && (
+          <NodeCard
+            node={overview.self}
+            isSelf
+            busy={busyNode === "self"}
+            onAction={controlNode}
+          />
+        )}
         {nodeSort.sorted.map((p) => (
-          <NodeCard key={p.peer_id ?? p.name} node={p} />
+          <NodeCard
+            key={p.peer_id ?? p.name}
+            node={p}
+            busy={busyNode === String(p.peer_id)}
+            onAction={controlNode}
+          />
         ))}
       </div>
 
@@ -334,6 +438,24 @@ export default function Pool() {
           </div>
           <code className="mt-1 block break-all text-sm text-ogc-teal">{revealedToken}</code>
         </div>
+      )}
+      {self?.token_set && (
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg bg-slate-800/40 p-3 text-sm ring-1 ring-white/5">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={self.control_enabled}
+            onChange={toggleControl}
+          />
+          <span>
+            <span className="font-medium text-white">Fernsteuerung durch Hub erlauben</span>
+            <span className="block text-xs text-slate-400">
+              Ein Hub mit diesem Token darf hier Uploads pausieren/fortsetzen und fehlgeschlagene
+              Transfers neu anstoßen. Löschen oder Einstellungen ändern kann er nicht. Jede Aktion
+              landet im Audit-Log.
+            </span>
+          </span>
+        </label>
       )}
     </Layout>
   );

@@ -112,6 +112,7 @@ export interface BandwidthStatus {
   bonding_links: BondingLink[];
   parallel_uploads: number;
   running_uploads: number;
+  uploads_paused: boolean;
 }
 
 /** A network link as net-merge sees it (link bundling). */
@@ -604,6 +605,9 @@ export interface PoolNodeStatus {
   throughput_kbps: number;
   disk_free: number;
   disk_total: number;
+  uploads_paused: boolean;
+  failed_transfers: number;
+  control_enabled: boolean;
 }
 
 export interface PoolTotals {
@@ -634,6 +638,15 @@ export interface PoolPeer {
 export interface PoolSelf {
   pool_token: string;
   token_set: boolean;
+  control_enabled: boolean;
+}
+
+export type TransferAction = "pause" | "resume" | "retry_failed";
+
+export interface TransferControl {
+  uploads_paused: boolean;
+  failed_transfers: number;
+  message: string;
 }
 
 export interface Health {

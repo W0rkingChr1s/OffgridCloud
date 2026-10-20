@@ -6,6 +6,14 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🛰️ Pool: Transfers aus der Ferne steuern
+
+- **Vom Hub aus** lassen sich auf einer Peer-Box Uploads **pausieren/fortsetzen** und **alle fehlgeschlagenen Transfers neu anstoßen**, direkt auf der Kachel unter **Pool**.
+- **Nur mit Freigabe:** Die Peer-Box muss unter **Pool → „Fernsteuerung durch Hub erlauben“** zustimmen. Standard: aus, das Pool-Token allein erlaubt weiterhin nur Lesen. Löschen oder Einstellungen ändern kann der Hub nicht.
+- **Nachvollziehbar:** Jede Aktion steht im Audit-Log beider Boxen, auf dem Peer mit dem Namen des Hubs.
+- **Auch lokal:** Die Seite **Transfers** hat jetzt „Uploads pausieren“ und „Alle fehlgeschlagenen erneut“. Ist die Box pausiert (von hier oder vom Hub), steht dort ein gelber Hinweis, **Bandbreite** nennt „Uploads manuell pausiert“ als Grund. Laufende Uploads werden beim Pausieren nicht abgebrochen.
+- Peers mit älterer Version zeigen keine Buttons. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
+
 ## [0.7.1] – 2026-10-20
 
 Mehrere Boxen mit Telegram vertragen sich jetzt: Die Box erkennt einen geteilten Bot, und Befehle lassen sich gezielt an eine Box richten.
