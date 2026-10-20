@@ -784,3 +784,175 @@ def test_update_failure_is_reported(client, clean_update_state, calls):
     telegram_bot.report_update_result("tok")
     text = _sent(calls)[-1]["text"]
     assert "fehlgeschlagen" in text and "Build kaputt" in text and "Protokoll" in text
+
+
+# --- Setup wizard ---------------------------------------------------------
+
+
+def test_name_suggestions_follow_telegram_rules(monkeypatch):
+    monkeypatch.setattr(telegram_bot, "_box_name", lambda: "boot-nord")
+    names = telegram_bot.name_suggestions()
+    assert names["label"] == "boot-nord"
+    assert names["display_names"][0] == "OffgridCloud · boot-nord"
+    assert names["usernames"][0] == "ogc_boot_nord_bot"
+    assert all(telegram_bot._valid_username(u) for u in names["usernames"])
+    # One variant carries a stable suffix in case the plain names are taken.
+    assert names == telegram_bot.name_suggestions()
+    assert any(len(u.split("_")) == 5 for u in names["usernames"])
+
+
+def test_name_suggestions_from_label_with_umlauts_and_prefix(monkeypatch):
+    monkeypatch.setattr(telegram_bot, "_box_name", lambda: "raspberrypi")
+    names = telegram_bot.name_suggestions("OffgridCloud Lösch-Zug Süd Bot")
+    assert names["usernames"][0] == "ogc_loesch_zug_sued_bot"
+    assert names["display_names"][0] == "OffgridCloud · OffgridCloud Lösch-Zug Süd Bot"
+
+
+def test_generic_hostname_gets_unique_names(monkeypatch):
+    for host in ("raspberrypi", "3f2a9c1b7d4e", "offgridcloud"):
+        monkeypatch.setattr(telegram_bot, "_box_name", lambda h=host: h)
+        names = telegram_bot.name_suggestions()
+        assert names["label"] == ""
+        assert names["usernames"]
+        assert all(telegram_bot._valid_username(u) for u in names["usernames"])
+        if host != "offgridcloud":  # that one is our own prefix anyway
+            assert not any(host in u for u in names["usernames"])
+
+
+def test_long_label_stays_within_limits(monkeypatch):
+    names = telegram_bot.name_suggestions("x" * 64)
+    assert all(len(u) <= 32 for u in names["usernames"])
+    assert all(len(n) <= 64 for n in names["display_names"])
+
+
+def test_names_endpoint(client, admin_auth):
+    r = client.get("/api/system/telegram/names", params={"label": "Boot"}, headers=admin_auth)
+    assert r.status_code == 200
+    assert r.json()["usernames"][0] == "ogc_boot_bot"
+
+
+def test_check_token_rejects_malformed_without_calling_telegram(calls):
+    result = telegram_bot.check_token("nope")
+    assert not result.ok and "Bot-Token" in result.message
+    assert calls == []
+
+
+def test_check_token_reports_bot(monkeypatch):
+    def fake(token, method, params=None, timeout=15, files=None):
+        assert method == "getMe"
+        return {"username": "ogc_boot_bot", "first_name": "OGC Boot", "can_join_groups": False}
+
+    monkeypatch.setattr(telegram_bot, "api_call", fake)
+    result = telegram_bot.check_token(" 123456789:" + "A" * 35 + " ")
+    assert result.ok and result.username == "ogc_boot_bot"
+    assert "@ogc_boot_bot" in result.message and "/setjoingroups" in result.message
+
+
+def test_check_token_unknown_and_offline(monkeypatch):
+    token = "123456789:" + "A" * 35
+
+    def unknown(*a, **k):
+        raise telegram_bot.TelegramError("Unauthorized", 401)
+
+    monkeypatch.setattr(telegram_bot, "api_call", unknown)
+    assert "kennt diesen Token nicht" in telegram_bot.check_token(token).message
+
+    def offline(*a, **k):
+        raise OSError("no route")
+
+    monkeypatch.setattr(telegram_bot, "api_call", offline)
+    assert "nicht erreichbar" in telegram_bot.check_token(token).message
+
+
+def test_check_token_endpoint_uses_stored_token(client, admin_auth, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        telegram_bot, "check_token", lambda t: seen.append(t) or telegram_bot.TokenCheck(True, "ok")
+    )
+    r = client.post("/api/system/telegram/check-token", headers=admin_auth, json={})
+    assert r.status_code == 409
+    monkeypatch.setattr(telegram_bot, "announce_connected_async", lambda token, chat_id: None)
+    client.put("/api/system", headers=admin_auth, json={"telegram_bot_token": "stored"})
+    try:
+        r = client.post("/api/system/telegram/check-token", headers=admin_auth, json={})
+        assert r.json()["ok"] is True
+        client.post("/api/system/telegram/check-token", headers=admin_auth, json={"token": "new"})
+        assert seen == ["stored", "new"]
+    finally:
+        client.put("/api/system", headers=admin_auth, json={"telegram_bot_token": ""})
+
+
+def test_unconfigured_chat_is_told_to_confirm_in_portal(client):
+    with SessionLocal() as db:
+        reply = telegram_bot.handle_message(db, _msg("/start setup", chat_id=5), "").text
+    assert "Chat erkannt" in reply and "5" in reply
+
+
+def test_poller_collects_chats_for_the_wizard(client, admin_auth, calls, monkeypatch):
+    monkeypatch.setattr(telegram_bot, "announce_connected_async", lambda token, chat_id: None)
+    client.put("/api/system", headers=admin_auth, json={"telegram_bot_token": "tok"})
+    try:
+        private = _msg("/start setup", chat_id=5)
+        private["chat"].update(type="private", first_name="Chris", username="chef")
+        calls.updates = [
+            {"update_id": 1, "message": private},
+            {
+                "update_id": 2,
+                "my_chat_member": {
+                    "chat": {"id": -100, "type": "supergroup", "title": "Einsatz"},
+                    "new_chat_member": {"status": "member"},
+                },
+            },
+            {
+                "update_id": 3,
+                "my_chat_member": {
+                    "chat": {"id": -200, "type": "group", "title": "Alt"},
+                    "new_chat_member": {"status": "left"},
+                },
+            },
+        ]
+        telegram_bot.BotPoller().poll_once()
+        r = client.get("/api/system/telegram/chats", headers=admin_auth).json()
+        assert r["configured"] is True
+        assert [(c["id"], c["title"]) for c in r["chats"]] == [
+            ("-100", "Einsatz"),
+            ("5", "Chris (@chef)"),
+        ]
+        # Only the message gets a reply; membership changes are silent.
+        assert [p["chat_id"] for p in _sent(calls)] == ["5"]
+        polled = [p for _, m, p in calls if m == "getUpdates"][0]
+        assert "my_chat_member" in polled["allowed_updates"]
+    finally:
+        client.put("/api/system", headers=admin_auth, json={"telegram_bot_token": ""})
+
+
+def test_seen_chats_are_capped_and_reset_on_new_token():
+    for i in range(telegram_bot.MAX_SEEN_CHATS + 3):
+        telegram_bot.remember_chat({"id": i, "type": "private", "first_name": f"u{i}"})
+    chats = telegram_bot.seen_chats()
+    assert len(chats) == telegram_bot.MAX_SEEN_CHATS
+    assert chats[0]["id"] == str(telegram_bot.MAX_SEEN_CHATS + 2)
+    telegram_bot.reset_state()
+    assert telegram_bot.seen_chats() == []
+
+
+def test_saving_telegram_settings_wakes_poller(client, admin_auth, monkeypatch):
+    monkeypatch.setattr(telegram_bot, "announce_connected_async", lambda token, chat_id: None)
+    woken = []
+    monkeypatch.setattr(telegram_bot, "wake_poller", lambda: woken.append(1))
+    client.put("/api/system", headers=admin_auth, json={"auto_resync": True})
+    assert woken == []
+    client.put("/api/system", headers=admin_auth, json={"telegram_chat_id": "42"})
+    client.put("/api/system", headers=admin_auth, json={"telegram_chat_id": ""})
+    assert len(woken) == 2
+
+
+def test_sleep_returns_early_when_woken():
+    import threading
+
+    stop = threading.Event()
+    telegram_bot.wake_poller()
+    started = time.monotonic()
+    telegram_bot._sleep(stop, 30)
+    assert time.monotonic() - started < 1
+    assert not telegram_bot._wake.is_set()

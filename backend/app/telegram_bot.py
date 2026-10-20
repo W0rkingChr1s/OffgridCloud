@@ -31,13 +31,16 @@ and retried with back-off, never raised into the app.
 
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import logging
+import re
 import secrets
 import socket
 import threading
 import time
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -226,6 +229,174 @@ def _box_name() -> str:
         return socket.gethostname() or "OffgridCloud"
     except OSError:
         return "OffgridCloud"
+
+
+# --- Setup wizard helpers -------------------------------------------------
+
+# Hostnames that say nothing about the box (image defaults, Docker's container
+# ID). Bot usernames are global on Telegram, so names built from these would
+# collide between installations — the wizard swaps them for a neutral label.
+_GENERIC_HOSTNAMES = {"", "offgridcloud", "raspberrypi", "localhost", "ubuntu", "debian"}
+_UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+TOKEN_PATTERN = re.compile(r"^\d{5,}:[A-Za-z0-9_-]{30,}$")
+
+
+def _is_generic(name: str) -> bool:
+    name = name.strip().lower()
+    return name in _GENERIC_HOSTNAMES or bool(re.fullmatch(r"[0-9a-f]{12}", name))
+
+
+def _slug(label: str) -> str:
+    """``"Boot Nord 2"`` -> ``"boot_nord_2"`` (ASCII, single underscores)."""
+    text = label.strip().lower().translate(_UMLAUTS)
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+    text = re.sub(r"^(offgridcloud|ogc)_?", "", text)  # we add our own prefix
+    return re.sub(r"_?bot$", "", text).strip("_")
+
+
+def _valid_username(name: str) -> bool:
+    """Telegram's rules: 5–32 chars, a–z/0–9/_, starts with a letter, ends in
+    "bot", no double or trailing underscores."""
+    return (
+        5 <= len(name) <= 32
+        and bool(re.fullmatch(r"[a-z][a-z0-9_]*bot", name))
+        and "__" not in name
+    )
+
+
+def name_suggestions(label: str = "") -> dict:
+    """Display names and @usernames to type into @BotFather for this box.
+
+    Usernames are global, so every list ends with a variant carrying a short,
+    box-stable suffix that is very unlikely to be taken already."""
+    box = _box_name()
+    label = label.strip() or ("" if _is_generic(box) else box)
+    slug = _slug(label)[:18].strip("_")
+    suffix = hashlib.sha256(f"{box}|{slug}".encode()).hexdigest()[:4]
+    shown = label or "Box"
+
+    display_names = [
+        f"OffgridCloud · {shown}",
+        f"{shown} – OffgridCloud",
+        f"OGC {shown}",
+    ]
+    if slug:
+        candidates = [
+            f"ogc_{slug}_bot",
+            f"offgridcloud_{slug}_bot",
+            f"{slug}_offgrid_bot",
+            f"ogc_{slug}_{suffix}_bot",
+        ]
+    else:
+        candidates = [f"ogc_box_{suffix}_bot", f"offgridcloud_{suffix}_bot"]
+    usernames: list[str] = []
+    for name in candidates:
+        if _valid_username(name) and name not in usernames:
+            usernames.append(name)
+    if not any(suffix in name for name in usernames):
+        usernames.append(f"ogc_{suffix}_bot")
+    return {
+        "box_name": box,
+        "label": label,
+        "display_names": [n[:64] for n in display_names],
+        "usernames": usernames,
+    }
+
+
+@dataclass(frozen=True)
+class TokenCheck:
+    ok: bool
+    message: str
+    username: str = ""
+    name: str = ""
+
+
+def check_token(token: str) -> TokenCheck:
+    """Ask Telegram (``getMe``) who this token belongs to, without storing it."""
+    token = token.strip()
+    if not TOKEN_PATTERN.match(token):
+        return TokenCheck(
+            False,
+            "Das sieht nicht nach einem Bot-Token aus. Er hat die Form "
+            "„123456789:AA…“ und steht in der Antwort von @BotFather.",
+        )
+    try:
+        me = api_call(token, "getMe", timeout=10) or {}
+    except TelegramError as exc:
+        if exc.code in (401, 404):
+            return TokenCheck(
+                False,
+                "Telegram kennt diesen Token nicht. Vollständig kopiert? "
+                "Bei @BotFather mit /token lässt er sich erneut anzeigen.",
+            )
+        return TokenCheck(False, f"Telegram meldet: {exc}")
+    except Exception:  # noqa: BLE001 - offline is a normal state for the box
+        return TokenCheck(
+            False,
+            "Telegram ist gerade nicht erreichbar. Hat die Box Internet? "
+            "Du kannst den Token trotzdem speichern – geprüft wird dann später.",
+        )
+    username = str(me.get("username") or "")
+    name = str(me.get("first_name") or "")
+    message = f"Token gehört zu {name or 'deinem Bot'} (@{username})."
+    if me.get("can_join_groups") is False:
+        message += (
+            " Hinweis: Gruppen sind für diesen Bot gesperrt – für einen Gruppenchat "
+            "bei @BotFather unter /setjoingroups erlauben."
+        )
+    return TokenCheck(True, message, username=username, name=name)
+
+
+# Chats that talked to the bot recently (or added it), so the wizard can offer
+# them for one-click selection instead of making people type chat IDs.
+MAX_SEEN_CHATS = 10
+_seen_chats: dict[str, dict] = {}
+_seen_lock = threading.Lock()
+
+
+def _chat_label(chat: dict) -> str:
+    if chat.get("title"):
+        return str(chat["title"])
+    name = " ".join(
+        str(part) for part in (chat.get("first_name"), chat.get("last_name")) if part
+    )
+    if chat.get("username"):
+        name = f"{name} (@{chat['username']})" if name else f"@{chat['username']}"
+    return name or str(chat.get("id", ""))
+
+
+def remember_chat(chat: dict, now: float | None = None) -> None:
+    chat_id = str(chat.get("id", ""))
+    if not chat_id:
+        return
+    entry = {
+        "id": chat_id,
+        "type": str(chat.get("type") or "private"),
+        "title": _chat_label(chat),
+        "seen_at": time.time() if now is None else now,
+    }
+    with _seen_lock:
+        _seen_chats.pop(chat_id, None)
+        _seen_chats[chat_id] = entry
+        while len(_seen_chats) > MAX_SEEN_CHATS:
+            _seen_chats.pop(next(iter(_seen_chats)))
+
+
+def forget_chat(chat_id: str) -> None:
+    with _seen_lock:
+        _seen_chats.pop(str(chat_id), None)
+
+
+def seen_chats() -> list[dict]:
+    """Most recent first."""
+    with _seen_lock:
+        return list(reversed(_seen_chats.values()))
+
+
+def _clear_seen_chats() -> None:
+    with _seen_lock:
+        _seen_chats.clear()
 
 
 def connected_message() -> str:
@@ -994,6 +1165,8 @@ def reset_state() -> None:
     global _speedtest_last_start, _poll_conflict
     _speedtest_last_start = None
     _poll_conflict = False
+    _clear_seen_chats()
+    _wake.clear()
     with _pending_lock:
         _pending_power.clear()
     if _speedtest_lock.locked():
@@ -1035,7 +1208,15 @@ def handle_message(
     chat_id = str((message.get("chat") or {}).get("id", ""))
     if command == "id":
         return Reply(f"🆔 Chat-ID: <code>{html.escape(chat_id)}</code>")
-    if not allowed_chat_id or chat_id != allowed_chat_id.strip():
+    if not allowed_chat_id.strip():
+        # Setup in progress: the portal wizard lists this chat for one click.
+        return Reply(
+            "👋 <b>Chat erkannt.</b>\n"
+            "Zurück im OffgridCloud-Portal kannst du ihn jetzt übernehmen "
+            "(System → Benachrichtigungen → Telegram).\n"
+            f"Chat-ID: <code>{html.escape(chat_id)}</code>"
+        )
+    if chat_id != allowed_chat_id.strip():
         # Strangers learn nothing about the box — just how to get unlocked.
         return Reply(
             "🔒 Dieser Chat ist nicht freigeschaltet.\n"
@@ -1064,6 +1245,15 @@ def handle_message(
 # Set while Telegram rejects our getUpdates because another instance polls with
 # the same token. Read by the portal status, so the admin sees the cause.
 _poll_conflict = False
+
+
+# Set when the portal changes token/chat, so a poller sleeping through an idle
+# or back-off interval picks the new settings up right away.
+_wake = threading.Event()
+
+
+def wake_poller() -> None:
+    _wake.set()
 
 
 def poll_conflict() -> bool:
@@ -1123,6 +1313,7 @@ class BotPoller:
             # existing installs get the command menu after an update too.
             self._token, self._offset, self._username = token, None, ""
             _set_poll_conflict(False)
+            _clear_seen_chats()
             setup_profile(token, chat_id)
         try:
             report_update_result(token)
@@ -1131,7 +1322,7 @@ class BotPoller:
 
         params: dict = {
             "timeout": POLL_TIMEOUT,
-            "allowed_updates": ["message", "callback_query"],
+            "allowed_updates": ["message", "callback_query", "my_chat_member"],
         }
         if self._offset is not None:
             params["offset"] = self._offset
@@ -1168,9 +1359,13 @@ class BotPoller:
             if "callback_query" in update:
                 self._on_callback(token, chat_id, update["callback_query"], now)
                 continue
+            if "my_chat_member" in update:
+                _on_membership(update["my_chat_member"], now)
+                continue
             message = update.get("message")
             if not message or now - message.get("date", now) > MAX_COMMAND_AGE:
                 continue
+            remember_chat(message.get("chat") or {}, now)
             with SessionLocal() as db:
                 reply = handle_message(db, message, chat_id, self._own_username(token))
             if reply:
@@ -1215,6 +1410,27 @@ class BotPoller:
             logger.debug("Telegram callback answer failed: %s", exc)
 
 
+def _on_membership(update: dict, now: float) -> None:
+    """The bot was added to (or removed from) a group or channel."""
+    chat = update.get("chat") or {}
+    status = (update.get("new_chat_member") or {}).get("status")
+    if status in ("member", "administrator"):
+        remember_chat(chat, now)
+    elif status in ("left", "kicked"):
+        forget_chat(str(chat.get("id", "")))
+
+
+def _sleep(stop: threading.Event, seconds: float) -> None:
+    """Wait ``seconds`` unless stopped or woken by a settings change."""
+    deadline = time.monotonic() + seconds
+    while not stop.is_set() and not _wake.is_set():
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        stop.wait(min(left, 1.0))
+    _wake.clear()
+
+
 def run_bot(stop: threading.Event) -> None:
     """Thread target: poll until ``stop`` is set. Runs as a daemon thread so a
     long-poll in flight never delays shutdown."""
@@ -1227,5 +1443,5 @@ def run_bot(stop: threading.Event) -> None:
             logger.exception("Telegram poller error")
             wait = ERROR_BACKOFF
         if wait:
-            stop.wait(wait)
+            _sleep(stop, wait)
     logger.info("Telegram bot poller stopped")
