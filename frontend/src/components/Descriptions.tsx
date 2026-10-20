@@ -95,7 +95,7 @@ export function DescriptionModal({
           onChange={(e) => setTitle(e.target.value)}
           maxLength={200}
           placeholder="z. B. Bootsfahrt am Morgen"
-          className="mt-1 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-ogc-teal/50"
+          className="mt-1 w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
         />
 
         <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -108,7 +108,7 @@ export function DescriptionModal({
           maxLength={20000}
           autoFocus
           placeholder="Was ist auf den Aufnahmen zu sehen?"
-          className="mt-1 w-full resize-y rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-none ring-1 ring-white/10 focus:ring-ogc-teal/50"
+          className="mt-1 w-full resize-y rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
         />
 
         {coveredNames.length > 0 && (
@@ -134,7 +134,7 @@ export function DescriptionModal({
           <button
             onClick={save}
             disabled={busy}
-            className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {busy ? "Speichere…" : "Speichern"}
           </button>
@@ -191,14 +191,14 @@ export function DescriptionsList({
                 <div className="flex shrink-0 items-center gap-2 text-xs">
                   <button
                     onClick={() => onEdit(d)}
-                    className="rounded border border-white/10 px-2 py-1 text-slate-200 hover:bg-white/5"
+                    className="rounded-sm border border-white/10 px-2 py-1 text-slate-200 hover:bg-white/5"
                   >
                     Bearbeiten
                   </button>
                   <button
                     onClick={() => remove(d)}
                     disabled={busyId === d.id}
-                    className="rounded border border-red-500/30 px-2 py-1 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                    className="rounded-sm border border-red-500/30 px-2 py-1 text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                   >
                     {busyId === d.id ? "…" : "Löschen"}
                   </button>

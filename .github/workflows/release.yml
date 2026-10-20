@@ -3,7 +3,8 @@ name: Release
 # Cut a release WITHOUT a terminal:
 #   GitHub → Actions → "Release" → "Run workflow" → type the version (e.g. 0.2.0).
 # This tags the current commit, builds the frontend, bundles a Node-free install
-# tarball, and publishes a GitHub Release.
+# tarball, and publishes a GitHub Release. A second job then builds the
+# flashable Raspberry Pi image (image.yml) and attaches it to the same release.
 #
 # Terminal alternative (still supported): push a semver tag
 #   git tag v0.2.0 && git push origin v0.2.0
@@ -28,6 +29,8 @@ jobs:
   release:
     name: Build & publish release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
 
@@ -100,3 +103,11 @@ jobs:
             "dist/offgridcloud-${VERSION}.tar.gz" \
             --title "OffgridCloud $TAG" \
             --generate-notes
+
+  image:
+    name: Raspberry Pi image
+    needs: release
+    uses: ./.github/workflows/image.yml
+    with:
+      ref: ${{ needs.release.outputs.tag }}
+      release-tag: ${{ needs.release.outputs.tag }}

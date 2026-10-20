@@ -62,7 +62,7 @@ function ProgressBar({ done, total, failed }: { done: number; total: number; fai
   return (
     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
       <div
-        className={`h-full rounded-full transition-[width] ${failed ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+        className={`h-full rounded-full transition-[width] ${failed ? "bg-red-500" : "bg-linear-to-r from-ogc-teal to-ogc-blue"}`}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -74,7 +74,7 @@ function UsageBar({ used, total }: { used: number; total: number }) {
   return (
     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
       <div
-        className={`h-full rounded-full ${pct > 90 ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+        className={`h-full rounded-full ${pct > 90 ? "bg-red-500" : "bg-linear-to-r from-ogc-teal to-ogc-blue"}`}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -84,7 +84,7 @@ function UsageBar({ used, total }: { used: number; total: number }) {
 const btn =
   "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40";
 const btnPrimary =
-  "rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40";
 
 export default function Storage() {
   const toast = useToast();
@@ -327,7 +327,7 @@ export default function Storage() {
           return (
             <div key={d.path} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-[14rem] flex-1">
+                <div className="min-w-56 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-lg font-semibold text-white" title={d.path}>
                       {single?.label || diskTitle(d)}
@@ -378,7 +378,7 @@ export default function Storage() {
                 <div className="mt-4 divide-y divide-white/5">
                   {d.partitions.map((p) => (
                     <div key={p.path} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                      <div className="min-w-[14rem] flex-1">
+                      <div className="min-w-56 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium text-white" title={p.path}>
                             {partTitle(p)}
@@ -754,7 +754,7 @@ function CachePanel({
             <div className="divide-y divide-white/5">
               {c.snapshots.map((s) => (
                 <div key={s.name} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                  <div className="min-w-[14rem] flex-1">
+                  <div className="min-w-56 flex-1">
                     <div className="truncate font-medium text-white">{s.name}</div>
                     <div className="text-xs text-slate-500">
                       {s.files} Dateien · {formatBytes(s.size)}

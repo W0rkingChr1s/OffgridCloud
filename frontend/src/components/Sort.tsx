@@ -91,7 +91,7 @@ export function SortMenu<T>({
         value={sort.key}
         onChange={(e) => sort.setKey(e.target.value)}
         aria-label="Sortierfeld"
-        className="rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white outline-none focus:border-ogc-teal/50"
+        className="rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-sm text-white outline-hidden focus:border-ogc-teal/50"
       >
         {sort.options.map((o) => (
           <option key={o.key} value={o.key}>

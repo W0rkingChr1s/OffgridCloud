@@ -98,7 +98,7 @@ export default function Providers() {
         </div>
         <button
           onClick={startCreate}
-          className="whitespace-nowrap rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="whitespace-nowrap rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           + Provider
         </button>
@@ -141,14 +141,14 @@ export default function Providers() {
             return (
               <div key={p.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-[12rem] flex-1">
+                  <div className="min-w-48 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-lg font-semibold text-white">{p.name}</span>
-                      <span className={`rounded px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
+                      <span className={`rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                     </div>
                     {p.name !== typeLabel && <div className="text-sm text-slate-400">{typeLabel}</div>}
                     {p.status === "error" && p.last_error && (
-                      <div className="mt-1 break-words text-xs text-red-300">{p.last_error}</div>
+                      <div className="mt-1 wrap-break-word text-xs text-red-300">{p.last_error}</div>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -346,7 +346,7 @@ function ProviderStep({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Anbieter suchen…"
-          className="w-48 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm outline-none focus:border-ogc-teal"
+          className="w-48 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-1.5 text-sm outline-hidden focus:border-ogc-teal"
         />
       </div>
       {category && (
@@ -365,7 +365,7 @@ function ProviderStep({
             <div className="flex items-center gap-2">
               <span className="font-semibold text-white">{t.label}</span>
               {t.popular && (
-                <span className="rounded bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ogc-teal">
+                <span className="rounded-sm bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ogc-teal">
                   Beliebt
                 </span>
               )}
@@ -445,7 +445,7 @@ function CredentialsStep({
   }
 
   const input =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
   // Required fields first; the optional ones (region, endpoint, storage class …)
   // fold away unless an existing provider already uses one of them.
   const required = def.fields.filter((f) => f.required);
@@ -538,7 +538,7 @@ function CredentialsStep({
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {editing ? "Speichern" : "Anlegen"}
         </button>
@@ -557,7 +557,7 @@ function FieldInput({
   onChange: (value: string) => void;
 }) {
   const input =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
   const label = (
     <span className="mb-1 block text-slate-400">
       {field.label}

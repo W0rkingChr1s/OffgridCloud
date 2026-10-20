@@ -94,14 +94,14 @@ export default function Dashboard() {
                 to={`/folders/${f.id}`}
                 className="group rounded-2xl bg-slate-800/60 p-5 shadow-lg ring-1 ring-white/5 transition hover:ring-ogc-teal/40"
               >
-                <div className={`mb-3 h-1.5 w-12 rounded-full bg-gradient-to-r ${ACCENTS[i % 3]}`} />
+                <div className={`mb-3 h-1.5 w-12 rounded-full bg-linear-to-r ${ACCENTS[i % 3]}`} />
                 <div className="text-lg font-semibold text-white group-hover:text-ogc-teal">{f.name}</div>
                 {descById[f.id] && <div className="mt-1 line-clamp-2 text-sm text-slate-400">{descById[f.id]}</div>}
 
                 {f.total > 0 && (
                   <>
                     <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-700">
-                      <div className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue transition-all" style={{ width: `${pct}%` }} />
+                      <div className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue transition-all" style={{ width: `${pct}%` }} />
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                       <span>{f.total} Dateien</span>

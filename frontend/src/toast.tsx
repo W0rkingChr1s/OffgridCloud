@@ -110,19 +110,19 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
   return (
     <div
       role="status"
-      className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl bg-slate-800/95 px-4 py-3 text-sm shadow-lg ring-1 ${v.ring} backdrop-blur`}
+      className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl bg-slate-800/95 px-4 py-3 text-sm shadow-lg ring-1 ${v.ring} backdrop-blur-sm`}
     >
       <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs text-slate-900 ${v.bar}`}>
         {v.icon}
       </span>
       <div className="min-w-0 flex-1">
         <div className="font-medium text-white">{toast.title}</div>
-        {toast.message && <div className="mt-0.5 break-words text-xs text-slate-300">{toast.message}</div>}
+        {toast.message && <div className="mt-0.5 wrap-break-word text-xs text-slate-300">{toast.message}</div>}
       </div>
       <button
         onClick={() => onDismiss(toast.id)}
         aria-label="Schließen"
-        className="-mr-1 shrink-0 rounded p-0.5 text-slate-400 hover:text-white"
+        className="-mr-1 shrink-0 rounded-sm p-0.5 text-slate-400 hover:text-white"
       >
         ✕
       </button>

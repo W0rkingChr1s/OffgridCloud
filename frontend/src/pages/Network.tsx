@@ -72,7 +72,7 @@ export default function Network() {
           type="button"
           onClick={apply}
           disabled={busy}
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {busy ? "…" : "Anwenden"}
         </button>
@@ -89,7 +89,7 @@ export default function Network() {
         >
           {applyMsg.message}
           {applyMsg.output && (
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-black/30 p-2 text-xs text-slate-300">
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-sm bg-black/30 p-2 text-xs text-slate-300">
               {applyMsg.output}
             </pre>
           )}
@@ -212,7 +212,7 @@ function FallbackSettings({
         <label className="text-sm">
           <span className="mb-1 block text-slate-400">AP-Name (SSID)</span>
           <input
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.ap_ssid}
             onChange={(e) => setForm({ ...form, ap_ssid: e.target.value })}
             onBlur={() => form.ap_ssid !== settings.ap_ssid && save({ ap_ssid: form.ap_ssid })}
@@ -222,7 +222,7 @@ function FallbackSettings({
           <span className="mb-1 block text-slate-400">AP-Passwort</span>
           <input
             type="password"
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             placeholder={settings.ap_has_password ? "•••••••• (gesetzt)" : "8–63 Zeichen (leer = offen)"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -237,7 +237,7 @@ function FallbackSettings({
         <label className="text-sm">
           <span className="mb-1 block text-slate-400">AP-Adresse</span>
           <input
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.ap_address}
             onChange={(e) => setForm({ ...form, ap_address: e.target.value })}
             onBlur={() =>
@@ -248,7 +248,7 @@ function FallbackSettings({
         <label className="text-sm">
           <span className="mb-1 block text-slate-400">Ländercode (WLAN-Regulierung)</span>
           <input
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             placeholder="z. B. DE"
             maxLength={2}
             value={form.country_code}
@@ -265,7 +265,7 @@ function FallbackSettings({
             type="number"
             min={5}
             max={3600}
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.check_interval}
             onChange={(e) => setForm({ ...form, check_interval: Number(e.target.value) })}
             onBlur={() =>
@@ -280,7 +280,7 @@ function FallbackSettings({
             type="number"
             min={1}
             max={20}
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.fail_threshold}
             onChange={(e) => setForm({ ...form, fail_threshold: Number(e.target.value) })}
             onBlur={() =>
@@ -353,16 +353,16 @@ function KnownNetworks({
         eines erreichbar, verlässt die Box den Rückfall-AP.
       </p>
 
-      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr,1fr,auto,auto]">
+      <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
         <input
-          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-ogc-teal"
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
           placeholder="SSID"
           value={ssid}
           onChange={(e) => setSsid(e.target.value)}
         />
         <input
           type="password"
-          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-ogc-teal"
+          className="rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
           placeholder="Passwort (leer = offen)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -370,7 +370,7 @@ function KnownNetworks({
         <input
           type="number"
           min={0}
-          className="w-24 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-none focus:border-ogc-teal"
+          className="w-24 rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 text-sm outline-hidden focus:border-ogc-teal"
           placeholder="Prio"
           value={priority}
           onChange={(e) => setPriority(Number(e.target.value))}
@@ -391,10 +391,10 @@ function KnownNetworks({
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
-                <SortTh sort={sort} field="ssid" className="!py-2">SSID</SortTh>
-                <SortTh sort={sort} field="priority" className="!py-2">Priorität</SortTh>
-                <SortTh sort={sort} field="password" className="!py-2">Passwort</SortTh>
-                <SortTh sort={sort} field="auto" className="!py-2">Auto</SortTh>
+                <SortTh sort={sort} field="ssid" className="py-2!">SSID</SortTh>
+                <SortTh sort={sort} field="priority" className="py-2!">Priorität</SortTh>
+                <SortTh sort={sort} field="password" className="py-2!">Passwort</SortTh>
+                <SortTh sort={sort} field="auto" className="py-2!">Auto</SortTh>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>

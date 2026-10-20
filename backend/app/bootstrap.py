@@ -22,6 +22,8 @@ logger = logging.getLogger("offgridcloud.bootstrap")
 
 def ensure_initial_admin() -> None:
     settings = get_settings()
+    if settings.setup_wizard:
+        return  # the first admin comes from the web wizard (see setup_wizard.py)
     with SessionLocal() as db:
         if db.scalar(select(User).limit(1)) is not None:
             return  # already initialised

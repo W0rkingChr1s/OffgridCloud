@@ -31,7 +31,7 @@ const KIND_LABEL: Record<Kind, string> = { photo: "Fotos", raw: "RAW", video: "V
 const btn =
   "rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40";
 const btnPrimary =
-  "rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40";
+  "rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40";
 
 const dayFmt = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
 const timeFmt = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
@@ -277,9 +277,9 @@ export default function MediaBrowser({ device, title, basePath = "", canCache = 
             const bytes = g.items.reduce((n, { item }) => n + item.size, 0);
             return (
               <section key={g.key} className="mb-6" style={{ contentVisibility: "auto", containIntrinsicSize: "auto 600px" }}>
-                <div className="sticky top-[60px] z-10 -mx-2 mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-slate-800/95 px-2 py-1.5 backdrop-blur sm:top-[68px]">
+                <div className="sticky top-[60px] z-10 -mx-2 mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-lg bg-slate-800/95 px-2 py-1.5 backdrop-blur-sm sm:top-[68px]">
                   <span className="text-sm font-semibold text-white sm:text-base">{g.label}</span>
-                  <span className="order-3 w-full text-xs text-slate-400 sm:order-none sm:w-auto">
+                  <span className="order-3 w-full text-xs text-slate-400 sm:order-0 sm:w-auto">
                     {g.items.length} Dateien · {formatBytes(bytes)}
                     {nSel > 0 && <span className="text-ogc-teal"> · {nSel} ausgewählt</span>}
                   </span>
@@ -366,7 +366,7 @@ function Tile({
           onClick(e.shiftKey);
         }
       }}
-      className={`group relative aspect-square cursor-pointer select-none overflow-hidden rounded-lg bg-slate-900 outline-none ring-offset-2 ring-offset-slate-800 focus-visible:ring-2 focus-visible:ring-ogc-teal ${
+      className={`group relative aspect-square cursor-pointer select-none overflow-hidden rounded-lg bg-slate-900 outline-hidden ring-offset-2 ring-offset-slate-800 focus-visible:ring-2 focus-visible:ring-ogc-teal ${
         selected ? "ring-2 ring-ogc-teal" : ""
       }`}
       title={`${item.name} · ${formatBytes(item.size)} · ${timeFmt.format(new Date(item.mtime * 1000))}`}
@@ -418,12 +418,12 @@ function Tile({
       )}
 
       {(item.kind === "raw" || item.kind === "video") && (
-        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+        <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-black/60 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
           {item.kind === "raw" ? item.name.split(".").pop() : "▶ Video"}
         </span>
       )}
       {badge && (
-        <span title={badge.title} className={`absolute bottom-1.5 left-1.5 rounded px-1 py-0.5 text-[9px] font-semibold ${badge.tone}`}>
+        <span title={badge.title} className={`absolute bottom-1.5 left-1.5 rounded-sm px-1 py-0.5 text-[9px] font-semibold ${badge.tone}`}>
           <span className="sm:hidden">{badge.icon}</span>
           <span className="hidden sm:inline">{badge.text}</span>
         </span>
@@ -469,7 +469,7 @@ function Lightbox({
   const isSel = selected.has(item.path);
   const badge = item.known ? knownLabel(item.known) : null;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/[.97] backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950/97 backdrop-blur-xs" onClick={onClose}>
       <div className="flex items-center gap-3 px-4 py-3 text-sm text-slate-200" onClick={(e) => e.stopPropagation()}>
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium text-white">{item.name}</div>
@@ -477,7 +477,7 @@ function Lightbox({
             {fullFmt.format(new Date(item.mtime * 1000))} · {formatBytes(item.size)} · {item.dir || "/"} · {index + 1}/{items.length}
           </div>
         </div>
-        {badge && <span className={`rounded px-2 py-0.5 text-xs font-semibold ${badge.tone}`}>{badge.text} · {item.known!.folder_name}</span>}
+        {badge && <span className={`rounded-sm px-2 py-0.5 text-xs font-semibold ${badge.tone}`}>{badge.text} · {item.known!.folder_name}</span>}
         <button className={isSel ? btnPrimary : btn} onClick={() => onToggle(item.path)}>
           {isSel ? "✓ Ausgewählt" : "Auswählen"}
         </button>
@@ -490,10 +490,10 @@ function Lightbox({
           key={item.path}
           src={thumbUrl(device, item.path, 1600)}
           alt={item.name}
-          className="max-h-full max-w-full rounded object-contain"
+          className="max-h-full max-w-full rounded-sm object-contain"
         />
         {item.kind === "video" && (
-          <span className="absolute bottom-10 rounded bg-black/70 px-2 py-1 text-xs text-slate-200">Video — Standbild</span>
+          <span className="absolute bottom-10 rounded-sm bg-black/70 px-2 py-1 text-xs text-slate-200">Video — Standbild</span>
         )}
         {index > 0 && (
           <button
@@ -579,7 +579,7 @@ function FolderView({
         </label>
       </div>
       {err && <div className="mb-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{err}</div>}
-      <div className="max-h-[28rem] overflow-y-auto rounded-lg ring-1 ring-white/5">
+      <div className="max-h-112 overflow-y-auto rounded-lg ring-1 ring-white/5">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-slate-900 text-left text-xs text-slate-400">
             <tr>
@@ -635,7 +635,7 @@ function FolderView({
                   </td>
                   <td className="hidden px-2 py-1.5 sm:table-cell">
                     {badge && (
-                      <span title={badge.title} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${badge.tone}`}>
+                      <span title={badge.title} className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${badge.tone}`}>
                         {badge.text}
                       </span>
                     )}
@@ -736,10 +736,10 @@ function ActionBar({
 
   const n = selected.size;
   return (
-    <div className="sticky bottom-0 z-20 rounded-b-2xl border-t border-white/10 bg-slate-900/95 px-5 py-3 backdrop-blur">
+    <div className="sticky bottom-0 z-20 rounded-b-2xl border-t border-white/10 bg-slate-900/95 px-5 py-3 backdrop-blur-sm">
       {err && <div className="mb-2 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs text-red-300">{err}</div>}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex w-full min-w-[9rem] items-center text-sm text-slate-300 sm:w-auto">
+        <div className="flex w-full min-w-36 items-center text-sm text-slate-300 sm:w-auto">
           <div className="flex-1">
           {n === 0 ? (
             <span className="text-slate-500">

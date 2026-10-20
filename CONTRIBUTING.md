@@ -41,7 +41,8 @@ einziger Prozess aus.
 
 - **Backend:** ruff-sauber, Type-Hints, kleine fokussierte Module.
 - **Frontend:** TypeScript strict mode, Tailwind fürs Styling, Brand-Palette
-  (`ogc.teal` / `ogc.blue` / `ogc.indigo`).
+  (`ogc-teal` / `ogc-blue` / `ogc-indigo`, definiert als `@theme` in
+  `frontend/src/index.css`).
 - **Commits:** klare Nachrichten im Imperativ.
 - **Raspberry Pi 3 zuerst:** die Laufzeit auf einen Prozess beschränken;
   keine Dauer-Dienste (Redis o. Ä.) ohne triftigen Grund. Nie ganze Mediendateien

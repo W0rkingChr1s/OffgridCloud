@@ -127,7 +127,7 @@ export default function Overview() {
 
       {/* Status hero: bandwidth gate + measured line (admin) */}
       {isAdmin && bw && (
-        <div className="mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800/70 to-slate-800/30 p-5 shadow-lg ring-1 ring-white/5">
+        <div className="mb-6 overflow-hidden rounded-2xl bg-linear-to-br from-slate-800/70 to-slate-800/30 p-5 shadow-lg ring-1 ring-white/5">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
             <span className="flex items-center gap-2.5">
               <span
@@ -145,9 +145,9 @@ export default function Overview() {
 
             {/* Signal bars */}
             <span className="flex items-end gap-1" aria-hidden>
-              <span className="h-2.5 w-1.5 rounded-sm bg-ogc-teal" />
-              <span className="h-3.5 w-1.5 rounded-sm bg-ogc-teal" />
-              <span className={`h-5 w-1.5 rounded-sm ${bw.gated ? "bg-slate-600" : "bg-ogc-teal"}`} />
+              <span className="h-2.5 w-1.5 rounded-xs bg-ogc-teal" />
+              <span className="h-3.5 w-1.5 rounded-xs bg-ogc-teal" />
+              <span className={`h-5 w-1.5 rounded-xs ${bw.gated ? "bg-slate-600" : "bg-ogc-teal"}`} />
             </span>
 
             <span className="text-sm text-slate-400">
@@ -204,7 +204,7 @@ export default function Overview() {
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-700">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue transition-all"
+              className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue transition-all"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -246,7 +246,7 @@ export default function Overview() {
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue transition-all"
+                        className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue transition-all"
                         style={{ width: `${p}%` }}
                       />
                     </div>
@@ -289,7 +289,7 @@ export default function Overview() {
                       to={`/folders/${f.id}`}
                       className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-white/5"
                     >
-                      <span className={`h-8 w-1.5 shrink-0 rounded-full bg-gradient-to-b ${ACCENTS[i % 3]}`} />
+                      <span className={`h-8 w-1.5 shrink-0 rounded-full bg-linear-to-b ${ACCENTS[i % 3]}`} />
                       <span className="min-w-0 flex-1">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium text-white group-hover:text-ogc-teal">
@@ -301,7 +301,7 @@ export default function Overview() {
                         </span>
                         <span className="mt-1 flex h-1 overflow-hidden rounded-full bg-slate-700">
                           <span
-                            className="h-full rounded-full bg-gradient-to-r from-ogc-teal to-ogc-blue"
+                            className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue"
                             style={{ width: `${fp}%` }}
                           />
                         </span>
@@ -359,7 +359,7 @@ export default function Overview() {
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700">
                   <div
-                    className={`h-full rounded-full ${system.disk.low_space ? "bg-amber-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+                    className={`h-full rounded-full ${system.disk.low_space ? "bg-amber-500" : "bg-linear-to-r from-ogc-teal to-ogc-blue"}`}
                     style={{ width: `${Math.min(100, system.disk.percent_used)}%` }}
                   />
                 </div>

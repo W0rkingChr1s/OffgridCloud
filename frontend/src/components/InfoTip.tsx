@@ -42,7 +42,7 @@ export default function InfoTip({ text, label = "Mehr Informationen" }: { text: 
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-500/60 text-[10px] font-bold leading-none text-slate-400 transition hover:border-ogc-teal hover:text-ogc-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-ogc-teal"
+        className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-500/60 text-[10px] font-bold leading-none text-slate-400 transition hover:border-ogc-teal hover:text-ogc-teal focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ogc-teal"
       >
         i
       </button>
