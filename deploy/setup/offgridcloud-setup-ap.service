@@ -1,0 +1,16 @@
+# Setup Wi-Fi + captive portal of the OffgridCloud image (until the wizard ran).
+# Installed by deploy/setup/install.sh (image build only).
+[Unit]
+Description=OffgridCloud setup Wi-Fi (captive portal for the setup wizard)
+ConditionPathExists=/var/lib/offgridcloud/setup-pending
+After=NetworkManager.service offgridcloud-firstboot.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/opt/offgridcloud/deploy/setup/setup-ap.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -28,6 +28,10 @@
 #                                    (Vorgabe: offgridcloud- + 5 Zufallszeichen [a-z0-9],
 #                                     damit mehrere Boxen im selben LAN nicht kollidieren)
 #   OGC_NONINTERACTIVE=1             # force unattended even with a terminal
+#   OGC_IMAGE_BUILD=0                # 1 = bake the flashable OS image (pi-gen chroot):
+#                                    #   no secrets/admin baked in, nothing started, a
+#                                    #   prebuilt frontend/dist is used as is, and the
+#                                    #   first-boot setup wizard is armed (deploy/setup/)
 #
 # Only -h/--help is a flag; any other argument is ignored (older flag-style
 # commands still run, they just fall through to the questions / env defaults).
@@ -38,6 +42,8 @@ PREFIX="${OGC_PREFIX:-/opt/offgridcloud}"
 SERVICE_USER="${OGC_SERVICE_USER:-offgrid}"
 SPEEDTEST_VER="1.2.0"
 NONINTERACTIVE="${OGC_NONINTERACTIVE:-0}"
+IMAGE_BUILD="${OGC_IMAGE_BUILD:-0}"
+[[ $IMAGE_BUILD -eq 1 ]] && NONINTERACTIVE=1
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Run from a directory we never delete. One-click updates inherit the service's
 # WorkingDirectory ($PREFIX/backend), which the copy step below replaces — pip
@@ -91,6 +97,8 @@ EXISTING_INSTALL=$_has_service
 ADMIN_EMAIL="${OGC_ADMIN_EMAIL:-$_det_email}"
 PORT="${OGC_PORT:-$_det_port}"
 DO_START="${OGC_START:-1}"
+# Image build: nothing may run in the chroot; the service is only enabled.
+[[ $IMAGE_BUILD -eq 1 ]] && DO_START=0
 INSTALL_SERVICE="${OGC_INSTALL_SERVICE:-1}"
 WITH_FFMPEG="${OGC_WITH_FFMPEG:-$_has_ffmpeg}"
 WITH_AP_FALLBACK="${OGC_WITH_AP_FALLBACK:-$_has_ap}"
@@ -456,40 +464,47 @@ if [[ $WITH_SPEEDTEST -eq 1 ]]; then
 fi
 
 # --- Frontend build ---------------------------------------------------------
-step "Building frontend (requires Node.js)..."
-# The frontend toolchain (Vite 8) needs Node ^20.19 or >=22.12. Boxes set up
-# with an older Node (bootstrap used to accept 18+) would otherwise fail every
-# self-update at the build step — so upgrade to Node 22 here when possible.
-node_ok() {
-  command -v node >/dev/null 2>&1 || return 1
-  local v major minor
-  v="$(node -v | sed 's/^v//')"
-  major="${v%%.*}"; minor="$(printf '%s' "$v" | cut -d. -f2)"
-  [[ "${major:-0}" -ge 23 ]] && return 0
-  [[ "${major:-0}" -eq 22 && "${minor:-0}" -ge 12 ]] && return 0
-  [[ "${major:-0}" -eq 20 && "${minor:-0}" -ge 19 ]] && return 0
-  return 1
-}
-if ! node_ok && command -v apt-get >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
-  echo "   Node.js $(node -v 2>/dev/null || echo 'fehlt') ist zu alt – installiere Node.js 22..."
-  if curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs; then
-    hash -r
-  else
-    echo "   Node.js-Upgrade fehlgeschlagen (offline?)." >&2
+if [[ $IMAGE_BUILD -eq 1 && -f "$REPO_ROOT/frontend/dist/index.html" ]]; then
+  # The image workflow builds the UI natively on the runner; doing it again in
+  # the image chroot would only cost time. Node is still installed in the
+  # image (bootstrap layout) so later one-click updates can rebuild.
+  step "Using the prebuilt frontend (image build)..."
+else
+  step "Building frontend (requires Node.js)..."
+  # The frontend toolchain (Vite 8) needs Node ^20.19 or >=22.12. Boxes set up
+  # with an older Node (bootstrap used to accept 18+) would otherwise fail every
+  # self-update at the build step — so upgrade to Node 22 here when possible.
+  node_ok() {
+    command -v node >/dev/null 2>&1 || return 1
+    local v major minor
+    v="$(node -v | sed 's/^v//')"
+    major="${v%%.*}"; minor="$(printf '%s' "$v" | cut -d. -f2)"
+    [[ "${major:-0}" -ge 23 ]] && return 0
+    [[ "${major:-0}" -eq 22 && "${minor:-0}" -ge 12 ]] && return 0
+    [[ "${major:-0}" -eq 20 && "${minor:-0}" -ge 19 ]] && return 0
+    return 1
+  }
+  if ! node_ok && command -v apt-get >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
+    echo "   Node.js $(node -v 2>/dev/null || echo 'fehlt') ist zu alt – installiere Node.js 22..."
+    if curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs; then
+      hash -r
+    else
+      echo "   Node.js-Upgrade fehlgeschlagen (offline?)." >&2
+    fi
   fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm not found. Install Node.js, or build the frontend on another machine" >&2
+    echo "and copy frontend/dist to backend/app/static before re-running." >&2
+    exit 1
+  fi
+  if ! node_ok; then
+    echo "Node.js $(node -v) ist zu alt für den Frontend-Build (benötigt ^20.19 oder >=22.12)." >&2
+    echo "Bitte Node.js 22 installieren (z. B. https://deb.nodesource.com/setup_22.x)." >&2
+    echo "Die bisherige Installation bleibt unverändert." >&2
+    exit 1
+  fi
+  ( cd "$REPO_ROOT/frontend" && npm install && npm run build )
 fi
-if ! command -v npm >/dev/null 2>&1; then
-  echo "npm not found. Install Node.js, or build the frontend on another machine" >&2
-  echo "and copy frontend/dist to backend/app/static before re-running." >&2
-  exit 1
-fi
-if ! node_ok; then
-  echo "Node.js $(node -v) ist zu alt für den Frontend-Build (benötigt ^20.19 oder >=22.12)." >&2
-  echo "Bitte Node.js 22 installieren (z. B. https://deb.nodesource.com/setup_22.x)." >&2
-  echo "Die bisherige Installation bleibt unverändert." >&2
-  exit 1
-fi
-( cd "$REPO_ROOT/frontend" && npm install && npm run build )
 
 # --- Service user -----------------------------------------------------------
 step "Creating service user '$SERVICE_USER'..."
@@ -572,7 +587,18 @@ if [[ -L "$PREFIX/.env" || -L "$PREFIX/data" ]]; then
   echo "Refusing to continue: $PREFIX/.env or $PREFIX/data is a symlink." >&2
   exit 1
 fi
-if [[ ! -f "$PREFIX/.env" ]]; then
+if [[ ! -f "$PREFIX/.env" && $IMAGE_BUILD -eq 1 ]]; then
+  # No secret and no admin password in the image — every box flashed from it
+  # would share them. firstboot.sh adds OGC_SECRET_KEY, the wizard the admin.
+  step "Creating $PREFIX/.env without secrets (image build)..."
+  cat > "$PREFIX/.env" <<ENV
+OGC_ENVIRONMENT=production
+OGC_DATA_DIR=$PREFIX/data
+OGC_BUFFER_DIR=$PREFIX/data/buffer
+OGC_RCLONE_BINARY=rclone
+ENV
+  chmod 600 "$PREFIX/.env"
+elif [[ ! -f "$PREFIX/.env" ]]; then
   step "Creating $PREFIX/.env with generated secret + admin password..."
   SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
   GENERATED_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')"
@@ -607,6 +633,7 @@ if [[ $INSTALL_SERVICE -eq 1 ]]; then
   sed "s/--port 8000/--port $PORT/" "$REPO_ROOT/deploy/offgridcloud.service" \
     > /etc/systemd/system/offgridcloud.service
   systemctl daemon-reload
+  [[ $IMAGE_BUILD -eq 1 ]] && systemctl enable offgridcloud
 fi
 
 # --- One-click self-update (sudoers) ----------------------------------------
@@ -747,6 +774,8 @@ if [[ $WITH_HTTPS -eq 1 ]]; then
   chmod +x "$PREFIX/deploy/https/"*.sh 2>/dev/null || true
   HTTPS_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER" --port "$PORT" --hostname "$HTTPS_HOSTNAME")
   [[ -n "$HTTPS_DOMAIN" ]] && HTTPS_ARGS+=(--domain "$HTTPS_DOMAIN")
+  # The real hostname is only known after the setup wizard (finish.sh applies it).
+  [[ $IMAGE_BUILD -eq 1 ]] && HTTPS_ARGS+=(--skip-apply)
   bash "$PREFIX/deploy/https/install.sh" "${HTTPS_ARGS[@]}" \
     || echo "   HTTPS setup reported an issue — see docs/BETRIEB.md §3." >&2
 elif [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile 2>/dev/null; then
@@ -756,6 +785,16 @@ elif [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh'
   bash "$REPO_ROOT/deploy/https/uninstall.sh" --prefix "$PREFIX" \
     || echo "   HTTPS teardown reported an issue — see docs/BETRIEB.md §3." >&2
   rm -rf "$PREFIX/deploy/https"
+fi
+
+# --- Image build: first-boot setup wizard ---------------------------------
+if [[ $IMAGE_BUILD -eq 1 ]]; then
+  step "Arming the first-boot setup wizard (image build)..."
+  mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/setup"
+  cp -r "$REPO_ROOT/deploy/setup" "$PREFIX/deploy/setup"
+  chown -R root:root "$PREFIX/deploy/setup"
+  bash "$PREFIX/deploy/setup/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER"
 fi
 
 # --- Optional start + health check -----------------------------------------
@@ -793,6 +832,8 @@ $(printf '\033[1;33m  Initial admin login (shown only once — save it now):\033
 
   Change the password after your first login.
 EOF
+elif [[ $IMAGE_BUILD -eq 1 ]]; then
+  echo "  Image build: admin + network are set in the setup wizard on first boot."
 else
   echo "  Login uses the credentials already in $PREFIX/.env"
 fi

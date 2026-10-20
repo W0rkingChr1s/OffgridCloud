@@ -46,6 +46,22 @@ class Settings(BaseSettings):
     initial_admin_email: str = "admin@offgrid.local"
     initial_admin_password: str = "changeme"
 
+    # --- First-boot setup wizard (prebuilt OS image) -------------------------
+    # The flashable image ships without any secrets or accounts. With this on,
+    # no initial admin is created from the two settings above; instead the box
+    # stays in "setup mode" (every other API answers 503) until someone runs
+    # the web wizard under /setup, which creates the admin and the network
+    # config. See app/setup_wizard.py and deploy/setup/.
+    setup_wizard: bool = False
+    # Privileged hand-off once the wizard is submitted: tears down the setup
+    # Wi-Fi + captive portal, applies the chosen network and hostname. Wired by
+    # deploy/setup/install.sh via a NOPASSWD sudoers rule; empty = the wizard
+    # only stores the config (useful in tests and on non-image installs).
+    setup_finish_command: str = ""
+    # Wi-Fi scan the root setup helper takes before raising the setup AP (a
+    # single radio can't scan reliably while it hosts the AP).
+    setup_scan_file: Path = Path("/run/offgridcloud/setup-wifi.json")
+
     # --- Bandwidth measurement ---------------------------------------------
     # Default target for the active bandwidth probe, so admins don't have to
     # configure anything for "measure now" to work. Overridable per-instance

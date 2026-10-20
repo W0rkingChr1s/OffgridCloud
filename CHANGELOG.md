@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 Ältere Versionen (bis v0.4.10) sind in den
 [GitHub-Releases](https://github.com/W0rkingChr1s/OffgridCloud/releases) dokumentiert.
 
+## [Unreleased]
+
+### ✨ Neu: Fertiges Raspberry-Pi-Image mit Setup-Assistent
+
+- **Flashbares Image** für Raspberry Pi 3/4/5 und Zero 2 W (Raspberry Pi OS Lite, arm64). Gebaut mit pi-gen auf einem nativen arm64-Runner und an jedes Release als `offgridcloud-<version>-rpi-arm64.img.xz` angehängt (`.github/workflows/image.yml`).
+- **Keine Geheimnisse im Image:** Secret-Key und Hostname-Vorschlag entstehen beim ersten Boot. Den Admin legt der neue **Setup-Assistent** unter `/setup` an. Bis dahin antworten alle anderen APIs mit 503.
+- **Setup-WLAN mit Captive Portal:** Ohne Kabel öffnet die Box das WLAN `OffgridCloud-Setup-XXXX`, und Handys zeigen den Assistenten von selbst an. Per Kabel ist er unter `http://offgridcloud-setup.local` erreichbar.
+- **Optionaler Setup-Code** und Passwort fürs Setup-WLAN über `offgridcloud-setup.txt` auf der Boot-Partition. Falsche Codes werden gedrosselt.
+- Der Assistent setzt Admin, Box-Namen, Ziel-WLAN und das Passwort fürs Rückfall-WLAN und übergibt dann an `deploy/setup/finish.sh`. Anleitung: [docs/IMAGE.md](docs/IMAGE.md).
+- `install.sh` hat dafür einen Image-Build-Modus (`OGC_IMAGE_BUILD=1`), `deploy/https/install.sh` die Option `--skip-apply`.
+
 ## [0.4.11] – 2026-10-19
 
 Die Box lässt sich jetzt **komplett per Telegram steuern** (Status, Neustart, Speedtest, Update). Außerdem bleibt eine Installation zuverlässig auf ihrem **Update-Kanal**, und **viele Sicherheitslücken in Abhängigkeiten** sind geschlossen.

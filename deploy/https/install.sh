@@ -9,7 +9,7 @@
 #
 # Usage:
 #   sudo ./deploy/https/install.sh --prefix DIR --hostname NAME [--domain DOMAIN]
-#                                  [--service-user USER] [--port PORT]
+#                                  [--service-user USER] [--port PORT] [--skip-apply]
 set -euo pipefail
 
 PREFIX="/opt/offgridcloud"
@@ -17,6 +17,7 @@ SERVICE_USER="offgrid"
 HOSTNAME_SHORT="offgridcloud"
 DOMAIN=""
 PORT="8000"
+SKIP_APPLY=0
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
@@ -26,6 +27,7 @@ while [[ $# -gt 0 ]]; do
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --service-user) SERVICE_USER="${2:?}"; shift 2 ;;
     --port) PORT="${2:?}"; shift 2 ;;
+    --skip-apply) SKIP_APPLY=1; shift ;;
     -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -66,10 +68,14 @@ fi
 systemctl enable --now caddy 2>/dev/null || true
 
 # --- 2. Render config + set hostname ---------------------------------------
-step "Applying HTTPS config..."
-APPLY_ARGS=(--hostname "$HOSTNAME_SHORT" --prefix "$PREFIX" --port "$PORT")
-[[ -n "$DOMAIN" ]] && APPLY_ARGS+=(--domain "$DOMAIN")
-OGC_PREFIX="$PREFIX" OGC_PORT="$PORT" bash "$APPLY" "${APPLY_ARGS[@]}"
+# --skip-apply: image build — the hostname is chosen later in the setup wizard
+# (deploy/setup/finish.sh runs apply.sh then).
+if [[ $SKIP_APPLY -eq 0 ]]; then
+  step "Applying HTTPS config..."
+  APPLY_ARGS=(--hostname "$HOSTNAME_SHORT" --prefix "$PREFIX" --port "$PORT")
+  [[ -n "$DOMAIN" ]] && APPLY_ARGS+=(--domain "$DOMAIN")
+  OGC_PREFIX="$PREFIX" OGC_PORT="$PORT" bash "$APPLY" "${APPLY_ARGS[@]}"
+fi
 
 # --- 3. NOPASSWD sudoers rule for apply.sh only ----------------------------
 step "Granting the service user permission to re-apply HTTPS config..."
@@ -92,4 +98,8 @@ if [[ -f "$ENV_FILE" ]]; then
   chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
 fi
 
+if [[ $SKIP_APPLY -eq 1 ]]; then
+  step "HTTPS installed; hostname + Caddyfile follow on the first apply.sh run."
+  exit 0
+fi
 step "HTTPS ready. LAN: https://${HOSTNAME_SHORT}.local${DOMAIN:+  Public: https://$DOMAIN}"
