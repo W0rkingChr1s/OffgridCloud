@@ -1,0 +1,15 @@
+# OffgridCloud — optionale Setup-Datei für das fertige Image.
+#
+# Nach dem Flashen als "offgridcloud-setup.txt" auf die Boot-Partition der
+# SD-Karte legen (das FAT-Laufwerk, das unter Windows/macOS sichtbar ist).
+# Die Box liest sie beim ersten Start und löscht sie danach von der Karte.
+# Ohne diese Datei ist das Setup-WLAN offen und der Assistent ohne Code nutzbar.
+
+# Der Setup-Assistent verlangt diesen Code (schützt vor "wer zuerst kommt").
+SETUP_CODE=
+
+# Setup-WLAN mit Passwort statt offen (8–63 Zeichen).
+SETUP_WIFI_PASSWORD=
+
+# WLAN-Land (Funkregeln), Vorgabe DE.
+COUNTRY=DE

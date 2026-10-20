@@ -74,6 +74,15 @@ wenn die Leitung zu dünn wird.
 
 ## Schnellstart
 
+**Fertiges Image (Raspberry Pi 3/4/5, Zero 2 W).** Jedes
+[Release](https://github.com/W0rkingChr1s/OffgridCloud/releases) enthält ein
+flashbares `offgridcloud-<version>-rpi-arm64.img.xz`. Mit dem Raspberry Pi Imager
+auf die SD-Karte schreiben, booten, dann den **Setup-Assistenten** im Browser
+öffnen: per Kabel unter `http://offgridcloud-setup.local`, ohne Kabel über das
+WLAN `OffgridCloud-Setup-XXXX` (öffnet sich als Captive Portal). Details,
+Setup-Code und Sicherheitshinweise: **[docs/IMAGE.md](docs/IMAGE.md)**.
+
+
 **One-Liner (empfohlen — Linux / Raspberry Pi OS).** Installiert alle Abhängigkeiten
 (git, Node, Python, rclone), baut das Frontend, richtet einen systemd-Dienst ein,
 startet ihn und prüft den Health-Endpoint:
@@ -167,6 +176,7 @@ Die ausführlichen Anleitungen liegen unter [`docs/`](docs/) (und sind für das
 **[Projekt-Wiki](https://github.com/W0rkingChr1s/OffgridCloud/wiki)** aufbereitet):
 
 - 📗 [Betriebshandbuch](docs/BETRIEB.md) — Installation, Absicherung, Betrieb, Troubleshooting
+- 💿 [Fertiges Image](docs/IMAGE.md) — Raspberry-Pi-Image flashen und per Setup-Assistent einrichten
 - 📘 [Konzept](docs/KONZEPT.md) — Vision, Architektur, Datenmodell, Tech-Stack
 - 🖥️ [OffgridCloud OS](docs/KIOSK.md) — Vollbild-Menü an der Box (Konsole/Kiosk) mit PIN-geschütztem OS-Zugang
 - 📡 [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md) — WLAN-Rückfallebene bei Router-Ausfall

@@ -12,12 +12,12 @@ import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, announce, telegram_bot
+from . import __version__, announce, setup_wizard, telegram_bot
 from .admin_ops import disk_usage, ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
@@ -39,6 +39,7 @@ from .routers import (
     network,
     pool,
     providers,
+    setup,
     storage,
     system,
     transfers,
@@ -117,6 +118,35 @@ app.include_router(network.router)
 app.include_router(vpn.router)
 app.include_router(storage.router)
 app.include_router(storage.public_router)
+app.include_router(setup.router)
+
+# API paths that stay open while the image's setup wizard has not run yet.
+_SETUP_OPEN_API = ("/api/setup/", "/api/health")
+
+
+@app.middleware("http")
+async def setup_gate(request: Request, call_next):
+    """Setup mode (prebuilt image, no account yet): lock everything else.
+
+    The API answers 503 so nothing can be used before an admin exists, and the
+    captive-portal probes of phones on the setup Wi-Fi get redirected to the
+    wizard (see ``setup_wizard.captive_redirect``).
+    """
+    if not setup_wizard.setup_required():
+        return await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/"):
+        if not path.startswith(_SETUP_OPEN_API):
+            return JSONResponse({"detail": "setup_required"}, status_code=503)
+    elif request.method == "GET":
+        peer = request.client.host if request.client else ""
+        target = setup_wizard.captive_redirect(
+            request.headers.get("host", ""),
+            setup_wizard.client_ip(peer, request.headers.get("x-forwarded-for", "")),
+        )
+        if target:
+            return RedirectResponse(target, status_code=302)
+    return await call_next(request)
 
 
 @app.get("/api/health")

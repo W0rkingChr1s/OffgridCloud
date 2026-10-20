@@ -1,0 +1,15 @@
+# First boot of the OffgridCloud image: per-box secret, setup mode.
+# Installed by deploy/setup/install.sh (image build only).
+[Unit]
+Description=OffgridCloud first boot (secrets + setup mode)
+ConditionPathExists=/var/lib/offgridcloud/firstboot-pending
+After=local-fs.target
+Before=offgridcloud.service caddy.service avahi-daemon.service NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/offgridcloud/deploy/setup/firstboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

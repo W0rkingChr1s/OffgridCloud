@@ -10,8 +10,9 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      # Tailwind v4 needs a migration (@tailwindcss/postcss, CSS-first config);
-      # a blind major bump breaks the build. Upgrade deliberately instead.
+      # Tailwind 4 needs a migration (@tailwindcss/postcss + CSS-based config);
+      # a plain version bump breaks the build (see #109). Minor/patch of 3.x
+      # still come in. Remove once the v4 migration has landed.
       - dependency-name: "tailwindcss"
         update-types: ["version-update:semver-major"]
 
