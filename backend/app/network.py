@@ -246,8 +246,144 @@ def get_status(*, apply_wired: bool = False) -> NetworkStatus:
         connectivity=connectivity,
         wifi_ip=_wifi_ip(devices, AP_CONNECTION_NAME),
     )
+    if status.wifi_ssid:
+        # build_status only sees the connection *name* (e.g. the Imager/netplan
+        # profile "netplan-wlan0-MyRouter"); show the actual SSID instead.
+        ssid = _wifi_details(status.wifi_ssid).get("ssid")
+        if ssid:
+            status.wifi_ssid = ssid
     status.apply_wired = apply_wired
     return status
+
+
+# --------------------------------------------------------------------------- #
+# System Wi-Fi profiles (read-only)                                            #
+# --------------------------------------------------------------------------- #
+@dataclass
+class SystemNetwork:
+    """A Wi-Fi client profile NetworkManager knows that OffgridCloud doesn't manage.
+
+    Typically the network entered in Raspberry Pi Imager (rendered via netplan as
+    ``netplan-wlan0-<SSID>``) or one added by hand with ``nmcli``/``nmtui``.
+    NetworkManager auto-joins these just like our own profiles, so the admin must
+    see them — but the unprivileged app can't read their secrets or change them.
+    """
+
+    name: str  # NetworkManager connection name
+    ssid: str
+    priority: int = 0
+    autoconnect: bool = True
+    has_password: bool = False
+    active: bool = False
+
+
+def parse_connection_list(raw: str) -> list[dict[str, str]]:
+    """Parse ``nmcli -t -f NAME,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE connection show``."""
+    rows: list[dict[str, str]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        parts = _split_terse(line)
+        if len(parts) < 5:
+            continue
+        rows.append(
+            {
+                "name": parts[0],
+                "type": parts[1],
+                "autoconnect": parts[2],
+                "priority": parts[3],
+                "active": parts[4],
+            }
+        )
+    return rows
+
+
+def parse_connection_details(raw: str) -> dict[str, str]:
+    """Parse ``nmcli -t -f <fields> connection show <name>`` (one ``key:value`` per line).
+
+    Keys never contain ':' so everything after the first separator is the value.
+    """
+    out: dict[str, str] = {}
+    for line in raw.splitlines():
+        key, sep, value = line.partition(_SEP)
+        if sep:
+            out[key.strip()] = value.strip()
+    return out
+
+
+def _wifi_details(name: str) -> dict[str, str]:
+    """SSID, mode and key management of a Wi-Fi profile (no secrets needed)."""
+    raw = _run_nmcli(
+        [
+            "-t",
+            "-f",
+            "802-11-wireless.ssid,802-11-wireless.mode,802-11-wireless-security.key-mgmt",
+            "connection",
+            "show",
+            name,
+        ]
+    )
+    if not raw:
+        return {}
+    d = parse_connection_details(raw)
+    return {
+        "ssid": d.get("802-11-wireless.ssid", ""),
+        "mode": d.get("802-11-wireless.mode", ""),
+        "key_mgmt": d.get("802-11-wireless-security.key-mgmt", ""),
+    }
+
+
+def build_system_networks(
+    rows: list[dict[str, str]],
+    details: dict[str, dict[str, str]],
+    *,
+    ap_connection_name: str = AP_CONNECTION_NAME,
+    client_prefix: str = CLIENT_CONNECTION_PREFIX,
+) -> list[SystemNetwork]:
+    """Pick the foreign Wi-Fi *client* profiles out of the connection list (pure)."""
+    out: list[SystemNetwork] = []
+    for row in rows:
+        name = row["name"]
+        if row["type"] not in ("802-11-wireless", "wifi"):
+            continue
+        if name == ap_connection_name or name.startswith(client_prefix):
+            continue
+        info = details.get(name, {})
+        if info.get("mode") in ("ap", "adhoc", "mesh"):
+            continue
+        key_mgmt = info.get("key_mgmt", "")
+        out.append(
+            SystemNetwork(
+                name=name,
+                ssid=info.get("ssid") or name,
+                priority=int(row["priority"]) if row["priority"].lstrip("-").isdigit() else 0,
+                autoconnect=row["autoconnect"] == "yes",
+                has_password=key_mgmt not in ("", "--", "none", "owe"),
+                active=row["active"] == "yes",
+            )
+        )
+    out.sort(key=lambda n: n.priority, reverse=True)
+    return out
+
+
+def get_system_networks() -> list[SystemNetwork]:
+    """Wi-Fi profiles configured outside OffgridCloud (best-effort, [] if unsupported)."""
+    if not nmcli_available():
+        return []
+    raw = _run_nmcli(
+        ["-t", "-f", "NAME,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY,ACTIVE", "connection", "show"]
+    )
+    if not raw:
+        return []
+    rows = parse_connection_list(raw)
+    details = {
+        r["name"]: _wifi_details(r["name"])
+        for r in rows
+        if r["type"] in ("802-11-wireless", "wifi")
+        and r["name"] != AP_CONNECTION_NAME
+        and not r["name"].startswith(CLIENT_CONNECTION_PREFIX)
+    }
+    return build_system_networks(rows, details)
 
 
 # --------------------------------------------------------------------------- #
