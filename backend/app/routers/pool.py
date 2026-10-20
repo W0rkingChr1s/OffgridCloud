@@ -15,14 +15,23 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import __version__
 from .. import pool as pool_core
 from .. import transfers as transfers_core
-from ..admin_ops import audit
+from ..admin_ops import audit, get_system_settings
 from ..crypto import encrypt
 from ..db import get_db
 from ..deps import require_admin
+from ..discovery import best_address, discovery
 from ..models import PoolAccessToken, PoolPeer, PoolTokenScope, Role, TransferStatus, User
 from ..schemas import (
+    DiscoveredBoxOut,
+    DiscoveryOut,
+    DiscoveryUpdate,
+    PairIn,
+    PairingCodeOut,
+    PairOut,
+    PeerPairIn,
     PoolAccessTokenCreate,
     PoolAccessTokenCreated,
     PoolAccessTokenOut,
@@ -169,6 +178,103 @@ def pool_retry_job(
     return out
 
 
+# --- Pairing: a hub trades a code shown here for a read token --------------
+
+
+@router.get("/pairing", response_model=PairingCodeOut)
+def get_pairing(_: User = Depends(require_admin)) -> PairingCodeOut:
+    current = pool_core.pairing.current()
+    return PairingCodeOut(code=current[0], expires_in=current[1]) if current else PairingCodeOut()
+
+
+@router.post("/pairing", response_model=PairingCodeOut)
+def open_pairing(
+    admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> PairingCodeOut:
+    """Show a fresh 6-digit code; a hub that enters it gets a read token here."""
+    code = pool_core.pairing.create()
+    audit(db, admin, "pool.pairing_open")
+    return PairingCodeOut(code=code, expires_in=pool_core.PAIRING_TTL_SECONDS)
+
+
+@router.delete("/pairing", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def close_pairing(_: User = Depends(require_admin)) -> Response:
+    pool_core.pairing.clear()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/pair", response_model=PairOut)
+def pair(payload: PairIn, db: Session = Depends(get_db)) -> PairOut:
+    """Called by a hub (no login): the shown code is the proof of consent."""
+    own_id = get_system_settings(db).node_id
+    if payload.hub_node_id and payload.hub_node_id == own_id:
+        raise HTTPException(status_code=409, detail="Das ist diese Box selbst")
+    result = pool_core.pairing.redeem(payload.code)
+    if result == "none":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Keine Kopplung offen – auf der Box zuerst einen Code erzeugen",
+        )
+    if result == "wrong":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Kopplungscode falsch")
+    hub_name = payload.hub_name.strip()
+    row, raw = pool_core.issue_token(db, hub_name, PoolTokenScope.READ)
+    audit(db, None, "pool.paired", f"{row.name} – Token …{row.hint} (lesen)")
+    return PairOut(token=raw, node_id=own_id, name=pool_core.node_name(), version=__version__)
+
+
+# --- Discovery (mDNS) --------------------------------------------------------
+
+
+def _peer_for(peers: list[PoolPeer], box: dict) -> PoolPeer | None:
+    """Which configured peer is this box? By node id, else by address + port."""
+    for peer in peers:
+        if peer.node_id and peer.node_id == box["node_id"]:
+            return peer
+    targets = {f"http://{a}:{box['port']}" for a in box["addresses"]}
+    return next((p for p in peers if not p.node_id and p.base_url in targets), None)
+
+
+@router.get("/discovery", response_model=DiscoveryOut)
+def get_discovery(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> DiscoveryOut:
+    """Other boxes announcing themselves in the LAN, and whether we announce."""
+    peers = list(db.scalars(select(PoolPeer)))
+    boxes = []
+    for box in discovery.boxes():
+        peer = _peer_for(peers, box)
+        boxes.append(
+            DiscoveredBoxOut(
+                node_id=box["node_id"],
+                name=box["name"],
+                version=box["version"],
+                url=f"http://{best_address(box['addresses'])}:{box['port']}",
+                addresses=box["addresses"],
+                peer_id=peer.id if peer else None,
+            )
+        )
+    error = discovery.error
+    if not discovery.running and not error:
+        error = "mDNS ist auf dieser Box ausgeschaltet (OGC_MDNS_ENABLED)"
+    return DiscoveryOut(
+        running=discovery.running,
+        error=error,
+        announce=get_system_settings(db).pool_announce,
+        boxes=boxes,
+    )
+
+
+@router.put("/discovery", response_model=DiscoveryOut)
+def update_discovery(
+    payload: DiscoveryUpdate, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> DiscoveryOut:
+    row = get_system_settings(db)
+    row.pool_announce = payload.announce
+    db.commit()
+    discovery.set_announce(payload.announce)
+    audit(db, admin, "pool.announce_" + ("on" if payload.announce else "off"))
+    return get_discovery(admin, db)
+
+
 # --- Access tokens this node issues, one per hub ---------------------------
 
 
@@ -245,6 +351,34 @@ def list_peers(
 ) -> list[PoolPeerOut]:
     peers = db.scalars(select(PoolPeer).order_by(PoolPeer.name)).all()
     return [_peer_out(p) for p in peers]
+
+
+@router.post("/peers/pair", response_model=PoolPeerOut, status_code=status.HTTP_201_CREATED)
+def pair_peer(
+    payload: PeerPairIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> PoolPeerOut:
+    """Pair with another box by the code it shows; store it as a peer here."""
+    own_id = get_system_settings(db).node_id
+    base_url = pool_core.normalize_base_url(payload.base_url)
+    try:
+        data = pool_core.pair_with_peer(base_url, payload.code, own_id)
+    except pool_core.PeerControlError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    node_id = str(data.get("node_id") or "")[:32]
+    peer = None
+    if node_id:
+        peer = db.scalar(select(PoolPeer).where(PoolPeer.node_id == node_id))
+    if peer is None:
+        peer = PoolPeer(name=(payload.name or data.get("name") or base_url).strip()[:200])
+        db.add(peer)
+    peer.base_url = base_url
+    peer.node_id = node_id
+    peer.token_encrypted = encrypt(str(data["token"]))
+    peer.enabled = True
+    db.commit()
+    db.refresh(peer)
+    audit(db, admin, "pool.peer_pair", f"{peer.name} ({peer.base_url})")
+    return _peer_out(peer)
 
 
 @router.post("/peers", response_model=PoolPeerOut, status_code=status.HTTP_201_CREATED)

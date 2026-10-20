@@ -71,6 +71,10 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
+    # Pool discovery: stable box identity + whether to announce via mDNS.
+    ("system_settings", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
+    ("system_settings", "pool_announce", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("pool_peers", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
     # Operational status announcements (startup / reconnect / bandwidth gate).
     ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),

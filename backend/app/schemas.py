@@ -774,6 +774,56 @@ class PoolAccessTokenUpdate(BaseModel):
     scope: PoolTokenScope | None = None
 
 
+class DiscoveredBoxOut(BaseModel):
+    """Another box announcing itself via mDNS — a suggestion, not a trusted peer."""
+
+    node_id: str
+    name: str
+    version: str = ""
+    url: str  # best guess for reaching it, e.g. http://192.168.1.20:8000
+    addresses: list[str] = []
+    peer_id: int | None = None  # already configured as a peer here
+
+
+class DiscoveryOut(BaseModel):
+    running: bool  # mDNS works on this box
+    error: str = ""  # why not, if it doesn't
+    announce: bool  # this box announces itself
+    boxes: list[DiscoveredBoxOut] = []
+
+
+class DiscoveryUpdate(BaseModel):
+    announce: bool
+
+
+class PairingCodeOut(BaseModel):
+    code: str = ""  # empty = no pairing open
+    expires_in: int = 0  # seconds
+
+
+class PairIn(BaseModel):
+    """A hub asks this box for a token, proving presence with the shown code."""
+
+    code: str = Field(min_length=1, max_length=12)
+    hub_name: str = Field(min_length=1, max_length=100)
+    hub_node_id: str = Field(default="", max_length=32)
+
+
+class PairOut(BaseModel):
+    token: str
+    node_id: str
+    name: str
+    version: str = ""
+
+
+class PeerPairIn(BaseModel):
+    """Hub side: pair with the box at ``base_url`` using the code it shows."""
+
+    base_url: str = Field(min_length=1, max_length=500)
+    code: str = Field(min_length=1, max_length=12)
+    name: str | None = Field(default=None, max_length=200)
+
+
 class TransferControlIn(BaseModel):
     """One manual transfer action, locally or sent by a pool hub."""
 

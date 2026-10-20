@@ -11,6 +11,9 @@ User=offgrid
 Group=offgrid
 WorkingDirectory=/opt/offgridcloud/backend
 EnvironmentFile=/opt/offgridcloud/.env
+# Port announced to other boxes via mDNS (Pool); install.sh keeps it in sync
+# with --port below. A value in .env takes precedence.
+Environment=OGC_MDNS_PORT=8000
 ExecStart=/opt/offgridcloud/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=5

@@ -269,6 +269,9 @@ class PoolPeer(Base):
     base_url: Mapped[str] = mapped_column(String(500))  # e.g. http://box2.local:8000
     token_encrypted: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The peer's node_id, known when it was paired via code; empty for peers
+    # added by URL + token. Marks it as "already paired" in the discovery list.
+    node_id: Mapped[str] = mapped_column(String(32), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -417,6 +420,11 @@ class SystemSettings(Base):
     # into ``pool_access_tokens`` on startup and then cleared; see
     # ``pool.migrate_legacy_token``.
     pool_token: Mapped[str] = mapped_column(String(128), default="")
+    # Stable identity of this box in the pool (mDNS TXT record, pairing), so a
+    # hub recognises it after an IP change and never lists itself as a peer.
+    node_id: Mapped[str] = mapped_column(String(32), default="")
+    # Announce this box via mDNS so hubs in the LAN can find it.
+    pool_announce: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

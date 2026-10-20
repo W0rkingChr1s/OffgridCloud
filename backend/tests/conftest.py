@@ -11,6 +11,8 @@ os.environ.setdefault("OGC_INITIAL_ADMIN_EMAIL", "admin@test.local")
 os.environ.setdefault("OGC_INITIAL_ADMIN_PASSWORD", "adminpass123")
 # Drive transfer-job state deterministically in tests; no background worker.
 os.environ.setdefault("OGC_WORKER_ENABLED", "false")
+# No multicast traffic from the test suite.
+os.environ.setdefault("OGC_MDNS_ENABLED", "false")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

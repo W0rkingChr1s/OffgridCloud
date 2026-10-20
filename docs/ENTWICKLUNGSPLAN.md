@@ -108,6 +108,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ **Pool-Fernsteuerung**: Hub pausiert/setzt Uploads fort und stößt Fehlgeschlagene neu an — nur mit einem Token mit Recht „steuern“; Audit auf beiden Seiten.
 - ☑ **Pool-Tokens pro Hub**: jeder Hub ein eigenes, einzeln sperrbares Token (lesen/steuern), auf der Box nur als Hash gespeichert; das alte gemeinsame Token wird automatisch übernommen.
 - ☑ **Pool-Job-Liste**: Hub zeigt die Transfers eines Peers mit Fehlertext und stößt einzelne Jobs neu an (Recht „steuern“).
+- ☑ **Pool-Discovery**: Boxen finden sich per mDNS (`_offgridcloud._tcp`) und koppeln per 6-stelligem Code statt Token-Copy-Paste (nur Leserecht).
 - ☐ **Pool-Ausbau** (Lastverteilung, Relay, Spiegelung …): siehe [Ausbauplan](MULTI-SERVER-POOL.md#ausbauplan).
 - ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
 

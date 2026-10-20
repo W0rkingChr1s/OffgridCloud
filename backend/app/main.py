@@ -18,13 +18,15 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, announce, buffers, setup_wizard, telegram_bot
-from .admin_ops import disk_usage, ensure_system_settings
+from .admin_ops import disk_usage, ensure_system_settings, get_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
 from .config import get_settings
-from .db import init_db
+from .db import SessionLocal, init_db
+from .discovery import discovery
 from .integrity import run_startup_checks
 from .network import ensure_network_settings
+from .pool import ensure_node_id, node_name
 from .pool import migrate_legacy_token as migrate_legacy_pool_token
 from .prtg import health_to_prtg
 from .rclone import check_rclone
@@ -64,6 +66,7 @@ async def lifespan(app: FastAPI):
     ensure_policy()
     ensure_system_settings()
     migrate_legacy_pool_token()
+    node_id = ensure_node_id()
     ensure_network_settings()
     # Mount buffer drives first, so their files are checked rather than
     # mistaken for lost ones.
@@ -94,6 +97,17 @@ async def lifespan(app: FastAPI):
         threading.Thread(
             target=telegram_bot.run_bot, args=(bot_stop,), name="telegram-bot", daemon=True
         ).start()
+    if settings.mdns_enabled:
+        # Announce this box and look for others (Pool page). Never fatal.
+        with SessionLocal() as db:
+            announce_box = get_system_settings(db).pool_announce
+        await discovery.start(
+            node_id=node_id,
+            name=node_name(),
+            version=__version__,
+            port=settings.mdns_port,
+            announce=announce_box,
+        )
     try:
         yield
     finally:
@@ -101,6 +115,7 @@ async def lifespan(app: FastAPI):
         bot_stop.set()
         for task in tasks:
             await task
+        await discovery.stop()
 
 
 app = FastAPI(title=settings.app_name, version=__version__, lifespan=lifespan)

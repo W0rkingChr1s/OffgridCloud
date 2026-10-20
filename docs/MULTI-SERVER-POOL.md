@@ -30,7 +30,33 @@ sicher und sparsam genug für den Raspberry Pi:
 
 ## Einrichtung
 
-### 1. Auf jeder Peer-Box: Token für den Hub erzeugen
+### Der schnelle Weg: finden und per Code koppeln
+
+Boxen im selben Netz **finden sich automatisch** (mDNS, Dienst
+`_offgridcloud._tcp`). So koppelt man eine Box an den Hub:
+
+1. **An der Peer-Box:** Web-UI → **Pool** → **„Kopplungscode erzeugen“** —
+   oder an der Konsole der Box *Pool → Kopplungscode für einen Hub anzeigen*.
+   Es erscheint ein **6-stelliger Code**, 10 Minuten gültig, einmal verwendbar.
+2. **Am Hub:** Web-UI → **Pool** → *In der Nähe gefunden* → bei der Box
+   **„Koppeln …“**, Code eingeben.
+
+Fertig: Die Box ist Peer des Hubs, mit einem eigenen Token mit Recht
+**nur lesen**. *Steuern* vergibt man danach bewusst an der Peer-Box (siehe
+unten). Steht eine Box nicht in der Liste (anderes Subnetz, Docker ohne
+Host-Netz), geht dasselbe per *„Box nicht in der Liste? Per Adresse + Code
+koppeln“* mit ihrer URL.
+
+**Voraussetzungen:** Hub und Peer im selben Netz (Multicast wird von Routern
+nicht zwischen Subnetzen weitergereicht), UDP-Port 5353 offen. Im
+**Docker-Container** nur mit `network_mode: host` (siehe `docker-compose.yml`) —
+im Standard-Bridge-Netz bleibt die Liste leer, die Seite sagt das dazu. Wer eine
+Box nicht im Netz zeigen will, schaltet *„Diese Box im Netz anzeigen (mDNS)“* aus
+oder setzt `OGC_MDNS_ENABLED=false` (dann sucht sie auch selbst nicht).
+
+### Von Hand: Token erzeugen und eintragen
+
+#### 1. Auf jeder Peer-Box: Token für den Hub erzeugen
 
 Web-UI → **Pool** → *Zugriff für Hubs auf diese Box*: Namen des Hubs eintragen
 (z. B. `ELW`), Recht wählen, **„Token erzeugen“**. Das Token wird **einmalig**
@@ -51,7 +77,7 @@ wurde. Recht ändern oder Zugriff entziehen wirkt sofort und nur für diesen Hub
 Die URL der Box ist die, unter der der Hub sie erreicht, z. B.
 `https://box2.local:8000` oder `http://10.0.0.12:8000`.
 
-### 2. Auf der Hub-Box: Peers eintragen
+#### 2. Auf der Hub-Box: Peers eintragen
 
 Web-UI → **Pool** → Formular *Peers verwalten*:
 
@@ -124,6 +150,15 @@ Hostnamen des Hubs.
   Boxen hinter einem Reverse-Proxy mit TLS stehen (siehe
   [docs/BETRIEB.md](BETRIEB.md), Abschnitt 3) — im Offline-Feld genügt ein
   self-signed Zertifikat.
+- **Gefunden heißt nicht vertraut.** mDNS ist nicht authentifiziert — jeder im
+  LAN kann sich als OffgridCloud-Box ausgeben. Die Liste macht deshalb nur
+  *Vorschläge*: Zugriff gibt es erst über den Kopplungscode, den man an der
+  echten Box abliest. Der Hub schickt nie ein gespeichertes Token an eine
+  Adresse, die er nur per mDNS kennt; ändert sich die IP eines Peers, koppelt
+  man neu (der Peer wird dabei aktualisiert, nicht verdoppelt).
+- **Kopplungscode.** 6 Ziffern, 10 Minuten gültig, nach 5 Fehlversuchen
+  verbrannt — Raten hat damit eine Chance von 5 zu einer Million, und für jeden
+  neuen Code muss jemand an der Box sein. Kopplung gibt nur Leserecht.
 - **Ein Token pro Hub, Rechte pro Token.** Ein verlorener oder fremder Hub wird
   gesperrt, indem man sein Token löscht — die anderen Hubs merken nichts davon.
   Tokens starten mit *nur lesen*; *steuern* muss man bewusst vergeben.
@@ -154,6 +189,10 @@ Hostnamen des Hubs.
 | `GET/POST /api/transfers/control` | Dieselben Aktionen lokal (Admin). |
 | `GET /api/pool/overview` | Hub-Sicht: diese Box + alle Peers + Summen (Admin). |
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
+| `GET /api/pool/discovery` · `PUT /api/pool/discovery` | Per mDNS gefundene Boxen (mit Hinweis, ob schon Peer); eigene Ankündigung an/aus (Admin). |
+| `GET/POST/DELETE /api/pool/pairing` | Kopplungscode dieser Box anzeigen/erzeugen/verwerfen (Admin). |
+| `POST /api/pool/pair` | Hub tauscht Code gegen Lese-Token (ohne Login; der Code ist der Nachweis). |
+| `POST /api/pool/peers/pair` | Hub koppelt sich mit `{base_url, code}` und legt den Peer an (Admin). |
 | `GET/POST /api/pool/tokens` | Tokens für Hubs auflisten/erzeugen; Body `{"name", "scope": "read" \| "control"}`. Klartext nur in der POST-Antwort (Admin). |
 | `PATCH/DELETE /api/pool/tokens/{id}` | Recht/Name ändern, Zugriff entziehen (Admin). |
 
@@ -184,7 +223,7 @@ Koordination vor dem Relay.
 |---|---|---|
 | ☑ **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
 | ☑ **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
-| **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
+| ☑ **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
 | **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |
 
 ### Stufe 2 — Koordination der Leitung

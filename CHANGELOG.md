@@ -15,6 +15,15 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Job-Liste eines Peers:** „Jobs ansehen“ auf der Kachel zeigt die Transfers der Box mit Datei, Ziel und **Fehlertext**, gefiltert nach Fehlgeschlagen/Wartend/Läuft/Alle. Mit Recht „steuern“ lässt sich jeder Job einzeln neu anstoßen. Für die eigene Box gibt es dieselbe Liste.
 - Peers mit älterer Version zeigen keine Buttons bzw. melden „Update nötig“. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
 
+### 📡 Pool: Boxen finden sich selbst und koppeln per Code
+
+- **Automatisch gefunden:** Boxen im selben Netz kündigen sich per mDNS an (`_offgridcloud._tcp`). Unter **Pool → In der Nähe gefunden** stehen sie mit Name, Version und Adresse, bereits gekoppelte sind markiert.
+- **Koppeln per Code statt Token kopieren:** An der Peer-Box **„Kopplungscode erzeugen“** (oder an der Box-Konsole *Kopplungscode für einen Hub anzeigen*), am Hub den 6-stelligen Code eingeben, fertig. Der Code gilt 10 Minuten, einmal, und ist nach 5 Fehlversuchen verbrannt. Kopplung gibt nur Leserecht, „steuern“ vergibt die Peer-Box selbst.
+- **Sicher trotz offenem mDNS:** Die Liste macht nur Vorschläge, Zugriff gibt es erst mit dem Code von der echten Box. Ein gespeichertes Token geht nie an eine nur per mDNS gelernte Adresse.
+- Boxen nicht in der Liste (anderes Subnetz) lassen sich per Adresse + Code koppeln. Ankündigung abschaltbar unter Pool oder per `OGC_MDNS_ENABLED=false`.
+- **Docker:** Finden klappt nur mit `network_mode: host` (Hinweis in `docker-compose.yml`), sonst bleibt die Liste leer und die Seite sagt warum.
+- Neue Abhängigkeiten: `zeroconf` und `ifaddr` (fertige Pakete für Pi 3/4/5 und x86).
+
 ### 🔑 Pool: ein Token pro Hub
 
 - **Jeder Hub bekommt sein eigenes Token** (**Pool → Zugriff für Hubs auf diese Box**), mit Namen und Recht *nur lesen* oder *lesen + steuern*. *Nur lesen* umfasst die Job-Liste, also auch Dateinamen und Fehlertexte. Einen Hub sperren heißt sein Token löschen, die anderen Hubs bleiben verbunden. Bisher teilten sich alle Hubs ein Token, und Sperren hieß: neu erzeugen und überall neu eintragen.

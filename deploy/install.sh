@@ -642,7 +642,8 @@ chown -h "$SERVICE_USER:$SERVICE_USER" "$PREFIX/.env"
 # --- systemd service --------------------------------------------------------
 if [[ $INSTALL_SERVICE -eq 1 ]]; then
   step "Installing systemd service (port $PORT)..."
-  sed "s/--port 8000/--port $PORT/" "$REPO_ROOT/deploy/offgridcloud.service" \
+  sed -e "s/--port 8000/--port $PORT/" -e "s/OGC_MDNS_PORT=8000/OGC_MDNS_PORT=$PORT/" \
+    "$REPO_ROOT/deploy/offgridcloud.service" \
     > /etc/systemd/system/offgridcloud.service
   systemctl daemon-reload
   [[ $IMAGE_BUILD -eq 1 ]] && systemctl enable offgridcloud

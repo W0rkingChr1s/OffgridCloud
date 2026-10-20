@@ -343,6 +343,9 @@ class Api:
     def delete_pool_token(self, token_id: int) -> dict:
         return self._request("DELETE", f"/api/pool/tokens/{token_id}")
 
+    def open_pool_pairing(self) -> dict:
+        return self._request("POST", "/api/pool/pairing")
+
     def get_pool_peers(self) -> list:
         return self._request("GET", "/api/pool/peers")
 
@@ -677,6 +680,7 @@ class Console:
             return [("wifi", "WLAN & Fallback-AP"), ("bandwidth", "Bandbreite"), ("vpn", "VPN")]
         if key == "pool":
             return [("pool_ov", "Pool-Übersicht"),
+                    ("pool_pair", "Kopplungscode für einen Hub anzeigen"),
                     ("pool_token", "Zugriff für Hubs (Tokens)"),
                     ("pool_peers", "Peers (andere Boxen) verwalten")]
         if key == "users":
@@ -750,6 +754,7 @@ class Console:
                 "bandwidth": self._bandwidth_editor,
                 "vpn": self._vpn_area,
                 "pool_ov": self._pool_overview,
+                "pool_pair": self._pool_pair,
                 "pool_token": self._pool_token,
                 "pool_peers": self._pool_peers,
                 "users": self._users_area,
@@ -1521,6 +1526,25 @@ class Console:
         for p in peers:
             lines += node_lines(p, prefix="  ")
         self._show_text("Pool-Übersicht", lines)
+
+    def _pool_pair(self):
+        """Show a pairing code to type in on the hub (the box's own screen is the proof)."""
+        try:
+            r = self.api.open_pool_pairing()
+        except ApiError as exc:
+            self.message = f"Konnte keinen Code erzeugen: {exc.detail}"
+            return
+        code = r.get("code", "")
+        minutes = int(r.get("expires_in", 0)) // 60
+        self._show_text("Kopplungscode", [
+            "Am Hub unter Pool → „In der Nähe gefunden“ bei dieser Box eingeben:",
+            "",
+            f"        {' '.join(code)}",
+            "",
+            f"Gültig {minutes} Minuten, nur einmal verwendbar.",
+            "Der Hub bekommt damit nur Leserecht; „steuern“ hier unter",
+            "„Zugriff für Hubs (Tokens)“ vergeben.",
+        ])
 
     def _pool_token(self):
         """One token per hub: create, switch read/control, revoke."""

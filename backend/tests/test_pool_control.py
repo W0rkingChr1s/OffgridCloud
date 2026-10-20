@@ -172,7 +172,7 @@ def test_hub_explains_refused_control(client, admin_auth, monkeypatch):
 def test_hub_name_header_is_ascii(monkeypatch):
     from app.models import PoolPeer
 
-    monkeypatch.setattr(pool_core, "_node_name", lambda: "Box – Ölwehr")
+    monkeypatch.setattr(pool_core, "node_name", lambda: "Box – Ölwehr")
     headers = pool_core._peer_headers(PoolPeer(name="p", base_url="http://x", token_encrypted=""))
     headers["X-Pool-Hub"].encode("ascii")  # must not raise
 

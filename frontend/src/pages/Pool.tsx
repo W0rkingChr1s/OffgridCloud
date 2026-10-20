@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  type DiscoveredBox,
+  type PairingCode,
+  type PoolDiscovery,
   type PoolNodeStatus,
   type PoolOverview,
   type PoolAccessToken,
@@ -306,6 +309,251 @@ function NodeJobs({
   );
 }
 
+/** Boxes announcing themselves in the LAN; pair one by the code it shows. */
+function NearbyBoxes({ onPaired }: { onPaired: () => void }) {
+  const [disc, setDisc] = useState<PoolDiscovery | null>(null);
+  const [pairing, setPairing] = useState<string | null>(null); // node_id or "manual"
+  const [code, setCode] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  const load = useCallback(() => {
+    api<PoolDiscovery>("/api/pool/discovery").then(setDisc).catch(() => setDisc(null));
+  }, []);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  function startPairing(key: string) {
+    setPairing(key);
+    setCode("");
+  }
+
+  async function pair(e: React.FormEvent, baseUrl: string, name?: string) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const peer = await api<PoolPeer>("/api/pool/peers/pair", {
+        method: "POST",
+        body: JSON.stringify({ base_url: baseUrl, code, name }),
+      });
+      toast.success("Gekoppelt", `„${peer.name}" ist jetzt Peer (nur lesen).`);
+      setPairing(null);
+      setManualUrl("");
+      load();
+      onPaired();
+    } catch (err) {
+      toast.error("Kopplung fehlgeschlagen", err instanceof ApiError ? err.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input =
+    "w-28 rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-center font-mono text-sm tracking-widest text-white outline-hidden focus:border-ogc-teal/50";
+  const btn = "rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5 disabled:opacity-50";
+
+  function codeForm(onSubmit: (e: React.FormEvent) => void) {
+    return (
+      <form onSubmit={onSubmit} className="flex items-center gap-2">
+        <input
+          className={input}
+          inputMode="numeric"
+          autoFocus
+          placeholder="Code"
+          maxLength={6}
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          aria-label="Kopplungscode"
+        />
+        <button type="submit" disabled={busy || code.length !== 6} className={btn}>
+          Koppeln
+        </button>
+        <button type="button" onClick={() => setPairing(null)} className="text-xs text-slate-400">
+          Abbrechen
+        </button>
+      </form>
+    );
+  }
+
+  if (!disc) return null;
+  const open = disc.boxes.filter((b: DiscoveredBox) => b.peer_id === null);
+  return (
+    <div className="mb-8">
+      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        In der Nähe gefunden
+      </h3>
+      {!disc.running ? (
+        <p className="mb-2 text-sm text-slate-500">
+          Automatische Suche nicht verfügbar: {disc.error}. In Docker funktioniert sie nur mit{" "}
+          <code>network_mode: host</code>.
+        </p>
+      ) : disc.boxes.length === 0 ? (
+        <p className="mb-2 text-sm text-slate-500">
+          Keine andere Box im Netz gefunden. Boxen müssen im selben Netz (Subnetz) sein und sich
+          anzeigen lassen.
+        </p>
+      ) : (
+        <div className="mb-2 space-y-2">
+          {disc.boxes.map((b) => (
+            <div
+              key={b.node_id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-800/60 p-3 text-sm ring-1 ring-white/5"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-white">
+                  {b.name}
+                  {b.version && <span className="ml-2 text-xs text-slate-500">v{b.version}</span>}
+                </div>
+                <div className="truncate text-xs text-slate-500">{b.url}</div>
+              </div>
+              {b.peer_id !== null ? (
+                <span className="rounded-sm bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+                  gekoppelt
+                </span>
+              ) : pairing === b.node_id ? (
+                codeForm((e) => pair(e, b.url, b.name))
+              ) : (
+                <button onClick={() => startPairing(b.node_id)} className={btn}>
+                  Koppeln …
+                </button>
+              )}
+            </div>
+          ))}
+          {open.length > 0 && (
+            <p className="text-xs text-slate-500">
+              „Koppeln“: Auf der anderen Box unter Pool einen Kopplungscode erzeugen und hier
+              eingeben.
+            </p>
+          )}
+        </div>
+      )}
+      {pairing === "manual" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="rounded-lg border border-white/10 bg-slate-800/60 px-3 py-1 text-sm text-white outline-hidden focus:border-ogc-teal/50"
+            placeholder="http://192.168.1.20:8000"
+            value={manualUrl}
+            onChange={(e) => setManualUrl(e.target.value)}
+            aria-label="Adresse der Box"
+          />
+          {codeForm((e) => pair(e, manualUrl))}
+        </div>
+      ) : (
+        <button onClick={() => startPairing("manual")} className="text-xs text-slate-400 underline">
+          Box nicht in der Liste? Per Adresse + Code koppeln
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** This box's side: show a pairing code, and whether to announce itself. */
+function PairingPanel({ onChanged }: { onChanged: () => void }) {
+  const [pairing, setPairing] = useState<PairingCode | null>(null);
+  const [left, setLeft] = useState(0);
+  const [announce, setAnnounce] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api<PairingCode>("/api/pool/pairing").then((p) => {
+      if (p.code) {
+        setPairing(p);
+        setLeft(p.expires_in);
+      }
+    });
+    api<PoolDiscovery>("/api/pool/discovery")
+      .then((d) => setAnnounce(d.announce))
+      .catch(() => setAnnounce(null));
+  }, []);
+
+  // Count down locally; when the code expires (or got used), drop it.
+  useEffect(() => {
+    if (!pairing) return;
+    const t = setInterval(() => {
+      setLeft((s) => {
+        if (s <= 1) {
+          setPairing(null);
+          onChanged();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [pairing, onChanged]);
+
+  // A hub that redeemed the code shows up as a new token — notice it.
+  useEffect(() => {
+    if (!pairing) return;
+    const t = setInterval(() => {
+      api<PairingCode>("/api/pool/pairing").then((p) => {
+        if (!p.code) {
+          setPairing(null);
+          onChanged();
+        }
+      });
+    }, 3000);
+    return () => clearInterval(t);
+  }, [pairing, onChanged]);
+
+  async function create() {
+    const p = await api<PairingCode>("/api/pool/pairing", { method: "POST" });
+    setPairing(p);
+    setLeft(p.expires_in);
+  }
+
+  async function cancel() {
+    await api("/api/pool/pairing", { method: "DELETE" });
+    setPairing(null);
+  }
+
+  async function toggleAnnounce() {
+    if (announce === null) return;
+    const d = await api<PoolDiscovery>("/api/pool/discovery", {
+      method: "PUT",
+      body: JSON.stringify({ announce: !announce }),
+    });
+    setAnnounce(d.announce);
+  }
+
+  const btn = "rounded-lg border border-white/10 px-4 py-2 text-sm hover:bg-white/5";
+  return (
+    <div className="mb-4 space-y-3">
+      {pairing ? (
+        <div className="rounded-xl bg-slate-800/60 p-4 ring-1 ring-ogc-teal/30">
+          <div className="text-xs text-slate-400">
+            Kopplungscode — am Hub unter „In der Nähe gefunden“ eingeben:
+          </div>
+          <div className="my-1 font-mono text-4xl font-bold tracking-[0.3em] text-ogc-teal">
+            {pairing.code}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            noch {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")} min gültig · einmal
+            verwendbar · der Hub bekommt nur Leserecht
+            <button onClick={cancel} className="text-slate-300 underline">
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={create} className={btn}>
+          Kopplungscode erzeugen
+        </button>
+      )}
+      {announce !== null && (
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input type="checkbox" checked={announce} onChange={toggleAnnounce} />
+          Diese Box im Netz anzeigen (mDNS), damit Hubs sie finden
+        </label>
+      )}
+    </div>
+  );
+}
+
 export default function Pool() {
   const [overview, setOverview] = useState<PoolOverview | null>(null);
   const [peers, setPeers] = useState<PoolPeer[]>([]);
@@ -543,6 +791,13 @@ export default function Pool() {
         />
       )}
 
+      <NearbyBoxes
+        onPaired={() => {
+          loadPeers();
+          loadOverview();
+        }}
+      />
+
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
           Peers verwalten
@@ -626,10 +881,12 @@ export default function Pool() {
         Zugriff für Hubs auf diese Box
       </h3>
       <p className="mb-3 text-sm text-slate-400">
-        Jede Box, die <em>diese</em> hier als Peer abfragen soll, bekommt ein eigenes Token. Dort
-        mit dieser URL + Token als Peer eintragen. Einzelne Hubs lassen sich jederzeit sperren, ohne
-        die anderen neu einzurichten.
+        Jede Box, die <em>diese</em> hier als Peer abfragen soll, bekommt ein eigenes Token. Am
+        einfachsten per Kopplungscode; alternativ hier ein Token erzeugen und dort mit dieser URL
+        eintragen. Einzelne Hubs lassen sich jederzeit sperren, ohne die anderen neu einzurichten.
       </p>
+
+      <PairingPanel onChanged={loadPeers} />
 
       <form onSubmit={createToken} className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
         <input

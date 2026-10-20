@@ -652,6 +652,28 @@ export interface PoolAccessTokenCreated extends PoolAccessToken {
   token: string;
 }
 
+/** Another box announcing itself via mDNS — a suggestion, not a trusted peer. */
+export interface DiscoveredBox {
+  node_id: string;
+  name: string;
+  version: string;
+  url: string;
+  addresses: string[];
+  peer_id: number | null;
+}
+
+export interface PoolDiscovery {
+  running: boolean;
+  error: string;
+  announce: boolean;
+  boxes: DiscoveredBox[];
+}
+
+export interface PairingCode {
+  code: string;
+  expires_in: number;
+}
+
 export type TransferAction = "pause" | "resume" | "retry_failed";
 
 export interface TransferControl {

@@ -147,6 +147,13 @@ class Settings(BaseSettings):
     worker_poll_interval: float = 3.0  # seconds between idle polls
     worker_max_attempts: int = 5
 
+    # --- Pool discovery (mDNS) ----------------------------------------------
+    # Announce this box as ``_offgridcloud._tcp`` and look for others in the LAN.
+    # Off in tests. In Docker it only reaches the LAN with ``network_mode: host``.
+    mdns_enabled: bool = True
+    # Port other boxes use to reach this backend (the plain-HTTP uvicorn port).
+    mdns_port: int = 8000
+
     # Background reconciler: how often (seconds) to re-queue failed/stuck
     # transfers and backfill any missing jobs, so a temporary outage self-heals
     # once connectivity returns. 0 disables the loop. Gated per-instance by the

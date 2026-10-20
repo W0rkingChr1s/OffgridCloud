@@ -20,9 +20,12 @@ import logging
 import secrets
 import socket
 import ssl
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
@@ -54,7 +57,7 @@ TOKEN_PREFIX = "ogcp_"
 _LAST_USED_EVERY = timedelta(seconds=60)
 
 
-def _node_name() -> str:
+def node_name() -> str:
     try:
         host = socket.gethostname().strip()
     except OSError:
@@ -102,6 +105,75 @@ def authenticate(db: Session, raw: str | None, hub: str | None = None) -> PoolAc
             row.last_used_hub = hub
         db.commit()
     return row
+
+
+# --- Identity + pairing by code --------------------------------------------
+
+PAIRING_TTL_SECONDS = 600
+PAIRING_ATTEMPTS = 5
+
+
+def ensure_node_id() -> str:
+    """This box's stable pool identity, created on first start."""
+    with SessionLocal() as db:
+        row = get_system_settings(db)
+        if not row.node_id:
+            row.node_id = uuid.uuid4().hex
+            db.commit()
+        return row.node_id
+
+
+class PairingCode:
+    """One short-lived 6-digit code a hub can trade for a read token.
+
+    Kept in memory only (single uvicorn process). A code dies after
+    ``PAIRING_ATTEMPTS`` wrong guesses, so guessing one has odds of 5 in a
+    million — and every new code needs an admin standing at this box.
+    """
+
+    def __init__(self, *, now=time.monotonic) -> None:
+        self._now = now
+        self._lock = threading.Lock()
+        self._code = ""
+        self._expires = 0.0
+        self._attempts = 0
+
+    def create(self) -> str:
+        with self._lock:
+            self._code = f"{secrets.randbelow(10**6):06d}"
+            self._expires = self._now() + PAIRING_TTL_SECONDS
+            self._attempts = PAIRING_ATTEMPTS
+            return self._code
+
+    def clear(self) -> None:
+        with self._lock:
+            self._code = ""
+
+    def current(self) -> tuple[str, int] | None:
+        """``(code, seconds_left)`` while one is valid."""
+        with self._lock:
+            left = int(self._expires - self._now())
+            if not self._code or left <= 0:
+                self._code = ""
+                return None
+            return self._code, left
+
+    def redeem(self, code: str) -> str:
+        """``"ok"`` (code used up), ``"wrong"`` or ``"none"`` (nothing to redeem)."""
+        with self._lock:
+            if not self._code or self._now() >= self._expires:
+                self._code = ""
+                return "none"
+            if secrets.compare_digest((code or "").strip(), self._code):
+                self._code = ""
+                return "ok"
+            self._attempts -= 1
+            if self._attempts <= 0:
+                self._code = ""
+            return "wrong"
+
+
+pairing = PairingCode()
 
 
 def migrate_legacy_token() -> None:
@@ -155,7 +227,7 @@ def node_status(db: Session, control_enabled: bool = False) -> dict:
     policy = get_policy(db)
     disk = disk_usage()
     return {
-        "name": _node_name(),
+        "name": node_name(),
         "version": __version__,
         "reachable": True,
         "error": "",
@@ -200,7 +272,7 @@ def _explain_error(exc: BaseException) -> str:
 def _peer_headers(peer: PoolPeer) -> dict[str, str]:
     token = decrypt(peer.token_encrypted) if peer.token_encrypted else ""
     # X-Pool-Hub names the caller in the peer's audit log (headers are ASCII).
-    hub = _node_name().encode("ascii", "replace").decode("ascii")
+    hub = node_name().encode("ascii", "replace").decode("ascii")
     return {"X-Pool-Token": token, "X-Pool-Hub": hub, "User-Agent": "OffgridCloud-Pool"}
 
 
@@ -238,6 +310,8 @@ def _peer_call(peer: PoolPeer, method: str, path: str, payload: dict | None = No
         detail = _http_detail(exc)
         if exc.code == 401:
             raise PeerControlError("Pool-Token ungültig") from exc
+        if exc.code == 403 and detail and "nur lesen" not in detail:
+            raise PeerControlError(detail, status=409) from exc  # e.g. wrong pairing code
         if exc.code == 403:
             raise PeerControlError(
                 "Token dieses Hubs hat auf dem Peer nur Leserechte", status=409
@@ -274,6 +348,16 @@ def peer_jobs(peer: PoolPeer, status: str | None = None) -> list:
 def retry_peer_job(peer: PoolPeer, job_id: int) -> dict:
     """Re-queue one job on a peer; returns the updated job."""
     return _expect(_peer_call(peer, "POST", f"/api/pool/jobs/{int(job_id)}/retry", {}), dict)
+
+
+def pair_with_peer(base_url: str, code: str, hub_node_id: str) -> dict:
+    """Trade a pairing code shown on another box for a read token there."""
+    target = PoolPeer(name="", base_url=normalize_base_url(base_url), token_encrypted="")
+    payload = {"code": code.strip(), "hub_name": node_name(), "hub_node_id": hub_node_id}
+    data = _expect(_peer_call(target, "POST", "/api/pool/pair", payload), dict)
+    if not data.get("token"):
+        raise PeerControlError("Unerwartete Antwort")
+    return data
 
 
 def poll_peer(peer: PoolPeer) -> dict:

@@ -29,6 +29,10 @@ services:
       # z. B. /mnt/ssd/offgrid:/data
       - ./data:/data
 
+    # --- Optional: Pool – andere Boxen im LAN automatisch finden (mDNS) -------
+    # Multicast erreicht das LAN nur im Host-Netz. Dann statt "ports:" oben:
+    # network_mode: host
+
     # --- Optional: eingebauter VPN-Client (WireGuard/OpenVPN) ---------------
     # cap_add: [NET_ADMIN]
     # devices: ["/dev/net/tun"]
