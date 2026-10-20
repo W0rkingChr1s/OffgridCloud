@@ -242,6 +242,7 @@ export interface SystemStatus {
   notify_on_startup: boolean;
   notify_on_reconnect: boolean;
   notify_on_bandwidth: boolean;
+  notify_on_pool: boolean;
   telegram_chat_id: string;
   telegram_configured: boolean;
   telegram_conflict: boolean;

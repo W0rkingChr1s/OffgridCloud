@@ -15,6 +15,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Job-Liste eines Peers:** „Jobs ansehen“ auf der Kachel zeigt die Transfers der Box mit Datei, Ziel und **Fehlertext**, gefiltert nach Fehlgeschlagen/Wartend/Läuft/Alle. Mit Recht „steuern“ lässt sich jeder Job einzeln neu anstoßen. Für die eigene Box gibt es dieselbe Liste.
 - Peers mit älterer Version zeigen keine Buttons bzw. melden „Update nötig“. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
 
+### 🛰️ Pool: gebündelte Meldungen vom Hub
+
+- **Eine Nachricht statt vieler:** Der Hub prüft seine Peers jede Minute und schickt Änderungen gesammelt über Telegram, E-Mail oder Webhook: Box nicht erreichbar (erst nach 2 Fehlversuchen) bzw. wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers.
+- **Nur Wechsel, kein Dauerfeuer:** Eine Box, die offline bleibt, wird einmal gemeldet. Fehlschläge melden sich erst bei einem neuen Höchststand oder nach einer Stunde Ruhe, sonst käme bei einem dauerhaft kaputten Ziel durch die automatische Wiederholung alle 15 Minuten dieselbe Nachricht. Ein Neustart des Hubs meldet keine alten Zustände nach.
+- Schalter unter **System → Benachrichtigungen → „Pool-Änderungen (nur am Hub)“** (Standard: an) und in der Box-Konsole. Empfehlung: Kanäle nur am Hub einrichten.
+- Verständlichere Fehlertexte für Peers: „Verbindung abgelehnt – läuft OffgridCloud dort, stimmt der Port?“ und „keine Antwort (Zeitüberschreitung)“ statt `[Errno 111] Connection refused`.
+
 ### 📡 Pool: Boxen finden sich selbst und koppeln per Code
 
 - **Automatisch gefunden:** Boxen im selben Netz kündigen sich per mDNS an (`_offgridcloud._tcp`). Unter **Pool → In der Nähe gefunden** stehen sie mit Name, Version und Adresse, bereits gekoppelte sind markiert.

@@ -138,6 +138,40 @@ Jede Aktion steht im **Audit-Log** beider Boxen: auf dem Hub mit dem
 ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Token-Namen und dem
 Hostnamen des Hubs.
 
+## Meldungen vom Hub
+
+Der Hub prüft seine aktiven Peers **jede Minute** und schickt bei Änderungen
+**eine gebündelte Nachricht** über seine Kanäle (Telegram, E-Mail, Webhook;
+eingerichtet unter **System → Benachrichtigungen**), z. B.:
+
+```
+🛰️ Pool: 2 Änderungen
+🔴 Box B – Boot: nicht erreichbar (keine Antwort (Zeitüberschreitung))
+💾 Drohne: Speicher knapp – noch 1.2 GB frei (98 % belegt)
+```
+
+| Meldung | Wann |
+|---------|------|
+| 🔴 nicht erreichbar | nach **2 Fehlversuchen in Folge** (ein einzelner Aussetzer meldet nichts) |
+| 🟢 wieder erreichbar | sobald die Box wieder antwortet |
+| 💾 Speicher knapp | unter 10 % oder 500 MB frei — einmal, erneut erst nach Erholung |
+| ⏸ / ▶️ Uploads pausiert / fortgesetzt | bei jedem Wechsel (von Hand, am Hub oder an der Box) |
+| ❌ neue fehlgeschlagene Transfers | wenn die Zahl einen neuen Höchststand erreicht |
+
+Gemeldet werden **nur Wechsel**: Eine Box, die offline bleibt, erscheint einmal,
+nicht jede Minute. Fehlschläge: Die Box reiht Fehlgeschlagene alle 15 Minuten
+automatisch neu ein, die Zahl fällt dabei kurz auf 0 — deshalb meldet der Hub
+erst wieder, wenn eine Stunde lang nichts mehr fehlgeschlagen ist oder es mehr
+werden als zuvor. Ein dauerhaft kaputtes Ziel nervt also nicht alle 15 Minuten.
+Nach einem Neustart merkt sich der Hub nur den Ist-Zustand; was dann schon
+offline ist, steht in der Start-Zusammenfassung („Pool: 1/2 Geräte verbunden“).
+
+**Empfehlung:** Benachrichtigungskanäle nur am **Hub** einrichten. Dann kommt
+alles Flottenweite gebündelt von dort, statt dass jede Box einzeln funkt. Wer
+an einer Peer-Box zusätzlich eigene Kanäle hat, bekommt deren Meldungen
+weiterhin auch. Abschalten am Hub: **System → Benachrichtigungen → „Pool-
+Änderungen (nur am Hub)“**.
+
 ## Sicherheit
 
 - **Auf der Peer-Box nur als Hash.** Ausgestellte Tokens speichert die Box nur
@@ -224,7 +258,7 @@ Koordination vor dem Relay.
 | ☑ **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
 | ☑ **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
 | ☑ **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
-| **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |
+| ☑ **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |
 
 ### Stufe 2 — Koordination der Leitung
 

@@ -257,6 +257,10 @@ def _explain_error(exc: BaseException) -> str:
     """Turn low-level connection errors into an actionable hint for the admin."""
     reason = getattr(exc, "reason", exc)
     text = str(reason)
+    if isinstance(reason, ConnectionRefusedError):
+        return "Verbindung abgelehnt – läuft OffgridCloud dort, stimmt der Port?"
+    if isinstance(reason, TimeoutError | socket.timeout):
+        return "keine Antwort (Zeitüberschreitung)"
     if isinstance(reason, ssl.SSLError) and "WRONG_VERSION_NUMBER" in text:
         # TLS handshake against a plain-HTTP port (uvicorn on :8000 has no TLS).
         return "Peer spricht unter dieser Adresse kein HTTPS – URL mit http:// eintragen"

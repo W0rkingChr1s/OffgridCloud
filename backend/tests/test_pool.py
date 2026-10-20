@@ -213,3 +213,20 @@ def test_peer_url_without_scheme_defaults_to_http(client, admin_auth):
     assert resp.status_code == 201
     assert resp.json()["base_url"] == "http://192.168.178.128:8000"
     assert pool_core.normalize_base_url("https://box.local/") == "https://box.local"
+
+
+def test_poll_peer_explains_common_network_errors(monkeypatch):
+    import urllib.error
+
+    from app.models import PoolPeer
+
+    for exc, text in (
+        (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")), "abgelehnt"),
+        (TimeoutError("timed out"), "Zeitüberschreitung"),
+    ):
+        def boom(*a, exc=exc, **k):
+            raise exc
+
+        monkeypatch.setattr(pool_core.urllib.request, "urlopen", boom)
+        result = pool_core.poll_peer(PoolPeer(name="p", base_url="http://10.0.0.2:8000"))
+        assert result["reachable"] is False and text in result["error"]

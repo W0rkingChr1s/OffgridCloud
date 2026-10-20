@@ -476,6 +476,7 @@ SYSTEM_FIELDS = [
     ("notify_on_startup", "Beim Start", "bool"),
     ("notify_on_reconnect", "Bei Wieder-Online", "bool"),
     ("notify_on_bandwidth", "Bei Bandbreiten-Drosselung", "bool"),
+    ("notify_on_pool", "Bei Pool-Änderungen (Hub)", "bool"),
 ]
 
 # USB-tethered phone as reported in the network status ("tether").

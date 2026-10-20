@@ -440,6 +440,8 @@ class SystemSettings(Base):
     notify_on_startup: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_reconnect: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_bandwidth: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Pool hub: one bundled message when peers go offline/low/paused/failing.
+    notify_on_pool: Mapped[bool] = mapped_column(Boolean, default=True)
     # Telegram bot channel. Token encrypted at rest with the same key as
     # provider credentials; empty token = channel disabled.
     telegram_bot_token_encrypted: Mapped[str] = mapped_column(Text, default="")

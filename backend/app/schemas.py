@@ -416,6 +416,7 @@ class SystemStatusOut(BaseModel):
     notify_on_startup: bool
     notify_on_reconnect: bool
     notify_on_bandwidth: bool
+    notify_on_pool: bool
     telegram_chat_id: str
     telegram_configured: bool
     # Another box polls with the same bot token (Telegram allows only one).
@@ -458,6 +459,7 @@ class SystemSettingsUpdate(BaseModel):
     notify_on_startup: bool | None = None
     notify_on_reconnect: bool | None = None
     notify_on_bandwidth: bool | None = None
+    notify_on_pool: bool | None = None
     # Telegram channel (token is write-only; "" clears it).
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
