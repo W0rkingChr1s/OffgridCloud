@@ -21,6 +21,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - Der Assistent setzt Admin, Box-Namen, Ziel-WLAN und das Passwort fürs Rückfall-WLAN und übergibt dann an `deploy/setup/finish.sh`. Anleitung: [docs/IMAGE.md](docs/IMAGE.md).
 - `install.sh` hat dafür einen Image-Build-Modus (`OGC_IMAGE_BUILD=1`), `deploy/https/install.sh` die Option `--skip-apply`.
 
+### 🐳 Docker: fertiges Image auf GHCR
+
+- **Multi-Arch-Image** (`linux/amd64`, `linux/arm64`) unter `ghcr.io/w0rkingchr1s/offgridcloud`: `latest` und `<major>.<minor>`/`<version>` bei jedem Release, `main` bei jedem Push auf `main`. arm64 wird nativ gebaut, ohne QEMU (`.github/workflows/docker.yml`).
+- **`docker-compose.yml`** im Repo-Stamm: `docker compose up -d` startet die Box, `docker compose pull && docker compose up -d` aktualisiert sie. VPN-Rechte sind auskommentiert vorbereitet.
+- **Image kennt seine Version:** Version, Commit und Update-Kanal werden beim Build gestempelt, die System-Seite zeigt also die echte Version statt `0.1.0`.
+- **Docker-taugliche Vorgaben:** Im Container sind One-Click-Update, Neustart/Reboot/Shutdown und die Laufwerks-Aktionen abgeschaltet (kein sudo/systemd). Die System-Seite zeigt als Update-Befehl `docker compose pull …` statt `update.sh`. Healthcheck auf `/api/health` eingebaut.
+
 ### 🤖 Auto-Merge für Pull Requests
 
 - PRs mit dem Label `automerge` werden automatisch per Squash gemerged, sobald CI (und ggf. der Image-Build) auf dem Head-Commit grün ist. Dependabot-Patch- und -Minor-Updates erhalten das Label automatisch (`.github/workflows/automerge.yml`, Details in [CONTRIBUTING.md](CONTRIBUTING.md)).

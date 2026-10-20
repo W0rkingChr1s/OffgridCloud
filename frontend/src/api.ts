@@ -524,6 +524,7 @@ export interface UpdateInfo {
   notes: string;
   error: string;
   self_update_enabled: boolean;
+  in_docker: boolean;
 }
 
 export interface UpdateProgress {

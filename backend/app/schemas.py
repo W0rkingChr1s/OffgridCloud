@@ -570,6 +570,8 @@ class UpdateInfoOut(BaseModel):
     error: str = ""
     # Whether one-click apply is wired up on this instance.
     self_update_enabled: bool = False
+    # Running in a container: updates mean pulling a new image, not update.sh.
+    in_docker: bool = False
 
 
 class UpdateApplyResult(BaseModel):

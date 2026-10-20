@@ -114,13 +114,20 @@ git clone https://github.com/W0rkingChr1s/OffgridCloud.git && cd OffgridCloud
 ./quickstart.sh                       # http://localhost:8000, Ctrl-C beendet
 ```
 
-**Docker (ein Image, plattformübergreifend):**
+**Docker (fertiges Image, amd64 + arm64):** Jedes Release landet als
+`ghcr.io/w0rkingchr1s/offgridcloud` in der GitHub Container Registry
+(`latest`, `0.5`, `0.5.0`; `main` = Entwicklungsstand).
 
 ```bash
-docker build -f deploy/Dockerfile -t offgridcloud .
-docker run -d --name offgridcloud -p 8000:8000 \
-  -v /mnt/ssd/offgrid:/data --env-file .env --restart unless-stopped offgridcloud
+mkdir offgridcloud && cd offgridcloud
+curl -fsSLO https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/W0rkingChr1s/OffgridCloud/main/.env.example -o .env
+nano .env                             # OGC_SECRET_KEY + Admin-Passwort setzen
+docker compose up -d                  # http://<host>:8000
 ```
+
+Update: `docker compose pull && docker compose up -d`. Ohne Compose, Selbst-Bauen,
+VPN im Container: [Betriebshandbuch](docs/BETRIEB.md) (Variante C).
 
 **Wieder loswerden.** Der Installer legt den Uninstaller mit auf der Box ab —
 er fragt, was mit weg soll, und behält Daten und `.env`, solange du nicht
