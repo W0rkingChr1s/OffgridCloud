@@ -6,6 +6,23 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.7.6] – 2026-10-20
+
+Uploads hängen nicht mehr stumm bei 0 %: Bei Verbindungsaussetzern macht der Browser dort weiter, wo die Box steht.
+
+### 🐛 Behoben
+
+- **Upload blieb stumm bei 0 % stehen:** Kam die Antwort der Box auf einen Block nicht an (WLAN-Aussetzer, hängende Verbindung), wartete der Browser ewig. Jede Anfrage hat jetzt ein Timeout (45 s ohne Fortschritt; ein langsamer, aber laufender Upload wird nie abgebrochen). Danach fragt der Browser die Box, wie weit sie ist, und macht genau dort weiter. Das passiert bis zu 5-mal mit wachsender Pause, der Ordner zeigt dabei „neuer Versuch 2/5 …“, erst danach erscheint eine Fehlermeldung. Der Fortschrittsbalken läuft jetzt auch innerhalb eines 4-MB-Blocks mit.
+- **Abgebrochener Block konnte die Datei beschädigen:** Riss ein Block mittendrin ab, blieben die halb empfangenen Bytes in der Teildatei, und der wiederholte Block wurde dahinter angehängt. Die Box verwirft solche Reste jetzt vor jedem Block.
+
+### 📄 Doku
+
+- **BLE-Protokoll:** Ablehnungen sind an der Länge erkennbar, die Musterwahl der Box (IK vor IKpsk2) ist klargestellt.
+
+## [0.7.5] – 2026-10-20
+
+Pool-Boxen lassen sich vom Hub aus steuern, finden sich selbst und koppeln per Code. Dazu kommen ein Telegram-Assistent und ein Schaubild der Leitungen.
+
 ### 🛰️ Pool: Transfers aus der Ferne steuern
 
 - **Vom Hub aus** lassen sich auf einer Peer-Box Uploads **pausieren/fortsetzen** und **alle fehlgeschlagenen Transfers neu anstoßen**, direkt auf der Kachel unter **Pool**.
@@ -64,8 +81,11 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 - **Safari: „FetchEvent.respondWith received an error: Returned response is null“ auf `https://<name>.local`:** Der Service Worker hat bei einer fehlgeschlagenen Anfrage ohne Cache-Treffer eine leere Antwort geliefert. Ausgelöst wird das, weil Safari die Ausnahme für das selbstsignierte Zertifikat nicht auf Anfragen des Service Workers anwendet. Der Service Worker prüft jetzt beim Installieren, ob er die Box erreicht, und meldet sich sonst selbst ab (auch eine bereits aktive ältere Version). Er liefert nie mehr eine leere Antwort und legt die App-Shell vorab in den Cache. Per IP (HTTP) war die Box nicht betroffen.
 - **`sudo /opt/offgridcloud/deploy/netmerge/install.sh`: command not found:** Die Bandbreiten-Seite verweist auf dieses Skript, der Installer hat es aber nur kopiert, wenn die Bündelung schon beim Installieren gewählt war. Es liegt jetzt immer dort (ausgeführt wird es weiterhin nur mit der Option).
-- **Upload blieb stumm bei 0 % stehen:** Kam die Antwort der Box auf einen Block nicht an (WLAN-Aussetzer, hängende Verbindung), wartete der Browser ewig. Jede Anfrage hat jetzt ein Timeout (45 s ohne Fortschritt; ein langsamer, aber laufender Upload wird nie abgebrochen). Danach fragt der Browser die Box, wie weit sie ist, und macht genau dort weiter. Das passiert bis zu 5-mal mit wachsender Pause, der Ordner zeigt dabei „neuer Versuch 2/5 …“, erst danach erscheint eine Fehlermeldung. Der Fortschrittsbalken läuft jetzt auch innerhalb eines 4-MB-Blocks mit.
-- **Abgebrochener Block konnte die Datei beschädigen:** Riss ein Block mittendrin ab, blieben die halb empfangenen Bytes in der Teildatei, und der wiederholte Block wurde dahinter angehängt. Die Box verwirft solche Reste jetzt vor jedem Block.
+- **„Fehler“ nach „Als Puffer nutzen“:** Die Speicher-Seite meldete ein nacktes „Fehler“, obwohl das Laufwerk korrekt als Puffer eingerichtet war (leere Antwort der Box wurde als JSON gelesen).
+
+### 📄 Doku
+
+- **BLE-Protokoll v1** für die Companion-App spezifiziert, mit Testvektoren: [docs/BLE-PROTOKOLL.md](docs/BLE-PROTOKOLL.md).
 
 ## [0.7.1] – 2026-10-20
 
