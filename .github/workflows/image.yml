@@ -120,7 +120,10 @@ jobs:
       - name: Checksum
         id: sum
         run: |
-          IMG="${{ steps.build.outputs.image-path }}"
+          # pi-gen prefixes "image_<date>-"; publish under the documented name.
+          SRC="${{ steps.build.outputs.image-path }}"
+          IMG="$(dirname "$SRC")/${{ steps.name.outputs.image }}.img.xz"
+          mv "$SRC" "$IMG"
           sha256sum "$IMG" | sed "s#  .*/#  #" > "$IMG.sha256"
           cat "$IMG.sha256"
           ls -lh "$IMG"
