@@ -351,6 +351,11 @@ def peer_jobs(peer: PoolPeer, status: str | None = None) -> list:
     return _expect(_peer_call(peer, "GET", path), list)
 
 
+def limit_peer(peer: PoolPeer, kbps: int) -> dict:
+    """Assign a peer its share of a shared uplink (0 lifts it)."""
+    return _expect(_peer_call(peer, "POST", "/api/pool/limit", {"kbps": int(kbps)}), dict)
+
+
 def retry_peer_job(peer: PoolPeer, job_id: int) -> dict:
     """Re-queue one job on a peer; returns the updated job."""
     return _expect(_peer_call(peer, "POST", f"/api/pool/jobs/{int(job_id)}/retry", {}), dict)

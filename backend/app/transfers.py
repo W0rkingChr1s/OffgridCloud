@@ -196,9 +196,11 @@ def control_state(db: Session) -> dict:
     failed = db.scalar(
         select(func.count(TransferJob.id)).where(TransferJob.status == TransferStatus.FAILED)
     )
+    policy = bandwidth.get_policy(db)
     return {
-        "uploads_paused": bandwidth.get_policy(db).uploads_paused,
+        "uploads_paused": policy.uploads_paused,
         "failed_transfers": int(failed or 0),
+        "pool_limit_kbps": bandwidth.active_pool_limit(policy, _utcnow_naive()),
     }
 
 
@@ -903,15 +905,7 @@ def process_one() -> bool:
         if job is None:
             return False
 
-        bwlimit = bandwidth.effective_bwlimit(
-            bandwidth.parse_schedule(policy.schedule_json),
-            policy.bwlimit_kbps,
-            datetime.now(),
-        )
-        # The limit is for the whole line: parallel uploads share it.
-        slots = _parallel_slots(policy)
-        if bwlimit > 0 and slots > 1:
-            bwlimit = max(1, bwlimit // slots)
+        bwlimit = upload_limit(policy)
         try:
             process_job(
                 db, job, bwlimit_kbps=bwlimit, metered=metered, bonding=policy.bonding_enabled
@@ -920,6 +914,55 @@ def process_one() -> bool:
             with _claim_lock:
                 _inflight.pop(job.id, None)
         return True
+
+
+def upload_limit(policy) -> int:
+    """KiB/s for ONE upload right now (0 = unlimited).
+
+    Own limit (with schedule windows) and a pool hub's share of a shared line
+    both apply, the lower wins; parallel uploads split it. Used when an upload
+    starts and again by ``sync_live_limits`` while it runs.
+    """
+    limit = bandwidth.combine_limits(
+        bandwidth.effective_bwlimit(
+            bandwidth.parse_schedule(policy.schedule_json),
+            policy.bwlimit_kbps,
+            datetime.now(),
+        ),
+        bandwidth.active_pool_limit(policy, _utcnow_naive()),
+    )
+    slots = _parallel_slots(policy)
+    if limit > 0 and slots > 1:
+        limit = max(1, limit // slots)
+    return limit
+
+
+LIVE_LIMIT_INTERVAL = 5.0  # seconds between live-limit checks
+
+
+def sync_live_limits() -> int:
+    """Bring every running upload to the current limit; returns how many changed."""
+    from .rclone import live_uploads, set_live_limit
+
+    uploads = live_uploads()
+    if not uploads:
+        return 0
+    with SessionLocal() as db:
+        target = upload_limit(bandwidth.get_policy(db))
+    return sum(1 for up in uploads if up.kbps != target and set_live_limit(up, target))
+
+
+async def live_limit_loop(stop: asyncio.Event, interval: float = LIVE_LIMIT_INTERVAL) -> None:
+    """Apply limit changes to uploads already running (pool share, schedule, settings)."""
+    while not stop.is_set():
+        try:
+            await asyncio.to_thread(sync_live_limits)
+        except Exception:  # noqa: BLE001 - must never stop the worker
+            logger.debug("Live limit sync failed", exc_info=True)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+        except TimeoutError:
+            pass
 
 
 def _parallel_slots(policy) -> int:

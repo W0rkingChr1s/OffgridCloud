@@ -52,7 +52,7 @@ from .routers import (
     vpn,
     webauthn,
 )
-from .transfers import reconcile_loop, worker_loop
+from .transfers import live_limit_loop, reconcile_loop, worker_loop
 from .updater import resolve_pending
 
 settings = get_settings()
@@ -84,6 +84,8 @@ async def lifespan(app: FastAPI):
     tasks: list[asyncio.Task] = []
     if settings.worker_enabled:
         tasks.append(asyncio.create_task(worker_loop(stop)))
+        # Running uploads follow limit changes (pool share, schedule) live.
+        tasks.append(asyncio.create_task(live_limit_loop(stop)))
         tasks.append(asyncio.create_task(reconcile_loop(stop)))
         # Re-mount buffer drives when they are plugged back in.
         tasks.append(asyncio.create_task(buffers.watch_loop(stop)))

@@ -6,6 +6,24 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ⚖️ Pool: Bandbreite fair teilen
+
+- **Eine Leitung, gerechte Anteile:** Unter **Pool → Gemeinsame Leitung** die Kapazität der Leitung (KB/s) eintragen und „Bandbreite fair teilen“ einschalten. Jede Minute bekommt jede sendende Box mit Rang den gleichen Anteil. Wer gerade nicht sendet, hat seinen Anteil schon bereit, damit ein Neuling nicht kurz alles belegt.
+- **Gilt zusätzlich zum eigenen Limit** (das kleinere zählt) und **sofort, auch für laufende Uploads** (siehe unten).
+- **Läuft von selbst ab:** Ohne Erneuerung durch den Hub fällt der Anteil nach 3 Minuten weg, keine Box bleibt dauerhaft gedrosselt. Ausschalten hebt ihn sofort auf.
+- **Kombinierbar mit Vorrang:** Erst pausiert der Vorrang niedrigere Ränge, dann teilen sich die übrigen die Leitung.
+- Braucht bei jeder Box mit Rang das Recht „steuern“. Die Box zeigt ihren Anteil unter **Bandbreite → Aktuelles Limit**, der Hub auf der Kachel. Neuer Endpunkt `POST /api/pool/limit`, Anteilsänderungen stehen im Audit-Log (die minütliche Erneuerung nicht).
+
+### 🎚️ Limits greifen auch bei laufenden Uploads
+
+- Bisher bekam rclone das Bandbreiten-Limit nur beim Start eines Uploads: Ein großes Drohnenvideo lief mit dem alten Tempo zu Ende, egal was sich änderte. Jetzt stellt die Box ein geändertes Limit **binnen ~5 Sekunden auch bei laufenden Uploads** um. Das gilt für den Pool-Anteil, eigene Limit-Änderungen und Zeitfenster aus dem Bandbreiten-Zeitplan.
+- Technisch öffnet jeder Upload rclones Fernsteuerung (`rc`) nur auf `127.0.0.1`, mit einem zufälligen Einmal-Passwort, das über die Umgebung statt die Kommandozeile übergeben wird (nicht in `ps` sichtbar). Ist der Port im Moment des Starts belegt, läuft der Upload ohne Live-Limit statt fehlzuschlagen. Abschaltbar mit `OGC_RCLONE_LIVE_LIMITS=false`.
+- Nebenbei: Harte rclone-Fehler (Level `critical`) erscheinen jetzt mit ihrem Text statt als „Upload fehlgeschlagen“.
+
+### 📄 Doku
+
+- **BLE-Protokoll:** Die Whitelist gibt eine eng gefasste Pool-Auswahl für die Companion-App frei (Übersicht, Steuerung und Job-Liste der Peers, Kopplungscode, Discovery + Koppeln, gemeinsame Leitung). Die Zugangsverwaltung (Tokens, Peers per URL + Token) bleibt gesperrt.
+
 ## [0.7.6] – 2026-10-20
 
 Uploads hängen nicht mehr stumm bei 0 %: Bei Verbindungsaussetzern macht der Browser dort weiter, wo die Box steht.

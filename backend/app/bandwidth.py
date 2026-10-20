@@ -45,6 +45,34 @@ def ensure_policy() -> None:
             db.commit()
 
 
+# A hub renews a box's uplink share every minute; without renewal it lapses.
+POOL_LIMIT_TTL = timedelta(minutes=3)
+
+
+def active_pool_limit(policy: BandwidthPolicy, now: datetime) -> int:
+    """The hub-assigned share in KiB/s, or 0 when none is set or it lapsed."""
+    if policy.pool_limit_kbps <= 0 or policy.pool_limit_until is None:
+        return 0
+    return policy.pool_limit_kbps if now < policy.pool_limit_until else 0
+
+
+def combine_limits(own_kbps: int, pool_kbps: int) -> int:
+    """Both apply: the lower non-zero limit wins (0 = unlimited)."""
+    limits = [k for k in (own_kbps, pool_kbps) if k > 0]
+    return min(limits) if limits else 0
+
+
+def set_pool_limit(db: Session, kbps: int, by: str, now: datetime) -> bool:
+    """Store (or with 0 clear) the hub's share; returns whether the value changed."""
+    policy = get_policy(db)
+    before = active_pool_limit(policy, now)
+    policy.pool_limit_kbps = max(0, kbps)
+    policy.pool_limit_until = now + POOL_LIMIT_TTL if kbps > 0 else None
+    policy.pool_limit_by = by[:100] if kbps > 0 else ""
+    db.commit()
+    return before != policy.pool_limit_kbps
+
+
 def get_policy(db: Session) -> BandwidthPolicy:
     policy = db.get(BandwidthPolicy, 1)
     if policy is None:

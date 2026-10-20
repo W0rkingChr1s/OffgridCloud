@@ -79,6 +79,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "pool_priority_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_priority_self", "INTEGER NOT NULL DEFAULT 0"),
     ("system_settings", "pool_priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_share_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_share_kbps", "INTEGER NOT NULL DEFAULT 0"),
     ("pool_peers", "priority", "INTEGER NOT NULL DEFAULT 0"),
     ("pool_peers", "priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
     # Operational status announcements (startup / reconnect / bandwidth gate).
@@ -104,6 +106,10 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("bandwidth_policy", "parallel_uploads", "INTEGER NOT NULL DEFAULT 1"),
     # Manual upload stop (locally or by a pool hub with control rights).
     ("bandwidth_policy", "uploads_paused", "BOOLEAN NOT NULL DEFAULT 0"),
+    # Uplink share assigned by a pool hub (expires unless renewed).
+    ("bandwidth_policy", "pool_limit_kbps", "INTEGER NOT NULL DEFAULT 0"),
+    ("bandwidth_policy", "pool_limit_until", "DATETIME"),
+    ("bandwidth_policy", "pool_limit_by", "VARCHAR(100) NOT NULL DEFAULT ''"),
 ]
 
 

@@ -138,13 +138,15 @@ Jede Aktion steht im **Audit-Log** beider Boxen: auf dem Hub mit dem
 ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Token-Namen und dem
 Hostnamen des Hubs.
 
-## Vorrang bei gemeinsamer Leitung
+## Gemeinsame Leitung: Vorrang und faires Teilen
+
+### Vorrang
 
 Teilen sich mehrere Boxen **eine** Leitung — etwa ein Starlink am Einsatzort —,
 konkurrieren ihre Uploads um dieselbe Bandbreite. Mit **Vorrang** legt man am
-Hub eine Reihenfolge fest: Web-UI → **Pool** → *Vorrang bei gemeinsamer
-Leitung*, pro Box **1 – hoch**, **2 – mittel**, **3 – niedrig** oder **nicht
-verwaltet**, dann „aktiv“ und **Speichern**.
+Hub eine Reihenfolge fest: Web-UI → **Pool** → *Gemeinsame Leitung*, pro Box
+**1 – hoch**, **2 – mittel**, **3 – niedrig** oder **nicht verwaltet**, dann
+„Vorrang“ anhaken und **Speichern**.
 
 Der Hub prüft jede Minute: **Hat eine Box mit höherem Rang etwas zu senden,
 pausiert er die Boxen mit niedrigerem Rang, die ebenfalls senden wollen** —
@@ -175,6 +177,36 @@ Regeln, damit Hub und Team nicht gegeneinander arbeiten:
 - Was der Vorrang tut, steht in den gebündelten Meldungen
   („⏸ Drohne: Uploads pausiert – Vorrang für ELW“) und auf den Kacheln
   („Rang 3“, „pausiert (Vorrang)“).
+
+### Bandbreite fair teilen
+
+Im selben Abschnitt (**Pool → Gemeinsame Leitung**) lässt sich die
+**Kapazität der Leitung** eintragen (KB/s, am besten der gemessene Upload, mit
+etwas Luft nach unten) und **„Bandbreite fair teilen“** einschalten. Dann
+teilen sich alle Boxen mit Rang die Leitung:
+
+- Jede Minute bekommt jede **sendende** Box *Kapazität ÷ Anzahl Sendender*.
+  Gerade nicht sendende (oder per Vorrang pausierte) Boxen bekommen schon den
+  Anteil, den sie beim Einstieg hätten, damit ein Neuling nicht kurz die ganze
+  Leitung belegt. Beispiel 1200 KB/s: zwei senden → je 600; eine pausiert → die
+  andere 1200, die pausierte vorsorglich 600.
+- Der Anteil wirkt **zusätzlich** zum eigenen Limit der Box — das kleinere gilt.
+  Die Box zeigt ihn unter **Bandbreite → Aktuelles Limit**, der Hub auf der
+  Kachel („≤ 600 KB/s“).
+- **Wirkt auch auf laufende Uploads:** Die Box stellt einen neuen Anteil
+  binnen weniger Sekunden auch bei Uploads um, die schon laufen — wichtig bei
+  großen Dateien wie Drohnenvideos. Technisch über rclones Fernsteuerung
+  (`rc`), die jeder Upload nur auf `127.0.0.1` mit einem Einmal-Passwort öffnet.
+  Lässt sich mit `OGC_RCLONE_LIVE_LIMITS=false` abschalten; dann gilt ein neuer
+  Anteil erst ab der nächsten Datei.
+- **Läuft ab:** Erneuert der Hub den Anteil nicht (ausgeschaltet, Hub weg,
+  Netz weg), fällt er nach 3 Minuten von selbst weg — keine Box bleibt
+  dauerhaft gedrosselt. Ausschalten hebt die Anteile sofort auf.
+- Braucht bei **jeder** Box mit Rang das Recht *steuern* (auch beim höchsten
+  Rang, anders als beim Vorrang). Fehlt es, warnt die Pool-Seite, und die
+  Meldungen nennen es einmal.
+- Vorrang und faires Teilen lassen sich kombinieren: Erst pausiert der Vorrang
+  niedrigere Ränge, dann wird die Leitung unter den übrigen Sendern geteilt.
 
 ## Meldungen vom Hub
 
@@ -262,7 +294,8 @@ weiterhin auch. Abschalten am Hub: **System → Benachrichtigungen → „Pool-
 | `GET /api/pool/overview` | Hub-Sicht: diese Box + alle Peers + Summen (Admin). |
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
 | `GET /api/pool/discovery` · `PUT /api/pool/discovery` | Per mDNS gefundene Boxen (mit Hinweis, ob schon Peer); eigene Ankündigung an/aus (Admin). |
-| `GET/PUT /api/pool/priority` | Vorrang an/aus und Rang pro Box (`peer_id` null = diese Box; 0 = nicht verwaltet, 1–3) (Admin). |
+| `GET/PUT /api/pool/priority` | Gemeinsame Leitung: Vorrang an/aus, Rang pro Box (`peer_id` null = diese Box; 0 = nicht verwaltet, 1–3), `share_enabled` + `share_kbps` für faires Teilen (Admin). |
+| `POST /api/pool/limit` | Hub setzt den Leitungsanteil dieser Box `{kbps}` (0 hebt auf; läuft nach 3 min ohne Erneuerung ab) (Admin **oder** `X-Pool-Token` mit Recht *steuern*). |
 | `GET/POST/DELETE /api/pool/pairing` | Kopplungscode dieser Box anzeigen/erzeugen/verwerfen (Admin). |
 | `POST /api/pool/pair` | Hub tauscht Code gegen Lese-Token (ohne Login; der Code ist der Nachweis). |
 | `POST /api/pool/peers/pair` | Hub koppelt sich mit `{base_url, code}` und legt den Peer an (Admin). |
@@ -304,7 +337,7 @@ Koordination vor dem Relay.
 | Baustein | Nutzen | Aufwand |
 |---|---|---|
 | ☑ **Prioritäten pro Box** | Der Hub legt eine Reihenfolge fest (z. B. „ELW-Lagebilder vor Drohnen-Rohmaterial“). Boxen mit niedriger Priorität pausieren automatisch, solange eine höhere etwas sendet. Technisch: der Hub nutzt die vorhandene Fernsteuerung im Takt der Abfrage. | mittel |
-| **Bandbreite fair teilen** | Teilen sich Boxen einen Uplink, verteilt der Hub das KB/s-Limit (`bwlimit`) auf die Boxen mit wartenden Jobs. Braucht eine zusätzliche Steuer-Aktion „Limit setzen“ und eine Angabe pro Peer „hängt am selben Uplink wie …“. | mittel |
+| ☑ **Bandbreite fair teilen** | Teilen sich Boxen einen Uplink, verteilt der Hub das KB/s-Limit (`bwlimit`) auf die Boxen mit wartenden Jobs. Braucht eine zusätzliche Steuer-Aktion „Limit setzen“ und eine Angabe pro Peer „hängt am selben Uplink wie …“. | mittel |
 | **Fernsteuerung im Companion** | Pool-Übersicht und die drei Aktionen in der App (steht im Companion-Plan schon als „Pool-Übersicht“). | mittel |
 
 ### Stufe 3 — Echte Lastverteilung (Relay)

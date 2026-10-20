@@ -415,10 +415,22 @@ Segmente (`/api/network` erlaubt `/api/network` und `/api/network/…`).
 | `/api/folders` | GET | Ordner- und Medienliste, ohne Downloads (`…/download` gesperrt) |
 | `/api/media/search` | GET | |
 | `/api/uplink/handover` | GET, POST, DELETE | Upload-Handover (Companion-Plan §3.6) |
+| `/api/pool/overview` | GET | Flottenübersicht (Admin). Der Hub fragt dabei alle Peers ab: bis 8 Peers höchstens ~6 s, darüber länger |
+| `/api/pool/peers/{id}/control` | POST | Uploads eines Peers pausieren/fortsetzen, Fehlgeschlagene neu (Admin) |
+| `/api/pool/peers/{id}/jobs` | GET | Job-Liste eines Peers, max. 100 (Admin). Die App SOLL mit `status`-Filter fragen |
+| `/api/pool/peers/{id}/jobs/{job}/retry` | POST | einen Job auf einem Peer neu einreihen (Admin) |
+| `/api/pool/pairing` | GET, POST, DELETE | Kopplungscode dieser Box für einen Hub zeigen/erzeugen/verwerfen (Admin) |
+| `/api/pool/discovery` | GET | per mDNS gefundene Boxen (Admin) |
+| `/api/pool/peers/pair` | POST | mit einer gefundenen Box per Code koppeln (Admin) |
+| `/api/pool/priority` | GET, PUT | Gemeinsame Leitung: Vorrang, faires Teilen (Admin) |
 
 Nicht erreichbar sind insbesondere: Datei-Downloads und Thumbnails,
 Provider-Zugangsdaten, Benutzer, Gruppen, Passkeys, HTTPS-Einstellungen,
-Pool-Verwaltung, `/api/events` (dafür gibt es §7.7). Antworten mit einem anderen
+die Zugangsverwaltung des Pools (`/api/pool/tokens`, Peers per URL + Token
+anlegen/ändern/löschen über `/api/pool/peers`), `/api/events` (dafür gibt es §7.7).
+Vom Pool sind nur die oben genannten Pfade freigegeben — Übersicht, Steuerung,
+Kopplung per Code und die gemeinsame Leitung, also das, was im Feld neben dem Hub
+gebraucht wird. Antworten mit einem anderen
 Content-Type als JSON beantwortet die Brücke mit `bad_request`.
 
 ### 7.6 Schreibberechtigung
