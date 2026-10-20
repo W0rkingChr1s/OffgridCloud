@@ -77,15 +77,15 @@ export default function Transfers() {
       {jobs.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Transfers. Lade Medien in einen verknüpften Ordner.</p>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-white/10">
+        <div className="overflow-x-auto rounded-2xl ring-1 ring-white/10">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-800/80 text-slate-400">
               <tr>
                 <SortTh sort={sort} field="file">Datei</SortTh>
-                <SortTh sort={sort} field="provider">Ziel</SortTh>
+                <SortTh sort={sort} field="provider" className="hidden sm:table-cell">Ziel</SortTh>
                 <SortTh sort={sort} field="status">Status</SortTh>
-                <SortTh sort={sort} field="attempts">Versuche</SortTh>
-                <th className="px-4 py-3 text-right">Aktion</th>
+                <SortTh sort={sort} field="attempts" className="hidden sm:table-cell">Versuche</SortTh>
+                <th className="px-4 py-3" aria-label="Aktion" />
               </tr>
             </thead>
             <tbody>
@@ -93,15 +93,22 @@ export default function Transfers() {
                 const s = STATUS[j.status] ?? STATUS.queued;
                 return (
                   <tr key={j.id} className="border-t border-white/5 bg-slate-900/40">
-                    <td className="px-4 py-3 font-medium text-white">{j.media_filename}</td>
-                    <td className="px-4 py-3 text-slate-300">{j.provider_name}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
+                      <div className="font-medium text-white">{j.media_filename}</div>
+                      {/* Target and attempts move under the file name on phones. */}
+                      <div className="text-xs text-slate-400 sm:hidden">
+                        → {j.provider_name}
+                        {j.attempts > 1 && ` · ${j.attempts} Versuche`}
+                      </div>
+                    </td>
+                    <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{j.provider_name}</td>
+                    <td className="px-4 py-3">
+                      <span className={`whitespace-nowrap rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                       {j.status === "done" && j.bytes_transferred > 0 && (
                         <span className="ml-2 text-xs text-slate-500">{formatBytes(j.bytes_transferred)}</span>
                       )}
                       {j.status === "running" && active[j.id] && (
-                        <div className="mt-1.5 w-48">
+                        <div className="mt-1.5 w-full max-w-48">
                           <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">
                             <div
                               className="h-full rounded-full bg-linear-to-r from-ogc-teal to-ogc-blue transition-all"
@@ -115,13 +122,13 @@ export default function Transfers() {
                         </div>
                       )}
                       {j.status === "failed" && j.last_error && (
-                        <div className="mt-1 text-xs text-red-300">{j.last_error}</div>
+                        <div className="mt-1 wrap-break-word text-xs text-red-300">{j.last_error}</div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-400">{j.attempts}</td>
+                    <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">{j.attempts}</td>
                     <td className="px-4 py-3 text-right">
                       {(j.status === "failed" || j.status === "queued") && (
-                        <button onClick={() => retry(j.id)} className="rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5">
+                        <button onClick={() => retry(j.id)} className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5">
                           Erneut
                         </button>
                       )}

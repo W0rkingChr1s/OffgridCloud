@@ -9,6 +9,7 @@ import {
   type User,
 } from "../api";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
 
 const FOLDER_SORT: SortOption<Folder>[] = [
@@ -139,7 +140,7 @@ export default function Folders() {
         </button>
       </form>
 
-      {folders.length > 0 && (
+      {folders.length > 4 && (
         <div className="mb-4 flex justify-end">
           <SortMenu sort={sort} />
         </div>
@@ -148,15 +149,13 @@ export default function Folders() {
       <div className="space-y-4">
         {sort.sorted.map((f) => (
           <div key={f.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <div className="text-lg font-semibold text-white">{f.name}</div>
                 {f.description && <div className="text-sm text-slate-400">{f.description}</div>}
                 <div className="mt-1 text-xs text-slate-500">{f.media_count} Dateien</div>
               </div>
-              <button onClick={() => removeFolder(f)} className="rounded-sm border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10">
-                Löschen
-              </button>
+              <MoreMenu items={[{ label: "Ordner löschen …", danger: true, onClick: () => removeFolder(f) }]} />
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -237,6 +236,7 @@ function ProviderLinks({
   const [providerId, setProviderId] = useState<number | "">("");
   const [destPath, setDestPath] = useState("");
   const [priority, setPriority] = useState(0);
+  const [adding, setAdding] = useState(false);
 
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1.5 text-sm outline-hidden focus:border-ogc-teal";
 
@@ -246,8 +246,8 @@ function ProviderLinks({
       <div className="space-y-1">
         {links.length === 0 && <div className="text-sm text-slate-500">Keine Ziele verknüpft.</div>}
         {links.map((l) => (
-          <div key={l.id} className="flex items-center justify-between rounded-lg bg-slate-900/40 px-3 py-1.5 text-sm">
-            <span className="text-slate-200">
+          <div key={l.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-900/40 px-3 py-1.5 text-sm">
+            <span className="min-w-0 break-all text-slate-200">
               {l.provider_name}
               {l.dest_path && <span className="text-slate-500"> → {l.dest_path}</span>}
               {l.priority !== 0 && <span className="ml-1 text-xs text-ogc-teal">P{l.priority}</span>}
@@ -259,8 +259,18 @@ function ProviderLinks({
         ))}
       </div>
 
-      {available.length > 0 && (
-        <div className="mt-2 flex gap-2">
+      {available.length > 0 && !adding && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="mt-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5"
+        >
+          + Ziel verknüpfen
+        </button>
+      )}
+
+      {available.length > 0 && adding && (
+        <div className="mt-2 flex flex-wrap gap-2">
           <select className={field} value={providerId} onChange={(e) => setProviderId(Number(e.target.value))}>
             <option value="">Provider…</option>
             {available.map((p) => (
@@ -269,7 +279,7 @@ function ProviderLinks({
               </option>
             ))}
           </select>
-          <input className={`${field} flex-1`} placeholder="Ziel-Pfad / Bucket (optional)" value={destPath} onChange={(e) => setDestPath(e.target.value)} />
+          <input className={`${field} min-w-40 flex-1`} placeholder="Ziel-Pfad / Bucket (optional)" value={destPath} onChange={(e) => setDestPath(e.target.value)} />
           <input className={`${field} w-20`} type="number" title="Priorität (höher = zuerst)" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
           <button
             disabled={!providerId}
@@ -279,11 +289,15 @@ function ProviderLinks({
                 setProviderId("");
                 setDestPath("");
                 setPriority(0);
+                setAdding(false);
               }
             }}
             className="rounded-lg bg-ogc-blue/80 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            +
+            Verknüpfen
+          </button>
+          <button type="button" onClick={() => setAdding(false)} className="px-2 text-sm text-slate-400 hover:text-white">
+            Abbrechen
           </button>
         </div>
       )}
