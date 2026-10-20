@@ -258,7 +258,8 @@ class PoolPeer(Base):
     one node acts as a hub that periodically reads each peer's compact
     ``/api/pool/status`` (authenticated by the peer's shared pool token, stored
     here encrypted at rest). It is read-only aggregation — no distributed
-    coordination, no writes across nodes.
+    coordination. The only write is transfer control (pause/resume, re-queue
+    failed jobs), which needs a token the peer issued with the "control" scope.
     """
 
     __tablename__ = "pool_peers"
@@ -268,7 +269,40 @@ class PoolPeer(Base):
     base_url: Mapped[str] = mapped_column(String(500))  # e.g. http://box2.local:8000
     token_encrypted: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The peer's node_id, known when it was paired via code; empty for peers
+    # added by URL + token. Marks it as "already paired" in the discovery list.
+    node_id: Mapped[str] = mapped_column(String(32), default="")
+    # Rank when boxes share one uplink: 0 = not managed, 1 = high … 3 = low.
+    priority: Mapped[int] = mapped_column(default=0)
+    # Its uploads were paused by the priority rule (only the rule resumes them).
+    priority_paused: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class PoolTokenScope(str, enum.Enum):
+    READ = "read"  # GET /api/pool/status only
+    CONTROL = "control"  # additionally POST /api/pool/control
+
+
+class PoolAccessToken(Base):
+    """A token THIS node issued to one hub, so each hub can be revoked alone.
+
+    Only the SHA-256 of the token is stored; the plaintext is shown once when
+    it is created. ``last_used_*`` tell the admin which hub is actually polling.
+    """
+
+    __tablename__ = "pool_access_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))  # which hub, e.g. "ELW"
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    hint: Mapped[str] = mapped_column(String(8), default="")  # last chars, to tell tokens apart
+    scope: Mapped[PoolTokenScope] = mapped_column(
+        Enum(PoolTokenScope), default=PoolTokenScope.READ
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_used_hub: Mapped[str] = mapped_column(String(100), default="")  # X-Pool-Hub
 
 
 class CloudProvider(Base):
@@ -361,6 +395,9 @@ class BandwidthPolicy(Base):
     # How many uploads run at the same time (1-4). More than one mainly pays
     # off together with bonding, or for many small files on a fast line.
     parallel_uploads: Mapped[int] = mapped_column(default=1)
+    # Manual stop: no new uploads start until an admin (or, if allowed, a pool
+    # hub) resumes them. Uploads already running finish normally.
+    uploads_paused: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class SystemSettings(Base):
@@ -383,10 +420,20 @@ class SystemSettings(Base):
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
-    # Shared token a pool hub must present (header ``X-Pool-Token``) to read this
-    # node's ``/api/pool/status``. Empty = this node does not expose itself as a
-    # poolable peer. Rotate/clear from the Pool admin page.
+    # Legacy shared pool token (one for all hubs, stored in plaintext). Moved
+    # into ``pool_access_tokens`` on startup and then cleared; see
+    # ``pool.migrate_legacy_token``.
     pool_token: Mapped[str] = mapped_column(String(128), default="")
+    # Stable identity of this box in the pool (mDNS TXT record, pairing), so a
+    # hub recognises it after an IP change and never lists itself as a peer.
+    node_id: Mapped[str] = mapped_column(String(32), default="")
+    # Announce this box via mDNS so hubs in the LAN can find it.
+    pool_announce: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Hub only: priorities between boxes sharing one uplink (app.pool_priority).
+    pool_priority_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    pool_priority_self: Mapped[int] = mapped_column(default=0)  # 0 = not managed, 1 = high … 3
+    # This box's uploads were paused by that rule (only the rule resumes them).
+    pool_priority_paused: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,
@@ -402,6 +449,8 @@ class SystemSettings(Base):
     notify_on_startup: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_reconnect: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_on_bandwidth: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Pool hub: one bundled message when peers go offline/low/paused/failing.
+    notify_on_pool: Mapped[bool] = mapped_column(Boolean, default=True)
     # Telegram bot channel. Token encrypted at rest with the same key as
     # provider credentials; empty token = channel disabled.
     telegram_bot_token_encrypted: Mapped[str] = mapped_column(Text, default="")

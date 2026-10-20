@@ -39,6 +39,8 @@ EVENT_TOGGLE: dict[str, str] = {
     # Bandwidth-gate pause and resume share one toggle.
     "transfer.paused": "notify_on_bandwidth",
     "transfer.resumed": "notify_on_bandwidth",
+    # Bundled fleet changes reported by a pool hub (see app.pool_watch).
+    "pool.alert": "notify_on_pool",
 }
 
 
@@ -104,6 +106,7 @@ TELEGRAM_ICONS: dict[str, str] = {
     "server.online": "📡",
     "transfer.paused": "⏸",
     "transfer.resumed": "▶️",
+    "pool.alert": "🛰️",
 }
 
 

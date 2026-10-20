@@ -48,6 +48,8 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
     ok, reason, _ = metered_gate(
         policy.metered_mode, policy.metered_budget_mb, used, metered, uplink
     )
+    if policy.uploads_paused:
+        ok, reason = False, "Uploads manuell pausiert"
     if ok:
         ok, reason = should_start(
             policy.enabled,
@@ -75,6 +77,7 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
         bonding_enabled=policy.bonding_enabled,
         parallel_uploads=policy.parallel_uploads,
         running_uploads=inflight_count(),
+        uploads_paused=policy.uploads_paused,
         bonding_available=bond.installed,
         bonding_running=bond.running,
         bonding_links=[

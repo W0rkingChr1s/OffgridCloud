@@ -105,6 +105,13 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ Ein gut verstecktes Easter Egg 🥚 (irgendwo wartet ein Stück der 80er …)
 - ☑ **Netzwerk-Redundanz**: Rückfall-WLAN (Access Point), wenn kein hinterlegtes Netz erreichbar ist — automatischer Watchdog + Client-Autoconnect, Verwaltung im Web-UI (`docs/NETZWERK-REDUNDANZ.md`)
 - ☑ **Multi-Server / Pooling**: mehrere Mini-Server als Flotte im Blick — ein Hub fragt die hinterlegten Peers (`/api/pool/status`, Shared-Token) periodisch ab und zeigt eine gemeinsame Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher). Read-only-Aggregation, keine verteilte Koordination — Pi-tauglich. Verwaltung im Web-UI unter **Pool** ([docs/MULTI-SERVER-POOL.md](MULTI-SERVER-POOL.md)).
+- ☑ **Pool-Fernsteuerung**: Hub pausiert/setzt Uploads fort und stößt Fehlgeschlagene neu an — nur mit einem Token mit Recht „steuern“; Audit auf beiden Seiten.
+- ☑ **Pool-Tokens pro Hub**: jeder Hub ein eigenes, einzeln sperrbares Token (lesen/steuern), auf der Box nur als Hash gespeichert; das alte gemeinsame Token wird automatisch übernommen.
+- ☑ **Pool-Job-Liste**: Hub zeigt die Transfers eines Peers mit Fehlertext und stößt einzelne Jobs neu an (Recht „steuern“).
+- ☑ **Pool-Discovery**: Boxen finden sich per mDNS (`_offgridcloud._tcp`) und koppeln per 6-stelligem Code statt Token-Copy-Paste (nur Leserecht).
+- ☑ **Pool-Meldungen**: Hub fasst Änderungen an den Peers (offline, Speicher, Pause, neue Fehlschläge) zu einer Nachricht pro Minute zusammen, nur bei Wechseln.
+- ☑ **Pool-Vorrang**: Rang 1–3 pro Box an einer gemeinsamen Leitung; der Hub pausiert niedrigere Ränge, solange höhere senden, und gibt nur selbst Pausiertes wieder frei.
+- ☐ **Pool-Ausbau** (Lastverteilung, Relay, Spiegelung …): siehe [Ausbauplan](MULTI-SERVER-POOL.md#ausbauplan).
 - ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
 
 **Damit ist der ursprünglich geplante Backlog vollständig abgearbeitet.** Weitere

@@ -114,6 +114,7 @@ export interface BandwidthStatus {
   bonding_bypass: string;
   parallel_uploads: number;
   running_uploads: number;
+  uploads_paused: boolean;
 }
 
 /** A network link as net-merge sees it (link bundling). */
@@ -243,6 +244,7 @@ export interface SystemStatus {
   notify_on_startup: boolean;
   notify_on_reconnect: boolean;
   notify_on_bandwidth: boolean;
+  notify_on_pool: boolean;
   telegram_chat_id: string;
   telegram_configured: boolean;
   telegram_conflict: boolean;
@@ -620,6 +622,12 @@ export interface PoolNodeStatus {
   throughput_kbps: number;
   disk_free: number;
   disk_total: number;
+  uploads_paused: boolean;
+  failed_transfers: number;
+  control_enabled: boolean;
+  pending_transfers: number | null;
+  priority: number; // 0 = not managed, 1 = high … 3 = low (hub view)
+  priority_paused: boolean;
 }
 
 export interface PoolTotals {
@@ -647,9 +655,62 @@ export interface PoolPeer {
   created_at: string;
 }
 
-export interface PoolSelf {
-  pool_token: string;
-  token_set: boolean;
+export type PoolTokenScope = "read" | "control";
+
+/** A token this box issued to one hub (plaintext only in PoolAccessTokenCreated). */
+export interface PoolAccessToken {
+  id: number;
+  name: string;
+  hint: string;
+  scope: PoolTokenScope;
+  created_at: string;
+  last_used_at: string | null;
+  last_used_hub: string;
+}
+
+export interface PoolAccessTokenCreated extends PoolAccessToken {
+  token: string;
+}
+
+/** Another box announcing itself via mDNS — a suggestion, not a trusted peer. */
+export interface DiscoveredBox {
+  node_id: string;
+  name: string;
+  version: string;
+  url: string;
+  addresses: string[];
+  peer_id: number | null;
+}
+
+export interface PoolDiscovery {
+  running: boolean;
+  error: string;
+  announce: boolean;
+  boxes: DiscoveredBox[];
+}
+
+export interface PoolPriorityNode {
+  peer_id: number | null; // null = this box
+  name: string;
+  level: number;
+}
+
+export interface PoolPriority {
+  enabled: boolean;
+  nodes: PoolPriorityNode[];
+}
+
+export interface PairingCode {
+  code: string;
+  expires_in: number;
+}
+
+export type TransferAction = "pause" | "resume" | "retry_failed";
+
+export interface TransferControl {
+  uploads_paused: boolean;
+  failed_transfers: number;
+  message: string;
 }
 
 export interface Health {

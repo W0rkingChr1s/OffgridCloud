@@ -331,14 +331,20 @@ class Api:
     def get_pool_overview(self) -> dict:
         return self._request("GET", "/api/pool/overview")
 
-    def get_pool_self(self) -> dict:
-        return self._request("GET", "/api/pool/self")
+    def get_pool_tokens(self) -> list:
+        return self._request("GET", "/api/pool/tokens")
 
-    def pool_token_generate(self) -> dict:
-        return self._request("POST", "/api/pool/token")
+    def create_pool_token(self, name: str, scope: str) -> dict:
+        return self._request("POST", "/api/pool/tokens", {"name": name, "scope": scope})
 
-    def pool_token_clear(self) -> dict:
-        return self._request("DELETE", "/api/pool/token")
+    def set_pool_token_scope(self, token_id: int, scope: str) -> dict:
+        return self._request("PATCH", f"/api/pool/tokens/{token_id}", {"scope": scope})
+
+    def delete_pool_token(self, token_id: int) -> dict:
+        return self._request("DELETE", f"/api/pool/tokens/{token_id}")
+
+    def open_pool_pairing(self) -> dict:
+        return self._request("POST", "/api/pool/pairing")
 
     def get_pool_peers(self) -> list:
         return self._request("GET", "/api/pool/peers")
@@ -470,6 +476,7 @@ SYSTEM_FIELDS = [
     ("notify_on_startup", "Beim Start", "bool"),
     ("notify_on_reconnect", "Bei Wieder-Online", "bool"),
     ("notify_on_bandwidth", "Bei Bandbreiten-Drosselung", "bool"),
+    ("notify_on_pool", "Bei Pool-Änderungen (Hub)", "bool"),
 ]
 
 # USB-tethered phone as reported in the network status ("tether").
@@ -674,7 +681,8 @@ class Console:
             return [("wifi", "WLAN & Fallback-AP"), ("bandwidth", "Bandbreite"), ("vpn", "VPN")]
         if key == "pool":
             return [("pool_ov", "Pool-Übersicht"),
-                    ("pool_token", "Diesen Knoten teilbar machen (Token)"),
+                    ("pool_pair", "Kopplungscode für einen Hub anzeigen"),
+                    ("pool_token", "Zugriff für Hubs (Tokens)"),
                     ("pool_peers", "Peers (andere Boxen) verwalten")]
         if key == "users":
             return [("users", "Benutzer"), ("groups", "Gruppen")]
@@ -747,6 +755,7 @@ class Console:
                 "bandwidth": self._bandwidth_editor,
                 "vpn": self._vpn_area,
                 "pool_ov": self._pool_overview,
+                "pool_pair": self._pool_pair,
                 "pool_token": self._pool_token,
                 "pool_peers": self._pool_peers,
                 "users": self._users_area,
@@ -1519,40 +1528,79 @@ class Console:
             lines += node_lines(p, prefix="  ")
         self._show_text("Pool-Übersicht", lines)
 
+    def _pool_pair(self):
+        """Show a pairing code to type in on the hub (the box's own screen is the proof)."""
+        try:
+            r = self.api.open_pool_pairing()
+        except ApiError as exc:
+            self.message = f"Konnte keinen Code erzeugen: {exc.detail}"
+            return
+        code = r.get("code", "")
+        minutes = int(r.get("expires_in", 0)) // 60
+        self._show_text("Kopplungscode", [
+            "Am Hub unter Pool → „In der Nähe gefunden“ bei dieser Box eingeben:",
+            "",
+            f"        {' '.join(code)}",
+            "",
+            f"Gültig {minutes} Minuten, nur einmal verwendbar.",
+            "Der Hub bekommt damit nur Leserecht; „steuern“ hier unter",
+            "„Zugriff für Hubs (Tokens)“ vergeben.",
+        ])
+
     def _pool_token(self):
-        try:
-            s = self.api.get_pool_self()
-        except ApiError as exc:
-            self.message = f"Konnte Token-Status nicht laden: {exc.detail}"
-            return
-        token = s.get("pool_token", "")
-        token_set = s.get("token_set")
-        items = []
-        if token:
-            items.append(("show", "Token anzeigen"))
-        items.append(("gen", "Neuen Token erzeugen" if token_set else "Token erzeugen"))
-        if token_set:
-            items.append(("clear", "Token entfernen (nicht mehr teilen)"))
-        items.append(("back", "Zurück"))
-        hint = "Teilbar (Token gesetzt)" if token_set else "Nicht teilbar (kein Token)"
-        sel = self._submenu("Diesen Knoten teilbar machen", items, 0, hint=hint)
-        if sel is None:
-            return
-        key = items[sel][0]
-        try:
-            if key == "show" and token:
-                self._show_text("Pool-Token", [
-                    "Diesen Token bei anderen Boxen als „Peer-Token“ eintragen:", "", token])
-            elif key == "gen":
-                r = self.api.pool_token_generate()
-                self._show_text("Neuer Pool-Token", [
-                    "Token erzeugt — bei anderen Boxen als Peer-Token eintragen:",
-                    "", r.get("pool_token", "")])
-            elif key == "clear" and self._confirm("Token wirklich entfernen?"):
-                self.api.pool_token_clear()
-                self.message = "Token entfernt."
-        except ApiError as exc:
-            self.message = f"Fehlgeschlagen: {exc.detail}"
+        """One token per hub: create, switch read/control, revoke."""
+        scope_label = {"read": "lesen", "control": "steuern"}
+        while True:
+            try:
+                tokens = self.api.get_pool_tokens()
+            except ApiError as exc:
+                self.message = f"Konnte Tokens nicht laden: {exc.detail}"
+                return
+            items = [("__add__", "+ Token für einen Hub erzeugen")]
+            for t in tokens:
+                items.append((str(t["id"]),
+                              f"{t['name']}  …{t['hint']}  [{scope_label.get(t['scope'], '?')}]"))
+            items.append(("__back__", "Zurück"))
+            hint = (f"{len(tokens)} Hub(s) dürfen abfragen" if tokens
+                    else "Nicht teilbar (kein Token)")
+            sel = self._submenu("Zugriff für Hubs", items, 0, hint=hint)
+            if sel is None or items[sel][0] == "__back__":
+                return
+            key = items[sel][0]
+            try:
+                if key == "__add__":
+                    vals = self._collect_form("Token für einen Hub", [
+                        {"key": "name", "label": "Für welchen Hub? (z. B. ELW)",
+                         "type": "text", "required": True},
+                        {"key": "control", "label": "Darf Transfers steuern",
+                         "type": "bool", "required": False, "default": "false"},
+                    ])
+                    if vals is None:
+                        continue
+                    r = self.api.create_pool_token(
+                        str(vals["name"]).strip(), "control" if vals["control"] else "read")
+                    self._show_text("Neuer Pool-Token", [
+                        f"Token für „{r.get('name', '')}“ — wird nur jetzt angezeigt.",
+                        "Beim Hub als Peer-Token eintragen:", "", r.get("token", "")])
+                    continue
+                tok = next(t for t in tokens if str(t["id"]) == key)
+                other = "read" if tok["scope"] == "control" else "control"
+                acts = [("scope", f"Recht ändern auf: {scope_label[other]}"),
+                        ("revoke", "Zugriff entziehen"), ("back", "Zurück")]
+                used = tok.get("last_used_hub") or ("benutzt" if tok.get("last_used_at")
+                                                    else "noch nie benutzt")
+                act = self._submenu(f"Token „{tok['name']}“", acts, 0, hint=used)
+                if act is None:
+                    continue
+                if acts[act][0] == "scope":
+                    self.api.set_pool_token_scope(int(key), other)
+                    self.message = f"„{tok['name']}“ darf jetzt {scope_label[other]}."
+                elif acts[act][0] == "revoke" and self._confirm(
+                        f"Zugriff für „{tok['name']}“ entziehen?"):
+                    self.api.delete_pool_token(int(key))
+                    self.message = "Zugriff entzogen."
+            except ApiError as exc:
+                self.message = f"Fehlgeschlagen: {exc.detail}"
 
     def _pool_peers(self):
         while True:

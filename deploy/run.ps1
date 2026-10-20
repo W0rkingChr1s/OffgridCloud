@@ -20,4 +20,6 @@ $port = if ($env:OGC_PORT) { $env:OGC_PORT } else { "8000" }
 $py = Join-Path $Root "backend\.venv\Scripts\python.exe"
 
 Set-Location (Join-Path $Root "backend")
+# Announce the same port to other boxes via mDNS (Pool).
+if (-not $env:OGC_MDNS_PORT) { $env:OGC_MDNS_PORT = $port }
 & $py -m uvicorn app.main:app --host 0.0.0.0 --port $port

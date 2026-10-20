@@ -23,3 +23,8 @@ pillow==13.0.0
 # 3.0.1: verify_registration_response() also rejects attestation statement
 # formats that aren't strings. No breaking API changes.
 webauthn==3.0.1
+# mDNS: boxes announce themselves and find each other in the LAN (pool).
+# Wheels for amd64, arm64 and armv7 (Pi 3); only dependency is ifaddr.
+zeroconf==0.151.5
+# Used directly to list this box's addresses (zeroconf's helper is deprecated).
+ifaddr==0.2.0

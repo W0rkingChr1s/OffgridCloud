@@ -459,6 +459,11 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
     label: "Senden pausiert/fortgesetzt",
     help: "Meldet, wenn das Senden wegen zu geringer Bandbreite gestoppt und später wieder aufgenommen wird.",
   },
+  {
+    key: "notify_on_pool",
+    label: "Pool-Änderungen (nur am Hub)",
+    help: "Ist diese Box Hub eines Pools, fasst sie Änderungen an den Peers zu einer Nachricht pro Minute zusammen: Box nicht erreichbar oder wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers. Gemeldet werden nur Wechsel, nicht der Dauerzustand.",
+  },
 ];
 
 function NotificationsCard({

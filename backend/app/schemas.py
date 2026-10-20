@@ -12,7 +12,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import MediaStatus, ProviderStatus, Role, TransferStatus, VpnType
+from .models import (
+    MediaStatus,
+    PoolTokenScope,
+    ProviderStatus,
+    Role,
+    TransferStatus,
+    VpnType,
+)
 
 
 def _normalise_email(value: str) -> str:
@@ -383,6 +390,7 @@ class BandwidthStatusOut(BaseModel):
     bonding_bypass: str = ""
     parallel_uploads: int = 1  # uploads running at the same time (1-4)
     running_uploads: int = 0  # how many run right now
+    uploads_paused: bool = False  # manually stopped (Transfers page or pool hub)
 
 
 class DiskUsageOut(BaseModel):
@@ -411,6 +419,7 @@ class SystemStatusOut(BaseModel):
     notify_on_startup: bool
     notify_on_reconnect: bool
     notify_on_bandwidth: bool
+    notify_on_pool: bool
     telegram_chat_id: str
     telegram_configured: bool
     # Another box polls with the same bot token (Telegram allows only one).
@@ -485,6 +494,7 @@ class SystemSettingsUpdate(BaseModel):
     notify_on_startup: bool | None = None
     notify_on_reconnect: bool | None = None
     notify_on_bandwidth: bool | None = None
+    notify_on_pool: bool | None = None
     # Telegram channel (token is write-only; "" clears it).
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
@@ -732,6 +742,15 @@ class PoolNodeStatus(BaseModel):
     throughput_kbps: float = 0.0
     disk_free: int = 0
     disk_total: int = 0
+    # Remote control. Peers on older versions omit these, so the defaults keep
+    # the hub from offering actions such a peer cannot perform.
+    uploads_paused: bool = False
+    failed_transfers: int = 0
+    control_enabled: bool = False  # the caller's token may control transfers here
+    pending_transfers: int | None = None  # waiting + running; None from older peers
+    # Hub view only: rank on a shared uplink and whether that rule paused it.
+    priority: int = 0
+    priority_paused: bool = False
 
 
 class PoolTotals(BaseModel):
@@ -778,15 +797,110 @@ class PoolPeerUpdate(BaseModel):
     enabled: bool | None = None
 
 
-class PoolSelfOut(BaseModel):
-    """This node's own poolability: whether it exposes a token, and the value."""
+class PoolAccessTokenOut(BaseModel):
+    """A token this node issued to one hub. The plaintext is never returned."""
 
-    pool_token: str = ""
-    token_set: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    hint: str  # last characters, to match it with what the hub has stored
+    scope: PoolTokenScope
+    created_at: datetime
+    last_used_at: datetime | None = None
+    last_used_hub: str = ""
 
 
-class PoolTokenOut(BaseModel):
-    pool_token: str
+class PoolAccessTokenCreated(PoolAccessTokenOut):
+    token: str  # shown exactly once
+
+
+class PoolAccessTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    scope: PoolTokenScope = PoolTokenScope.READ
+
+
+class PoolAccessTokenUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    scope: PoolTokenScope | None = None
+
+
+class DiscoveredBoxOut(BaseModel):
+    """Another box announcing itself via mDNS — a suggestion, not a trusted peer."""
+
+    node_id: str
+    name: str
+    version: str = ""
+    url: str  # best guess for reaching it, e.g. http://192.168.1.20:8000
+    addresses: list[str] = []
+    peer_id: int | None = None  # already configured as a peer here
+
+
+class DiscoveryOut(BaseModel):
+    running: bool  # mDNS works on this box
+    error: str = ""  # why not, if it doesn't
+    announce: bool  # this box announces itself
+    boxes: list[DiscoveredBoxOut] = []
+
+
+class DiscoveryUpdate(BaseModel):
+    announce: bool
+
+
+class PairingCodeOut(BaseModel):
+    code: str = ""  # empty = no pairing open
+    expires_in: int = 0  # seconds
+
+
+class PairIn(BaseModel):
+    """A hub asks this box for a token, proving presence with the shown code."""
+
+    code: str = Field(min_length=1, max_length=12)
+    hub_name: str = Field(min_length=1, max_length=100)
+    hub_node_id: str = Field(default="", max_length=32)
+
+
+class PairOut(BaseModel):
+    token: str
+    node_id: str
+    name: str
+    version: str = ""
+
+
+class PeerPairIn(BaseModel):
+    """Hub side: pair with the box at ``base_url`` using the code it shows."""
+
+    base_url: str = Field(min_length=1, max_length=500)
+    code: str = Field(min_length=1, max_length=12)
+    name: str | None = Field(default=None, max_length=200)
+
+
+class PoolPriorityNode(BaseModel):
+    peer_id: int | None = None  # None = this box (the hub)
+    name: str = ""
+    level: int = Field(default=0, ge=0, le=3)  # 0 = not managed, 1 = high … 3 = low
+
+
+class PoolPriorityOut(BaseModel):
+    enabled: bool
+    nodes: list[PoolPriorityNode]
+
+
+class PoolPriorityIn(BaseModel):
+    enabled: bool
+    nodes: list[PoolPriorityNode] = []
+
+
+class TransferControlIn(BaseModel):
+    """One manual transfer action, locally or sent by a pool hub."""
+
+    action: Literal["pause", "resume", "retry_failed"]
+
+
+class TransferControlOut(BaseModel):
+    uploads_paused: bool
+    failed_transfers: int
+    message: str = ""  # what the last action did, e.g. "3 … neu eingereiht"
 
 
 # --- WebAuthn / passkeys ----------------------------------------------------

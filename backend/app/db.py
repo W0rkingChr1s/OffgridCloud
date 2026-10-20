@@ -71,10 +71,21 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "smtp_tls", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "low_space_notified", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "pool_token", "VARCHAR(128) NOT NULL DEFAULT ''"),
+    # Pool discovery: stable box identity + whether to announce via mDNS.
+    ("system_settings", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
+    ("system_settings", "pool_announce", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("pool_peers", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
+    # Pool priorities between boxes on a shared uplink.
+    ("system_settings", "pool_priority_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_priority_self", "INTEGER NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("pool_peers", "priority", "INTEGER NOT NULL DEFAULT 0"),
+    ("pool_peers", "priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
     # Operational status announcements (startup / reconnect / bandwidth gate).
     ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_bandwidth", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("system_settings", "notify_on_pool", "BOOLEAN NOT NULL DEFAULT 1"),
     # WebAuthn user handle — added to an existing users table. Nullable (no
     # DEFAULT): filled on first passkey registration.
     ("users", "webauthn_user_handle", "BLOB"),
@@ -91,6 +102,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Link bundling via net-merge (all uplinks at once).
     ("bandwidth_policy", "bonding_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
     ("bandwidth_policy", "parallel_uploads", "INTEGER NOT NULL DEFAULT 1"),
+    # Manual upload stop (locally or by a pool hub with control rights).
+    ("bandwidth_policy", "uploads_paused", "BOOLEAN NOT NULL DEFAULT 0"),
 ]
 
 

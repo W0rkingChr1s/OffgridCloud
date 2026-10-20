@@ -6,6 +6,46 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🛰️ Pool: Transfers aus der Ferne steuern
+
+- **Vom Hub aus** lassen sich auf einer Peer-Box Uploads **pausieren/fortsetzen** und **alle fehlgeschlagenen Transfers neu anstoßen**, direkt auf der Kachel unter **Pool**.
+- **Nur mit Recht „steuern“:** Das Token, das die Peer-Box dem Hub ausgestellt hat, muss dieses Recht haben (siehe unten). Standard ist „nur lesen“. Löschen oder Einstellungen ändern kann der Hub nicht.
+- **Nachvollziehbar:** Jede Aktion steht im Audit-Log beider Boxen, auf dem Peer mit Token-Namen und Hostnamen des Hubs.
+- **Auch lokal:** Die Seite **Transfers** hat jetzt „Uploads pausieren“ und „Alle fehlgeschlagenen erneut“. Ist die Box pausiert (von hier oder vom Hub), steht dort ein gelber Hinweis, **Bandbreite** nennt „Uploads manuell pausiert“ als Grund. Laufende Uploads werden beim Pausieren nicht abgebrochen.
+- **Job-Liste eines Peers:** „Jobs ansehen“ auf der Kachel zeigt die Transfers der Box mit Datei, Ziel und **Fehlertext**, gefiltert nach Fehlgeschlagen/Wartend/Läuft/Alle. Mit Recht „steuern“ lässt sich jeder Job einzeln neu anstoßen. Für die eigene Box gibt es dieselbe Liste.
+- Peers mit älterer Version zeigen keine Buttons bzw. melden „Update nötig“. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
+
+### 🥇 Pool: Vorrang bei gemeinsamer Leitung
+
+- **Reihenfolge für Boxen an einer Leitung:** Unter **Pool → Vorrang bei gemeinsamer Leitung** bekommt jede Box Rang 1 (hoch) bis 3 (niedrig) oder bleibt „nicht verwaltet“. Solange eine höherrangige Box senden will, pausiert der Hub die niedrigeren und setzt sie danach fort, z. B. ELW-Lagebilder vor Drohnen-Rohmaterial.
+- **Nur für eine gemeinsame Leitung gedacht:** Boxen mit eigenem Uplink nicht eintragen, sonst verschenken sie Bandbreite.
+- **Kein Gegeneinander:** Der Hub setzt nur fort, was er selbst pausiert hat, auch über einen Neustart hinweg. Von Hand pausierte Boxen bleiben pausiert. Setzt jemand eine Vorrang-Pause von Hand fort, lässt der Hub die Box in Ruhe, bis der Vorrang vorbei ist. Ausschalten gibt alles sofort frei.
+- Braucht das Recht „steuern“ im Token des Peers (die Seite warnt, wo es fehlt). Reaktionszeit bis zu einer Minute, laufende Uploads werden nicht abgebrochen. Aktionen erscheinen in den Pool-Meldungen und auf den Kacheln („Rang 3“, „pausiert (Vorrang)“).
+
+### 🛰️ Pool: gebündelte Meldungen vom Hub
+
+- **Eine Nachricht statt vieler:** Der Hub prüft seine Peers jede Minute und schickt Änderungen gesammelt über Telegram, E-Mail oder Webhook: Box nicht erreichbar (erst nach 2 Fehlversuchen) bzw. wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers.
+- **Nur Wechsel, kein Dauerfeuer:** Eine Box, die offline bleibt, wird einmal gemeldet. Fehlschläge melden sich erst bei einem neuen Höchststand oder nach einer Stunde Ruhe, sonst käme bei einem dauerhaft kaputten Ziel durch die automatische Wiederholung alle 15 Minuten dieselbe Nachricht. Ein Neustart des Hubs meldet keine alten Zustände nach.
+- Schalter unter **System → Benachrichtigungen → „Pool-Änderungen (nur am Hub)“** (Standard: an) und in der Box-Konsole. Empfehlung: Kanäle nur am Hub einrichten.
+- Verständlichere Fehlertexte für Peers: „Verbindung abgelehnt – läuft OffgridCloud dort, stimmt der Port?“ und „keine Antwort (Zeitüberschreitung)“ statt `[Errno 111] Connection refused`.
+
+### 📡 Pool: Boxen finden sich selbst und koppeln per Code
+
+- **Automatisch gefunden:** Boxen im selben Netz kündigen sich per mDNS an (`_offgridcloud._tcp`). Unter **Pool → In der Nähe gefunden** stehen sie mit Name, Version und Adresse, bereits gekoppelte sind markiert.
+- **Koppeln per Code statt Token kopieren:** An der Peer-Box **„Kopplungscode erzeugen“** (oder an der Box-Konsole *Kopplungscode für einen Hub anzeigen*), am Hub den 6-stelligen Code eingeben, fertig. Der Code gilt 10 Minuten, einmal, und ist nach 5 Fehlversuchen verbrannt. Kopplung gibt nur Leserecht, „steuern“ vergibt die Peer-Box selbst.
+- **Sicher trotz offenem mDNS:** Die Liste macht nur Vorschläge, Zugriff gibt es erst mit dem Code von der echten Box. Ein gespeichertes Token geht nie an eine nur per mDNS gelernte Adresse.
+- Boxen nicht in der Liste (anderes Subnetz) lassen sich per Adresse + Code koppeln. Ankündigung abschaltbar unter Pool oder per `OGC_MDNS_ENABLED=false`.
+- **Docker:** Finden klappt nur mit `network_mode: host` (Hinweis in `docker-compose.yml`), sonst bleibt die Liste leer und die Seite sagt warum.
+- Neue Abhängigkeiten: `zeroconf` und `ifaddr` (fertige Pakete für Pi 3/4/5 und x86).
+
+### 🔑 Pool: ein Token pro Hub
+
+- **Jeder Hub bekommt sein eigenes Token** (**Pool → Zugriff für Hubs auf diese Box**), mit Namen und Recht *nur lesen* oder *lesen + steuern*. *Nur lesen* umfasst die Job-Liste, also auch Dateinamen und Fehlertexte. Einen Hub sperren heißt sein Token löschen, die anderen Hubs bleiben verbunden. Bisher teilten sich alle Hubs ein Token, und Sperren hieß: neu erzeugen und überall neu eintragen.
+- **Sieht, wer abfragt:** Pro Token steht, wann und von welchem Hub es zuletzt benutzt wurde.
+- **Nur noch als Hash gespeichert:** Die Box hält ausgestellte Tokens nur als SHA-256, der Klartext erscheint einmal beim Erzeugen. Das alte Token lag im Klartext in der Datenbank und war im Web-UI erneut abrufbar.
+- **Umstieg ohne Ausfall:** Das bisherige gemeinsame Token wird beim Start als „Bisheriges Token“ (*nur lesen*) übernommen, Hubs damit laufen weiter. Empfehlung: jedem Hub ein eigenes Token ausstellen und das bisherige danach löschen.
+- **API:** `/api/pool/token` und `/api/pool/self` entfallen, neu ist `/api/pool/tokens`. Die Konsole an der Box ist angepasst.
+
 ### 🧭 Telegram: Einrichtungsassistent
 
 - **Geführte Einrichtung** unter **System → Benachrichtigungen → Telegram → Einrichtungsassistent**, in vier Schritten: Bot anlegen, Token, Chat, fertig.
