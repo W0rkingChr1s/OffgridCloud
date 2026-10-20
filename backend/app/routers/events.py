@@ -28,6 +28,7 @@ from ..models import (
     UploadFolder,
     User,
 )
+from ..network import metered_uplink
 from ..security import decode_access_token
 from ..storage import accessible_folder_ids
 from ..transfers import get_live
@@ -138,8 +139,12 @@ def build_snapshot(user_id: int) -> dict | None:
             # can carry the external IP, so keep them to admins like the rest.
             snapshot["notices"] = notices.recent()
             snapshot["transfers"] = {"counts": counts, "active": active}
+            metered, uplink = metered_uplink()
             snapshot["bandwidth"] = {
                 "enabled": policy.enabled,
+                # Uplink in use (cached 30 s): lets the dashboard flag a phone.
+                "metered": metered,
+                "uplink": uplink,
                 "effective_bwlimit_kbps": effective_bwlimit(
                     schedule, policy.bwlimit_kbps, datetime.now()
                 ),

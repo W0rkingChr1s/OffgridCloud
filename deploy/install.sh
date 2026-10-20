@@ -763,12 +763,15 @@ if [[ $WITH_VPN -eq 1 ]]; then
 fi
 
 # --- Optional: link bundling (net-merge) -----------------------------------
+# Always copied: the Bandbreite page tells the admin to run
+# $PREFIX/deploy/netmerge/install.sh later, so it has to exist even when
+# bundling wasn't picked here. It is only *run* with the option.
+mkdir -p "$PREFIX/deploy"
+rm -rf "$PREFIX/deploy/netmerge"   # replace, don't nest, on a re-run/update
+cp -r "$REPO_ROOT/deploy/netmerge" "$PREFIX/deploy/netmerge"
+chmod +x "$PREFIX/deploy/netmerge/install.sh" 2>/dev/null || true
 if [[ $WITH_NETMERGE -eq 1 ]]; then
   step "Installing link bundling (net-merge)..."
-  mkdir -p "$PREFIX/deploy"
-  rm -rf "$PREFIX/deploy/netmerge"   # replace, don't nest, on a re-run/update
-  cp -r "$REPO_ROOT/deploy/netmerge" "$PREFIX/deploy/netmerge"
-  chmod +x "$PREFIX/deploy/netmerge/install.sh" 2>/dev/null || true
   if [[ $IMAGE_BUILD -eq 1 ]]; then
     echo "   Image build: run $PREFIX/deploy/netmerge/install.sh on the box itself."
   else

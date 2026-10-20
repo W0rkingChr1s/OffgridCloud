@@ -210,3 +210,30 @@ def test_bandwidth_api_toggles_bonding(client, admin_auth, monkeypatch):
         assert body["bonding_links"] == [{"name": "wlan0", "used": True, "detail": "v4 10.0.0.2"}]
     finally:
         client.put("/api/bandwidth", headers=admin_auth, json={"bonding_enabled": False})
+
+
+def test_bandwidth_api_reports_why_bundling_is_bypassed(client, admin_auth, monkeypatch):
+    from app.routers import bandwidth as bw_router
+
+    monkeypatch.setattr(bonding, "proxy_url", lambda: PROXY)
+    monkeypatch.setattr(
+        bonding, "get_status", lambda: bonding.Status(installed=True, running=True)
+    )
+    monkeypatch.setattr(bw_router, "metered_link_present", lambda: True)
+    try:
+        client.put(
+            "/api/bandwidth",
+            headers=admin_auth,
+            json={"bonding_enabled": True, "metered_mode": "pause"},
+        )
+        body = client.get("/api/bandwidth", headers=admin_auth).json()
+        assert "Handy" in body["bonding_bypass"]
+        client.put("/api/bandwidth", headers=admin_auth, json={"metered_mode": "allow"})
+        body = client.get("/api/bandwidth", headers=admin_auth).json()
+        assert body["bonding_bypass"] == ""
+    finally:
+        client.put(
+            "/api/bandwidth",
+            headers=admin_auth,
+            json={"bonding_enabled": False, "metered_mode": "allow"},
+        )

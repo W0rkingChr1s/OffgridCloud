@@ -26,6 +26,9 @@ export interface Snapshot {
   transfers?: { counts: Record<string, number>; active: ActiveTransfer[] };
   bandwidth?: {
     enabled: boolean;
+    /** The uplink in use is metered (e.g. a USB-tethered phone). */
+    metered?: boolean;
+    uplink?: string;
     effective_bwlimit_kbps: number;
     last_kbps: number;
     gated: boolean;

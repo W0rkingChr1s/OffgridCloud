@@ -171,6 +171,10 @@ aus, gehen die Uploads automatisch direkt raus, statt fehlzuschlagen.
 
 ```bash
 sudo /opt/offgridcloud/deploy/netmerge/install.sh
+# „command not found“? Ältere Installationen haben das Skript dort nur, wenn die
+# Bündelung schon beim Installieren gewählt wurde. Dann aus dem Checkout:
+#   sudo ./deploy/netmerge/install.sh
+# oder den Installer mit OGC_WITH_NETMERGE=1 erneut laufen lassen.
 ```
 
 Das Skript installiert net-merge (auf Raspberry Pi OS/Debian aus dessen signiertem

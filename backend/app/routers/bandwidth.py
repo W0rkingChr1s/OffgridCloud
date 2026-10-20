@@ -24,7 +24,7 @@ from ..config import get_settings as get_app_settings
 from ..db import get_db
 from ..deps import require_admin
 from ..models import BandwidthPolicy, User
-from ..network import metered_uplink
+from ..network import metered_link_present, metered_uplink
 from ..schemas import (
     BandwidthPolicyUpdate,
     BandwidthStatusOut,
@@ -59,6 +59,7 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
             datetime.utcnow(),
         )
     return BandwidthStatusOut(
+        bonding_bypass=_bonding_bypass(policy, bond),
         enabled=policy.enabled,
         min_bandwidth_kbps=policy.min_bandwidth_kbps,
         bwlimit_kbps=policy.bwlimit_kbps,
@@ -84,6 +85,25 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
             for link in bond.links
         ],
     )
+
+
+def _bonding_bypass(policy: BandwidthPolicy, bond: bonding.Status) -> str:
+    """Box-wide reason why uploads skip net-merge although bundling is on.
+
+    Mirrors the checks in :func:`bonding.decide` that don't depend on the
+    upload target, so the UI can say why nothing is bundled right now.
+    """
+    if not policy.bonding_enabled or not bond.installed:
+        return ""
+    from .. import vpn as vpnsvc
+
+    if metered_link_present() and policy.metered_mode in ("pause", "limit"):
+        return "Handy angeschlossen und getaktete Verbindungen stehen nicht auf „normal senden“"
+    if vpnsvc.active_type() == "openvpn":
+        return "OpenVPN aktiv"
+    if not bond.running:
+        return "net-merge antwortet nicht"
+    return ""
 
 
 @router.get("", response_model=BandwidthStatusOut)

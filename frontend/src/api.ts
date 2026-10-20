@@ -110,6 +110,8 @@ export interface BandwidthStatus {
   bonding_available: boolean;
   bonding_running: boolean;
   bonding_links: BondingLink[];
+  /** Why uploads skip net-merge right now although bundling is on ("" = they don't). */
+  bonding_bypass: string;
   parallel_uploads: number;
   running_uploads: number;
   uploads_paused: boolean;
@@ -507,8 +509,22 @@ export interface NetworkStatus {
   tether: "iphone" | "android" | null;
   tether_ip: string | null;
   metered: boolean;
+  metered_present: boolean;
   uplink_ip: string | null;
+  links: Uplink[];
   detail: string;
+}
+
+/** One connected link to the internet (cable, Wi-Fi, USB-tethered phone). */
+export interface Uplink {
+  /** Kernel name, e.g. "wlan0" — matches BondingLink.name. */
+  device: string;
+  kind: "ethernet" | "client" | "tether";
+  label: string;
+  ip: string | null;
+  metered: boolean;
+  /** Carries the default route. */
+  primary: boolean;
 }
 
 export interface KnownNetwork {

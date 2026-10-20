@@ -138,3 +138,32 @@ body {
   margin: 0;
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
+
+/*
+  Uplink diagram (components/UplinkDiagram.tsx): a link carrying uploads gets
+  a dash pattern that runs towards the internet; reserve links stay dashed and
+  still. Both draw in currentColor, so the text-* class picks the colour.
+*/
+.ogc-flow,
+.ogc-idle {
+  background-image: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 10px);
+  background-size: 10px 100%;
+}
+.ogc-idle {
+  opacity: 0.6;
+}
+.ogc-flow {
+  animation: ogc-flow 0.6s linear infinite;
+}
+@keyframes ogc-flow {
+  to {
+    background-position: 10px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ogc-flow {
+    animation: none;
+    background-image: none;
+    background-color: currentColor;
+  }
+}

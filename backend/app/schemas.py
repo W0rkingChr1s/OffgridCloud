@@ -385,6 +385,9 @@ class BandwidthStatusOut(BaseModel):
     bonding_available: bool = False  # net-merge installed (deploy/netmerge/install.sh)
     bonding_running: bool = False  # its SOCKS5 proxy answers
     bonding_links: list[BondingLinkOut] = []  # what net-merge sees
+    # Why uploads go direct right now although bundling is on ("" = they don't),
+    # e.g. a phone is plugged in while metered links are paused.
+    bonding_bypass: str = ""
     parallel_uploads: int = 1  # uploads running at the same time (1-4)
     running_uploads: int = 0  # how many run right now
     uploads_paused: bool = False  # manually stopped (Transfers page or pool hub)
@@ -528,6 +531,15 @@ class MediaBulkDeleteResult(BaseModel):
 # --- Network redundancy / AP fallback -------------------------------------
 
 
+class UplinkOut(BaseModel):
+    device: str  # e.g. "wlan0" — matches BondingLinkOut.name
+    kind: str  # ethernet | client | tether
+    label: str
+    ip: str | None = None
+    metered: bool = False
+    primary: bool = False  # carries the default route
+
+
 class NetworkStatusOut(BaseModel):
     supported: bool
     apply_wired: bool
@@ -544,6 +556,7 @@ class NetworkStatusOut(BaseModel):
     metered: bool = False
     metered_present: bool = False
     uplink_ip: str | None = None
+    links: list[UplinkOut] = []  # every uplink, primary first
     detail: str = ""
 
 

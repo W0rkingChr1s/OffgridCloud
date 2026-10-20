@@ -66,6 +66,14 @@ export default function Dashboard() {
                 ? "unbegrenzt"
                 : `${snapshot.bandwidth.effective_bwlimit_kbps} KB/s`}
             </span>
+            {snapshot.bandwidth.metered && (
+              <Link
+                to="/admin/network"
+                className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/30"
+              >
+                {snapshot.bandwidth.uplink || "Getaktete Verbindung"} · mobile Daten
+              </Link>
+            )}
             {snapshot.bandwidth.last_kbps > 0 && (
               <span className="text-slate-500">Gemessen: {snapshot.bandwidth.last_kbps.toFixed(0)} KB/s</span>
             )}

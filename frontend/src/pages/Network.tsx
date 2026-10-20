@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   api,
   ApiError,
+  type BandwidthStatus,
   type KnownNetwork,
   type NetworkApplyResult,
   type NetworkOverview,
@@ -12,6 +14,7 @@ import {
 import Collapsible from "../components/Collapsible";
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
+import UplinkDiagram from "../components/UplinkDiagram";
 import MoreMenu from "../components/MoreMenu";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 
@@ -36,12 +39,15 @@ export default function Network() {
   const [error, setError] = useState<string | null>(null);
   const [applyMsg, setApplyMsg] = useState<NetworkApplyResult | null>(null);
   const [busy, setBusy] = useState(false);
+  // Only for the diagram (which links net-merge bundles) and the metered rule.
+  const [bandwidth, setBandwidth] = useState<BandwidthStatus | null>(null);
 
   function report(e: unknown) {
     setError(e instanceof ApiError ? e.message : "Fehler");
   }
   function load() {
     api<NetworkOverview>("/api/network").then(setData).catch(report);
+    api<BandwidthStatus>("/api/bandwidth").then(setBandwidth).catch(() => setBandwidth(null));
   }
   useEffect(load, []);
 
@@ -100,7 +106,7 @@ export default function Network() {
         </div>
       )}
 
-      {status && <StatusCard status={status} />}
+      {status && <StatusCard status={status} bandwidth={bandwidth} />}
 
       {status && !status.supported && (
         <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 text-sm text-slate-300 ring-1 ring-amber-400/20">
@@ -129,13 +135,14 @@ export default function Network() {
   );
 }
 
-function StatusCard({ status }: { status: NetworkStatus }) {
+function StatusCard({ status, bandwidth }: { status: NetworkStatus; bandwidth: BandwidthStatus | null }) {
   const online = status.online;
   const badge = status.ap_active
     ? { text: "AP aktiv", cls: "bg-amber-500/20 text-amber-200" }
     : online
       ? { text: "Online", cls: "bg-emerald-500/20 text-emerald-300" }
       : { text: "Offline", cls: "bg-red-500/20 text-red-300" };
+  const links = status.links ?? [];
   return (
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
       <div className="mb-3 flex items-center gap-3">
@@ -144,6 +151,7 @@ function StatusCard({ status }: { status: NetworkStatus }) {
           {badge.text}
         </span>
       </div>
+      {status.tether && <TetherBanner status={status} bandwidth={bandwidth} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <Field
           label="Modus"
@@ -152,12 +160,64 @@ function StatusCard({ status }: { status: NetworkStatus }) {
         <Field label="Verbunden mit" value={connectedTo(status)} />
         <Field label="IP-Adresse" value={status.uplink_ip || status.wifi_ip || "—"} />
       </div>
-      {status.tether && status.mode !== "tether" && (
-        <p className="mt-3 text-xs text-slate-500">
-          {TETHER_NAMES[status.tether]} per USB angeschlossen (Reserve, solange Kabel oder WLAN
-          da ist).
-        </p>
+      {links.length > 1 && (
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <div className="mb-2 text-sm font-medium text-slate-400">Leitungen</div>
+          <UplinkDiagram
+            links={links}
+            bonding={
+              bandwidth?.bonding_available
+                ? {
+                    enabled: bandwidth.bonding_enabled,
+                    links: bandwidth.bonding_links,
+                    bypass: bandwidth.bonding_bypass ?? "",
+                  }
+                : undefined
+            }
+          />
+        </div>
       )}
+    </div>
+  );
+}
+
+const METERED_RULE: Record<BandwidthStatus["metered_mode"], string> = {
+  allow: "Uploads laufen normal weiter",
+  limit: "Uploads laufen bis zum Tagesvolumen",
+  pause: "Uploads sind pausiert, bis Kabel oder WLAN da ist",
+};
+
+/** Hard to miss: a phone is plugged in — in use (mobile data!) or in reserve. */
+function TetherBanner({ status, bandwidth }: { status: NetworkStatus; bandwidth: BandwidthStatus | null }) {
+  const phone = TETHER_NAMES[status.tether!];
+  const inUse = status.mode === "tether";
+  const bundled =
+    !inUse &&
+    !!bandwidth?.bonding_enabled &&
+    !bandwidth.bonding_bypass &&
+    bandwidth.bonding_links.some((b) => b.used && status.links?.some((l) => l.kind === "tether" && l.device === b.name));
+  return (
+    <div
+      className={`mb-4 rounded-xl px-3 py-2 text-sm ring-1 ${
+        inUse || bundled ? "bg-amber-500/15 text-amber-200 ring-amber-400/30" : "bg-white/5 text-slate-300 ring-white/10"
+      }`}
+    >
+      <div className="font-semibold">
+        {inUse
+          ? `USB-Tethering aktiv: Die Box ist über das ${phone} online`
+          : bundled
+            ? `USB-Tethering aktiv: Das ${phone} wird mitgebündelt`
+            : `${phone} per USB angeschlossen (Reserve)`}
+      </div>
+      <div className="mt-0.5 text-xs opacity-90">
+        {inUse || bundled ? "Uploads verbrauchen mobiles Datenvolumen" : "Springt ein, wenn Kabel und WLAN wegfallen"}
+        {bandwidth && (inUse || bundled) && ` · ${METERED_RULE[bandwidth.metered_mode]}`}
+        {status.tether_ip && ` · ${status.tether_ip}`}
+        {" · "}
+        <Link to="/admin/bandwidth" className="underline">
+          Regel ändern
+        </Link>
+      </div>
     </div>
   );
 }
