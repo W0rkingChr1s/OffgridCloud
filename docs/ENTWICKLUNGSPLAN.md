@@ -106,6 +106,7 @@ Legende: ☐ offen · ◐ in Arbeit · ☑ erledigt
 - ☑ **Netzwerk-Redundanz**: Rückfall-WLAN (Access Point), wenn kein hinterlegtes Netz erreichbar ist — automatischer Watchdog + Client-Autoconnect, Verwaltung im Web-UI (`docs/NETZWERK-REDUNDANZ.md`)
 - ☑ **Multi-Server / Pooling**: mehrere Mini-Server als Flotte im Blick — ein Hub fragt die hinterlegten Peers (`/api/pool/status`, Shared-Token) periodisch ab und zeigt eine gemeinsame Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher). Read-only-Aggregation, keine verteilte Koordination — Pi-tauglich. Verwaltung im Web-UI unter **Pool** ([docs/MULTI-SERVER-POOL.md](MULTI-SERVER-POOL.md)).
 - ☑ **Pool-Fernsteuerung**: Hub pausiert/setzt Uploads fort und stößt Fehlgeschlagene neu an — nur auf Boxen, die das freigegeben haben; Audit auf beiden Seiten.
+- ☐ **Pool-Ausbau** (Lastverteilung, Relay, Spiegelung …): siehe [Ausbauplan](MULTI-SERVER-POOL.md#ausbauplan).
 - ☑ **Metadaten/Tagging & Suche**: freie Tags je Medium plus eine ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner), zugriffsgeschützt. Web-UI unter **Suche** und direkt an jedem Medium.
 
 **Damit ist der ursprünglich geplante Backlog vollständig abgearbeitet.** Weitere

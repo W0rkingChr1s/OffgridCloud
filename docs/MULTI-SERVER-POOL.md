@@ -122,3 +122,85 @@ ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Hostnamen des Hu
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
 | `POST /api/pool/token` · `DELETE /api/pool/token` | Eigenes Pool-Token erzeugen/löschen (Admin). |
 
+## Ausbauplan
+
+Wohin sich der Pool sinnvoll entwickeln kann — sortiert nach Nutzen pro Aufwand.
+Noch nichts davon ist umgesetzt.
+
+### Vorweg: Wann bringt Lastverteilung überhaupt etwas?
+
+„Lastverteilung“ heißt hier: Eine Box mit schlechter Leitung gibt Dateien an eine
+Box mit besserer Leitung ab, die sie dann hochlädt. Das lohnt sich **nur, wenn
+zwei Bedingungen gleichzeitig gelten**:
+
+1. Die Boxen haben **unterschiedliche Uplinks** (z. B. ELW mit Starlink, Boot nur
+   mit LTE).
+2. Zwischen ihnen gibt es eine **schnelle lokale Verbindung** (gemeinsames WLAN,
+   Kabel, Mesh), die deutlich schneller ist als der schwächere Uplink.
+
+Hängen alle Boxen am selben Router oder Starlink, bringt das Verschieben von
+Dateien **nichts** — der Engpass bleibt dieselbe Leitung. Dann hilft nur,
+die Leitung **fair oder nach Priorität aufzuteilen** (Stufe 2). Deshalb kommt die
+Koordination vor dem Relay.
+
+### Stufe 1 — Grundlagen (klein, sofort nützlich)
+
+| Baustein | Nutzen | Aufwand |
+|---|---|---|
+| **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
+| **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
+| **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
+| **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |
+
+### Stufe 2 — Koordination der Leitung
+
+| Baustein | Nutzen | Aufwand |
+|---|---|---|
+| **Prioritäten pro Box** | Der Hub legt eine Reihenfolge fest (z. B. „ELW-Lagebilder vor Drohnen-Rohmaterial“). Boxen mit niedriger Priorität pausieren automatisch, solange eine höhere etwas sendet. Technisch: der Hub nutzt die vorhandene Fernsteuerung im Takt der Abfrage. | mittel |
+| **Bandbreite fair teilen** | Teilen sich Boxen einen Uplink, verteilt der Hub das KB/s-Limit (`bwlimit`) auf die Boxen mit wartenden Jobs. Braucht eine zusätzliche Steuer-Aktion „Limit setzen“ und eine Angabe pro Peer „hängt am selben Uplink wie …“. | mittel |
+| **Fernsteuerung im Companion** | Pool-Übersicht und die drei Aktionen in der App (steht im Companion-Plan schon als „Pool-Übersicht“). | mittel |
+
+### Stufe 3 — Echte Lastverteilung (Relay)
+
+**Ablauf:** Box A erkennt, dass ihre Warteschlange bei der aktuellen Leitung
+viel länger braucht als bei Box B. Sie schickt Dateien über das LAN an B, B lädt
+sie ins Ziel hoch und meldet „fertig“ zurück. A behält ihre lokale Kopie, bis B
+das bestätigt.
+
+Kernfragen, die vorher geklärt sein müssen:
+
+- **Zugangsdaten:** B braucht Schreibzugriff auf das Ziel von A. Sauberste
+  Lösung: **dasselbe Ziel ist auf beiden Boxen eingerichtet** (Zuordnung über
+  einen Ziel-Schlüssel), A überträgt *keine* Zugangsdaten. Ohne passendes Ziel
+  auf B findet kein Relay statt.
+- **Entscheidungsregel:** Abgeben nur, wenn `geschätzte Dauer auf A >
+  LAN-Übertragung + Warteschlange von B + Upload auf B` mit deutlichem Abstand
+  (z. B. Faktor 2), damit Dateien nicht hin und her pendeln. Nie an eine Box,
+  deren getaktetes Tagesvolumen knapp ist oder deren Speicher fast voll ist.
+- **Doppelte Uploads vermeiden:** Prüfung über `sha256` (liegt pro Medium schon
+  vor). Bricht B ab, holt A den Job zurück.
+- **Nachvollziehbarkeit:** Im Medium steht, welche Box es tatsächlich
+  hochgeladen hat.
+
+Aufwand: **groß**. Erst angehen, wenn sich im Einsatz zeigt, dass Boxen
+tatsächlich unterschiedlich gut angebunden nebeneinander stehen.
+
+### Stufe 4 — Ausfallsicherheit
+
+| Baustein | Nutzen | Aufwand |
+|---|---|---|
+| **Spiegelung vor dem Upload** | Für ausgewählte Ordner legt die Box sofort nach Empfang eine Kopie auf einer zweiten Box ab. Geht eine Box verloren (Diebstahl, Wasser, Brand), bevor alles hochgeladen ist, sind die Daten nicht weg. Nutzt dieselbe LAN-Übertragung wie das Relay. | mittel (nach Stufe 3) |
+| **Speicher-Ausgleich** | Läuft eine Box voll, lagert sie wartende Dateien auf eine Box mit Platz aus, statt neue Uploads abzulehnen. | mittel (nach Stufe 3) |
+
+### Bewusst nicht geplant
+
+- **Konfiguration zentral verteilen** (Ziele, Ordner, Zugangsdaten vom Hub auf
+  alle Boxen schieben): Ein kompromittierter Hub hätte dann die Zugangsdaten der
+  ganzen Flotte. Besser: Export/Import einer Vorlage, die ein Admin auf jeder Box
+  bewusst einspielt.
+- **Updates fernauslösen:** Ein misslungenes Update auf allen Boxen gleichzeitig
+  mitten im Einsatz ist das schlimmste mögliche Szenario. Der Hub zeigt die
+  Versionen an; aktualisiert wird vor Ort, Box für Box.
+- **Verteiltes Dateisystem / Konsens:** Zu schwer für den Pi und für die
+  Netzqualität im Feld. Jede Box bleibt allein lauffähig — das ist der
+  wichtigste Grundsatz und gilt auch für alle Stufen oben.
