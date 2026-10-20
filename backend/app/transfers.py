@@ -20,6 +20,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from . import bandwidth, network
+from . import bandwidth, buffers
 from .config import get_settings
 from .crypto import decrypt
 from .db import SessionLocal
@@ -35,6 +36,9 @@ from .providers_registry import get_type
 from .rclone import DeleteResult, UploadResult, delete_remote, run_upload
 
 logger = logging.getLogger("offgridcloud.transfers")
+
+# Seconds between checks whether an unplugged buffer drive is back.
+OFFLINE_RETRY = 60
 
 # Progress callback: (bytes_done, total_bytes, kbps) -> None
 ProgressCb = Callable[[int, int, float], None]
@@ -204,6 +208,14 @@ def process_job(
         )
     )
     dest_path = link.dest_path if link else ""
+
+    if not media.local_deleted and buffers.is_offline(media.stored_path, db):
+        # Its buffer drive is unplugged: wait for it instead of burning attempts.
+        job.status = TransferStatus.QUEUED
+        job.last_error = "Puffer-Laufwerk nicht angeschlossen — wartet"
+        job.next_attempt_at = _now() + timedelta(seconds=OFFLINE_RETRY)
+        db.commit()
+        return job
 
     job.status = TransferStatus.RUNNING
     job.attempts += 1

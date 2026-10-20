@@ -13,6 +13,7 @@
 #   storage.sh eject   /dev/sdX                   (unmount all + power off USB)
 #   storage.sh format  /dev/sdX|/dev/sdX1 exfat|vfat|ext4 [LABEL]
 #   storage.sh prepare-cache /dev/sdX1           (create OffgridCloud-Cache/)
+#   storage.sh prepare-buffer /dev/sdX1          (create OffgridCloud-Puffer/)
 #
 # Formatting a whole disk (/dev/sdX) wipes it and writes one partition spanning
 # the disk; formatting a partition keeps the partition table.
@@ -187,15 +188,16 @@ do_format() {
   echo "$part"
 }
 
-# Create the card-copy directory on a mounted cache drive and hand it to the
-# service account (an ext4 drive formatted elsewhere is root-owned).
-do_prepare_cache() {
-  local dev="$1" mp dir
+# Create a working directory (card copies on a cache drive, the media buffer on
+# a buffer drive) on a mounted drive and hand it to the service account (an
+# ext4 drive formatted elsewhere is root-owned).
+do_prepare_dir() {
+  local dev="$1" name="$2" mp dir
   check_dev "$dev"
   check_disk_safe "$(disk_of "$dev")"
   mp="$(lsblk -ndo MOUNTPOINT "$dev" | head -1)"
   [[ -n "$mp" ]] || die "$dev ist nicht eingehängt."
-  dir="$mp/OffgridCloud-Cache"
+  dir="$mp/$name"
   [[ -L "$dir" ]] && die "$dir ist ein Symlink."
   mkdir -p "$dir"
   chown "$OWNER_UID:$OWNER_GID" "$dir" 2>/dev/null || true  # FAT/exFAT: fixed by mount uid
@@ -208,8 +210,9 @@ case "$action" in
   mount)   [[ $# -eq 1 ]] || die "Usage: storage.sh mount DEV";   do_mount "$1" ;;
   unmount) [[ $# -eq 1 ]] || die "Usage: storage.sh unmount DEV"; do_unmount "$1" ;;
   eject)   [[ $# -eq 1 ]] || die "Usage: storage.sh eject DISK";  do_eject "$1" ;;
-  prepare-cache) [[ $# -eq 1 ]] || die "Usage: storage.sh prepare-cache DEV"; do_prepare_cache "$1" ;;
+  prepare-cache) [[ $# -eq 1 ]] || die "Usage: storage.sh prepare-cache DEV"; do_prepare_dir "$1" OffgridCloud-Cache ;;
+  prepare-buffer) [[ $# -eq 1 ]] || die "Usage: storage.sh prepare-buffer DEV"; do_prepare_dir "$1" OffgridCloud-Puffer ;;
   format)  [[ $# -ge 2 && $# -le 3 ]] || die "Usage: storage.sh format DEV FSTYPE [LABEL]"
            do_format "$1" "$2" "${3:-}" ;;
-  *) die "Usage: storage.sh mount|unmount|eject|format|prepare-cache …" ;;
+  *) die "Usage: storage.sh mount|unmount|eject|format|prepare-cache|prepare-buffer …" ;;
 esac

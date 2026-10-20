@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
+from .. import buffers
 from ..admin_ops import audit
 from ..db import SessionLocal, get_db
 from ..deps import get_current_user, require_admin, user_from_query_token
@@ -143,7 +144,8 @@ def delete_folder(
     name = folder.name
     db.delete(folder)  # cascades access + media rows
     db.commit()
-    shutil.rmtree(folder_dir(folder_id), ignore_errors=True)
+    for root in buffers.roots(db):
+        shutil.rmtree(root / str(folder_id), ignore_errors=True)
     audit(db, admin, "folder.delete", name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

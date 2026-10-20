@@ -780,6 +780,7 @@ class StoragePartitionOut(BaseModel):
     browsable: bool
     busy: bool
     cache: bool = False
+    buffer_drive: bool = False  # marked as additional media buffer (by UUID)
 
 
 class StorageDiskOut(BaseModel):
@@ -797,12 +798,28 @@ class StorageDiskOut(BaseModel):
     partitions: list[StoragePartitionOut]
 
 
+class StorageBufferOut(BaseModel):
+    """A removable drive marked as additional media buffer."""
+
+    uuid: str
+    label: str
+    device: str | None  # None while the drive is unplugged
+    mountpoint: str
+    online: bool  # mounted and writable — new files may land on it
+    total: int
+    free: int
+    used: int
+    pending: int  # files on it not yet at every provider
+    error: str = ""
+
+
 class StorageOverviewOut(BaseModel):
     manage_enabled: bool
     filesystems: list[str]
     label_max: dict[str, int]
     disks: list[StorageDiskOut]
     buffer: DiskUsageOut
+    buffers: list[StorageBufferOut] = Field(default_factory=list)
     error: str = ""
 
 

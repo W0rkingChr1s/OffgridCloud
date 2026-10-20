@@ -65,7 +65,8 @@ MEDIA_EXTENSIONS = PHOTO_EXTENSIONS | RAW_EXTENSIONS | VIDEO_EXTENSIONS | AUDIO_
 # System clutter that a camera card or a Mac/Windows stick tends to carry.
 _SKIP_DIRS = frozenset(
     {"System Volume Information", "$RECYCLE.BIN", "lost+found", ".Trashes", ".Spotlight-V100",
-     ".fseventsd", ".TemporaryItems"}
+     ".fseventsd", ".TemporaryItems",
+     "OffgridCloud-Puffer"}  # our own buffer on a buffer drive (buffers.BUFFER_DIRNAME)
 )
 
 
@@ -418,6 +419,7 @@ def _run_import(
     skip_duplicates: bool,
     ev: threading.Event,
 ) -> None:
+    from . import buffers
     from .db import SessionLocal
     from .models import MediaItem, MediaStatus, MediaTag
     from .tagging import normalise_tags
@@ -453,7 +455,8 @@ def _run_import(
                     _skip(job, size)
                     continue
 
-                tmp = uploads_tmp_dir() / f"import-{uuid.uuid4().hex}.part"
+                buffer_root = buffers.pick(size)
+                tmp = uploads_tmp_dir(buffer_root) / f"import-{uuid.uuid4().hex}.part"
                 before = job.done_bytes
                 try:
                     sha = _copy(src, tmp, ev, job)
@@ -471,7 +474,8 @@ def _run_import(
                     continue
 
                 final_name = _unique_name(taken, name)
-                final_path = folder_dir(job.folder_id) / f"{uuid.uuid4()}__{final_name}"
+                target_dir = folder_dir(job.folder_id, buffer_root)
+                final_path = target_dir / f"{uuid.uuid4()}__{final_name}"
                 os.replace(tmp, final_path)
                 media = MediaItem(
                     folder_id=job.folder_id,

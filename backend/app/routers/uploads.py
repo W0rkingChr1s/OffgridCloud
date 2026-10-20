@@ -15,10 +15,12 @@ from __future__ import annotations
 import hashlib
 import os
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
+from .. import buffers
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import MediaItem, MediaStatus, Role, UploadFolder, UploadSession, User
@@ -57,7 +59,10 @@ def create_upload(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to folder")
 
     upload_id = str(uuid.uuid4())
-    temp_path = uploads_tmp_dir() / f"{upload_id}.part"
+    # The whole upload stays on one buffer target: temp file and final file
+    # share a filesystem, so completing it is a rename, not a copy.
+    root = buffers.pick(payload.size or 0, db)
+    temp_path = uploads_tmp_dir(root) / f"{upload_id}.part"
     temp_path.touch()
 
     session = UploadSession(
@@ -103,6 +108,11 @@ async def upload_chunk(
             headers={"X-Received": str(session.received)},
         )
 
+    if buffers.is_offline(session.temp_path, db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Das Puffer-Laufwerk dieses Uploads ist nicht angeschlossen.",
+        )
     written = 0
     with open(session.temp_path, "ab") as fh:
         async for chunk in request.stream():
@@ -143,7 +153,8 @@ def complete_upload(
             digest.update(block)
 
     final_name = f"{upload_id}__{session.filename}"
-    final_path = folder_dir(session.folder_id) / final_name
+    # <root>/.uploads/<id>.part -> <root>/<folder>/<name>
+    final_path = folder_dir(session.folder_id, Path(session.temp_path).parent.parent) / final_name
     os.replace(session.temp_path, final_path)
 
     media = MediaItem(
