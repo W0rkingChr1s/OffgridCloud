@@ -11,6 +11,7 @@ import {
   type MediaItem,
 } from "../api";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortMenu, SortTh, type SortOption, useSort } from "../components/Sort";
 import { useToast } from "../toast";
 import { TagEditor } from "../components/Tags";
@@ -48,6 +49,9 @@ function triggerDownload(url: string) {
   a.remove();
 }
 
+const dateFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short" });
+const dateTimeFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" });
+
 const STATUS_LABELS: Record<string, string> = {
   received: "empfangen",
   queued: "in Warteschlange",
@@ -67,7 +71,7 @@ function StatusPill({ status }: { status: string }) {
           ? "bg-ogc-blue/20 text-sky-300"
           : "bg-ogc-teal/15 text-ogc-teal";
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
+    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>
       {STATUS_LABELS[status] ?? status}
     </span>
   );
@@ -118,6 +122,8 @@ export default function FolderDetail() {
   // Optional description typed before an upload — applied to that whole batch.
   const [descTitle, setDescTitle] = useState("");
   const [descBody, setDescBody] = useState("");
+  // The composer stays folded until asked for (or while it still holds text).
+  const [descOpen, setDescOpen] = useState(false);
   // Read the latest composer text from inside the async upload loop.
   const descTitleRef = useRef("");
   const descBodyRef = useRef("");
@@ -321,6 +327,12 @@ export default function FolderDetail() {
   }, [folderId, availableIds]);
 
   const sort = useSort(media, MEDIA_SORT, { key: "created", dir: "desc" });
+  const deleteItem = (m: MediaItem) => ({
+    label: busyId === m.id ? "Lösche …" : "Löschen …",
+    danger: true,
+    disabled: busyId !== null,
+    onClick: () => remove(m),
+  });
 
   return (
     <Layout>
@@ -350,23 +362,39 @@ export default function FolderDetail() {
       )}
 
       {/* Optional description composer — applies to the next uploaded batch. */}
-      <div className="mb-3 rounded-2xl bg-slate-800/40 p-3 ring-1 ring-white/5">
-        <input
-          value={descTitle}
-          onChange={(e) => setDescTitle(e.target.value)}
-          maxLength={200}
-          placeholder="Thema (optional) – z. B. Bootsfahrt am Morgen"
-          className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
-        />
-        <textarea
-          value={descBody}
-          onChange={(e) => setDescBody(e.target.value)}
-          rows={2}
-          maxLength={20000}
-          placeholder="Beschreibung für die nächsten hochgeladenen Fotos/Videos (optional). Wird als Textdatei mit in die Cloud geladen."
-          className="mt-2 w-full resize-y rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
-        />
-      </div>
+      {descOpen || descTitle || descBody ? (
+        <div className="mb-3 rounded-2xl bg-slate-800/40 p-3 ring-1 ring-white/5">
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-400">
+            <span>Beschreibung für die nächsten Uploads – wird als Textdatei mit in die Cloud geladen.</span>
+            <button
+              type="button"
+              onClick={() => {
+                setDescTitle("");
+                setDescBody("");
+                setDescOpen(false);
+              }}
+              className="shrink-0 hover:text-white"
+            >
+              Entfernen
+            </button>
+          </div>
+          <input
+            value={descTitle}
+            onChange={(e) => setDescTitle(e.target.value)}
+            maxLength={200}
+            placeholder="Thema (optional) – z. B. Bootsfahrt am Morgen"
+            className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
+          />
+          <textarea
+            value={descBody}
+            onChange={(e) => setDescBody(e.target.value)}
+            rows={2}
+            maxLength={20000}
+            placeholder="Was ist auf den Fotos/Videos zu sehen?"
+            className="mt-2 w-full resize-y rounded-lg bg-slate-800 px-3 py-2 text-sm text-white outline-hidden ring-1 ring-white/10 focus:ring-ogc-teal/50"
+          />
+        </div>
+      ) : null}
 
       <div
         onDragOver={(e) => {
@@ -376,7 +404,7 @@ export default function FolderDetail() {
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => inputRef.current?.click()}
-        className={`mb-6 cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition ${
+        className={`mb-6 cursor-pointer rounded-2xl border-2 border-dashed px-6 py-6 text-center transition ${
           dragOver ? "border-ogc-teal bg-ogc-teal/5" : "border-white/15 hover:border-white/30"
         }`}
       >
@@ -388,9 +416,18 @@ export default function FolderDetail() {
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
         <div className="text-slate-300">Dateien hierher ziehen oder klicken zum Auswählen</div>
-        <div className="mt-1 text-xs text-slate-500">
-          Große Videos werden in Teilen hochgeladen und können fortgesetzt werden.
-        </div>
+        {!(descOpen || descTitle || descBody) && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDescOpen(true);
+            }}
+            className="mt-1 text-xs text-slate-500 hover:text-ogc-teal"
+          >
+            + Beschreibung für diesen Upload
+          </button>
+        )}
       </div>
 
       {uploads.length > 0 && (
@@ -479,29 +516,26 @@ export default function FolderDetail() {
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
                       <span>{formatBytes(m.size)}</span>
                       <span aria-hidden>·</span>
-                      <span>{new Date(m.created_at).toLocaleDateString()}</span>
+                      <span>{dateFmt.format(new Date(m.created_at))}</span>
                       <span aria-hidden>·</span>
                       <StatusPill status={m.status} />
                     </div>
                     <div className="mt-1.5">
                       <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
                     </div>
-                    <div className="mt-1.5 flex items-center gap-3 text-xs">
-                      {m.local_deleted ? (
-                        <span className="text-slate-500">lokal entfernt</span>
-                      ) : (
-                        <a href={downloadUrl(m.id)} download className="text-ogc-teal hover:underline">
-                          Herunterladen
-                        </a>
-                      )}
-                      <button
-                        onClick={() => remove(m)}
-                        disabled={busyId === m.id}
-                        className="text-red-300 hover:underline disabled:opacity-50"
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    {!m.local_deleted && (
+                      <a
+                        href={downloadUrl(m.id)}
+                        download
+                        aria-label={`${m.filename} herunterladen`}
+                        className="rounded-lg border border-white/10 px-2.5 py-1 text-sm leading-none text-slate-300 hover:bg-white/5"
                       >
-                        {busyId === m.id ? "…" : "Löschen"}
-                      </button>
-                    </div>
+                        ↓
+                      </a>
+                    )}
+                    <MoreMenu items={[deleteItem(m)]} />
                   </div>
                 </div>
               );
@@ -529,7 +563,7 @@ export default function FolderDetail() {
                   <SortTh sort={sort} field="status">Status</SortTh>
                   <th className="px-4 py-3">Tags</th>
                   <SortTh sort={sort} field="created">Hochgeladen</SortTh>
-                  <th className="px-4 py-3 text-right">Aktion</th>
+                  <th className="px-4 py-3" aria-label="Aktionen" />
                 </tr>
               </thead>
               <tbody>
@@ -538,7 +572,7 @@ export default function FolderDetail() {
                   return (
                     <tr
                       key={m.id}
-                      className={`border-t border-white/5 transition ${
+                      className={`group border-t border-white/5 transition ${
                         isSel ? "bg-ogc-teal/10" : "bg-slate-900/40 hover:bg-slate-800/40"
                       }`}
                     >
@@ -561,15 +595,15 @@ export default function FolderDetail() {
                         )}
                       </td>
                       <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
-                      <td className="px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
                       <td className="px-4 py-3">
                         <StatusPill status={m.status} />
                       </td>
                       <td className="px-4 py-3">
-                        <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
+                        <TagEditor mediaId={m.id} tags={m.tags} quietAdd onChange={(t) => patchTags(m.id, t)} />
                       </td>
-                      <td className="px-4 py-3 text-slate-400">
-                        {new Date(m.created_at).toLocaleString()}
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-400">
+                        {dateTimeFmt.format(new Date(m.created_at))}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -577,18 +611,12 @@ export default function FolderDetail() {
                             <a
                               href={downloadUrl(m.id)}
                               download
-                              className="rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
+                              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs leading-none hover:bg-white/5"
                             >
                               Download
                             </a>
                           )}
-                          <button
-                            onClick={() => remove(m)}
-                            disabled={busyId === m.id}
-                            className="rounded-sm border border-red-500/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
-                          >
-                            {busyId === m.id ? "…" : "Löschen"}
-                          </button>
+                          <MoreMenu items={[deleteItem(m)]} />
                         </div>
                       </td>
                     </tr>
