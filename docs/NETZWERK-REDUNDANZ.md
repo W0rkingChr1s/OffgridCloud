@@ -113,6 +113,10 @@ Unter **Netzwerk** (nur Admin):
 - **Rückkehr aus dem AP:** Weil der Funkchip im AP-Modus belegt ist, sucht der
   Watchdog aktiv nach bekannten WLANs. Berücksichtigt werden alle WLAN-Profile mit
   Autoconnect, auch das aus dem Raspberry Pi Imager (`netplan-wlan0-*`).
+  Solche Profile zeigt die Netzwerk-Seite in der Liste der bekannten WLANs mit dem
+  Kennzeichen „System“ (und „verbunden“, wenn aktiv) an. Sie lassen sich dort nicht
+  bearbeiten, sondern nur per `nmtui`/`nmcli` auf der Box. Der Status nennt die
+  tatsächlich verbundene SSID.
   1. Alle **2 Minuten** scannt er, ohne den AP abzuschalten. Ist ein bekanntes
      WLAN sichtbar, verbindet er sich damit.
   2. Viele Treiber, darunter der des Pi (`brcmfmac`), liefern im AP-Modus keine
