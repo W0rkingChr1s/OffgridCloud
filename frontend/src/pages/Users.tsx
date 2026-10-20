@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, ApiError, type Role, type User } from "../api";
 import { useAuth } from "../auth";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 
 const USER_SORT: SortOption<User>[] = [
@@ -56,14 +57,14 @@ export default function Users() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Benutzerverwaltung</h2>
           <p className="text-sm text-slate-400">Konten anlegen, sperren, Rollen ändern.</p>
         </div>
         <button
           onClick={() => setShowCreate((v) => !v)}
-          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="whitespace-nowrap rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           {showCreate ? "Abbrechen" : "+ Benutzer"}
         </button>
@@ -83,15 +84,15 @@ export default function Users() {
         />
       )}
 
-      <div className="overflow-hidden rounded-2xl ring-1 ring-white/10">
+      <div className="overflow-x-auto rounded-2xl ring-1 ring-white/10">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-800/80 text-slate-400">
             <tr>
               <SortTh sort={sort} field="email">E-Mail</SortTh>
-              <SortTh sort={sort} field="name">Name</SortTh>
+              <SortTh sort={sort} field="name" className="hidden sm:table-cell">Name</SortTh>
               <SortTh sort={sort} field="role">Rolle</SortTh>
-              <SortTh sort={sort} field="status">Status</SortTh>
-              <th className="px-4 py-3 text-right">Aktionen</th>
+              <SortTh sort={sort} field="status" className="hidden sm:table-cell">Status</SortTh>
+              <th className="px-4 py-3" aria-label="Aktionen" />
             </tr>
           </thead>
           <tbody>
@@ -99,8 +100,17 @@ export default function Users() {
               const self = u.id === me?.id;
               return (
                 <tr key={u.id} className="border-t border-white/5 bg-slate-900/40">
-                  <td className="px-4 py-3 font-medium text-white">{u.email}</td>
-                  <td className="px-4 py-3 text-slate-300">{u.name || "—"}</td>
+                  <td className="px-4 py-3">
+                    <div className="max-w-44 truncate font-medium text-white sm:max-w-none" title={u.email}>
+                      {u.email}
+                    </div>
+                    {/* Name and lock state move under the e-mail on phones. */}
+                    <div className="text-xs text-slate-400 sm:hidden">
+                      {u.name}
+                      {!u.active && <span className="ml-1 text-slate-500">· gesperrt</span>}
+                    </div>
+                  </td>
+                  <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{u.name || "—"}</td>
                   <td className="px-4 py-3">
                     <select
                       value={u.role}
@@ -112,7 +122,7 @@ export default function Users() {
                       <option value="admin">admin</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="hidden px-4 py-3 sm:table-cell">
                     <span
                       className={`rounded px-2 py-0.5 text-xs ${
                         u.active ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-500/20 text-slate-400"
@@ -122,27 +132,25 @@ export default function Users() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => patch(u.id, { active: !u.active })}
-                        disabled={self}
-                        className="rounded-sm border border-white/10 px-2 py-1 text-xs hover:bg-white/5 disabled:opacity-30"
-                      >
-                        {u.active ? "Sperren" : "Entsperren"}
-                      </button>
-                      <button
-                        onClick={() => resetPassword(u.id)}
-                        className="rounded-sm border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-                      >
-                        Passwort
-                      </button>
-                      <button
-                        onClick={() => remove(u.id)}
-                        disabled={self}
-                        className="rounded-sm border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-30"
-                      >
-                        Löschen
-                      </button>
+                    <div className="flex justify-end">
+                      <MoreMenu
+                        items={[
+                          {
+                            label: u.active ? "Sperren" : "Entsperren",
+                            disabled: self,
+                            title: self ? "Das eigene Konto lässt sich nicht sperren" : undefined,
+                            onClick: () => patch(u.id, { active: !u.active }),
+                          },
+                          { label: "Passwort setzen …", onClick: () => resetPassword(u.id) },
+                          {
+                            label: "Löschen …",
+                            danger: true,
+                            disabled: self,
+                            title: self ? "Das eigene Konto lässt sich nicht löschen" : undefined,
+                            onClick: () => remove(u.id),
+                          },
+                        ]}
+                      />
                     </div>
                   </td>
                 </tr>

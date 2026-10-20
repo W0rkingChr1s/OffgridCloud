@@ -139,7 +139,7 @@ export default function Bandwidth() {
           {schedule.length === 0 && <div className="text-sm text-slate-500">Keine Zeitfenster — es gilt immer das Standard-Limit.</div>}
           <div className="space-y-2">
             {schedule.map((w, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
+              <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
                 <input type="time" className={field} value={w.start} onChange={(e) => updateWindow(i, { start: e.target.value })} />
                 <span className="text-slate-500">bis</span>
                 <input type="time" className={field} value={w.end} onChange={(e) => updateWindow(i, { end: e.target.value })} />

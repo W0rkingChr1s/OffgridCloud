@@ -8,6 +8,7 @@ import {
   type PoolSelf,
 } from "../api";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
 import { formatBytes } from "../upload";
 
@@ -93,6 +94,7 @@ export default function Pool() {
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [addingPeer, setAddingPeer] = useState(false);
 
   const loadPeers = useCallback(() => {
     api<PoolPeer[]>("/api/pool/peers").then(setPeers).catch(() => setPeers([]));
@@ -125,6 +127,7 @@ export default function Pool() {
       setName("");
       setBaseUrl("");
       setToken("");
+      setAddingPeer(false);
       loadPeers();
       loadOverview();
     } catch (err) {
@@ -206,7 +209,8 @@ export default function Pool() {
         </div>
       )}
 
-      {overview && overview.peers.length > 0 && (
+      {/* Sorting only pays off once the list no longer fits at a glance. */}
+      {overview && overview.peers.length > 4 && (
         <div className="mb-3 flex justify-end">
           <SortMenu sort={nodeSort} />
         </div>
@@ -222,43 +226,56 @@ export default function Pool() {
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
           Peers verwalten
         </h3>
-        {peers.length > 0 && <SortMenu sort={peerSort} />}
+        <div className="flex items-center gap-2">
+          {peers.length > 4 && <SortMenu sort={peerSort} />}
+          {!addingPeer && (
+            <button
+              type="button"
+              onClick={() => setAddingPeer(true)}
+              className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/5"
+            >
+              + Peer hinzufügen
+            </button>
+          )}
+        </div>
       </div>
-      <form onSubmit={addPeer} className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
-        <input
-          className={field}
-          placeholder="Name (z. B. Box 2)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <input
-          className={field}
-          placeholder="https://box2.local:8000"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          required
-        />
-        <input
-          className={field}
-          placeholder="Pool-Token des Peers"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-medium text-white"
-        >
-          Peer hinzufügen
-        </button>
-      </form>
+      {(addingPeer || peers.length === 0) && (
+        <form onSubmit={addPeer} className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <input
+            className={field}
+            placeholder="Name (z. B. Box 2)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <input
+            className={field}
+            placeholder="https://box2.local:8000"
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            required
+          />
+          <input
+            className={field}
+            placeholder="Pool-Token des Peers"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-medium text-white"
+          >
+            Peer hinzufügen
+          </button>
+        </form>
+      )}
 
       {peers.length > 0 && (
         <div className="mb-8 space-y-2">
           {peerSort.sorted.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between rounded-xl bg-slate-800/60 p-3 text-sm ring-1 ring-white/5"
+              className="flex items-center justify-between gap-3 rounded-xl bg-slate-800/60 p-3 text-sm ring-1 ring-white/5"
             >
               <div className="min-w-0">
                 <div className="truncate font-medium text-white">{p.name}</div>
@@ -272,16 +289,12 @@ export default function Pool() {
                 )}
                 <button
                   onClick={() => togglePeer(p)}
-                  className="rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
+                  title={p.enabled ? "Abfrage pausieren" : "Abfrage wieder aufnehmen"}
+                  className="rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
                 >
                   {p.enabled ? "Aktiv" : "Pausiert"}
                 </button>
-                <button
-                  onClick={() => removePeer(p)}
-                  className="rounded-sm border border-red-500/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                >
-                  Entfernen
-                </button>
+                <MoreMenu items={[{ label: "Peer entfernen …", danger: true, onClick: () => removePeer(p) }]} />
               </div>
             </div>
           ))}

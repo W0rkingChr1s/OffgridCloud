@@ -21,6 +21,15 @@ const RESULT_SORT: SortOption<MediaSearchResult>[] = [
   { key: "created", label: "Hochgeladen", get: (m) => m.created_at },
 ];
 
+const STATUS_LABELS: Record<string, string> = {
+  received: "empfangen",
+  queued: "in Warteschlange",
+  uploading: "wird übertragen",
+  verified: "geprüft",
+  done: "gesichert",
+  failed: "Fehler",
+};
+
 const STATUSES: MediaStatus[] = [
   "received",
   "queued",
@@ -107,7 +116,7 @@ export default function Search() {
           <option value="">Alle Status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {STATUS_LABELS[s] ?? s}
             </option>
           ))}
         </select>
@@ -139,9 +148,9 @@ export default function Search() {
           {sort.sorted.map((m) => (
             <div
               key={m.id}
-              className="flex flex-col gap-2 rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/5 sm:flex-row sm:items-center sm:justify-between"
+              className="flex items-start gap-3 rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/5 sm:items-center"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-white">{m.filename}</div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
                   <Link to={`/folders/${m.folder_id}`} className="text-ogc-teal hover:underline">
@@ -150,7 +159,7 @@ export default function Search() {
                   <span aria-hidden>·</span>
                   <span>{formatBytes(m.size)}</span>
                   <span aria-hidden>·</span>
-                  <span>{m.status}</span>
+                  <span>{STATUS_LABELS[m.status] ?? m.status}</span>
                 </div>
                 <div className="mt-1.5">
                   <TagEditor mediaId={m.id} tags={m.tags} />
@@ -160,7 +169,7 @@ export default function Search() {
                 <a
                   href={downloadUrl(m.id)}
                   download
-                  className="shrink-0 self-start rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5 sm:self-center"
+                  className="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
                 >
                   Download
                 </a>
