@@ -500,6 +500,17 @@ class KnownNetworkUpdate(BaseModel):
     autoconnect: bool | None = None
 
 
+class SystemNetworkOut(BaseModel):
+    """Wi-Fi profile configured outside OffgridCloud (e.g. Raspberry Pi Imager)."""
+
+    name: str
+    ssid: str
+    priority: int
+    autoconnect: bool
+    has_password: bool = False
+    active: bool = False
+
+
 class NetworkSettingsOut(BaseModel):
     fallback_enabled: bool
     ap_ssid: str
@@ -528,6 +539,7 @@ class NetworkOverviewOut(BaseModel):
     status: NetworkStatusOut
     settings: NetworkSettingsOut
     known_networks: list[KnownNetworkOut]
+    system_networks: list[SystemNetworkOut] = []
 
 
 class NetworkApplyResult(BaseModel):

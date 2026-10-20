@@ -8,6 +8,8 @@ opt-in privileged helper and the root watchdog (see ``app/network.py`` and
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +23,7 @@ from ..network import (
     apply_config,
     get_network_settings,
     get_status,
+    get_system_networks,
     scan_wifi,
     set_known_psk,
     status_dict,
@@ -37,6 +40,7 @@ from ..schemas import (
     NetworkSettingsOut,
     NetworkSettingsUpdate,
     NetworkStatusOut,
+    SystemNetworkOut,
     WifiScanOut,
 )
 
@@ -82,6 +86,7 @@ def overview(_: User = Depends(require_admin), db: Session = Depends(get_db)) ->
         status=_live_status(),
         settings=_settings_out(row),
         known_networks=[_known_out(n) for n in known],
+        system_networks=[SystemNetworkOut(**asdict(n)) for n in get_system_networks()],
     )
 
 

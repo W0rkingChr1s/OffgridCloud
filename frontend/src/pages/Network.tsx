@@ -7,6 +7,7 @@ import {
   type NetworkOverview,
   type NetworkSettings,
   type NetworkStatus,
+  type SystemNetwork,
 } from "../api";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
@@ -112,7 +113,12 @@ export default function Network() {
       {data && (
         <>
           <FallbackSettings settings={data.settings} onSaved={load} onError={report} />
-          <KnownNetworks networks={data.known_networks} onChanged={load} onError={report} />
+          <KnownNetworks
+            networks={data.known_networks}
+            systemNetworks={data.system_networks ?? []}
+            onChanged={load}
+            onError={report}
+          />
         </>
       )}
     </Layout>
@@ -300,10 +306,12 @@ function FallbackSettings({
 
 function KnownNetworks({
   networks,
+  systemNetworks,
   onChanged,
   onError,
 }: {
   networks: KnownNetwork[];
+  systemNetworks: SystemNetwork[];
   onChanged: () => void;
   onError: (e: unknown) => void;
 }) {
@@ -376,7 +384,7 @@ function KnownNetworks({
         </button>
       </div>
 
-      {networks.length === 0 ? (
+      {networks.length === 0 && systemNetworks.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Netzwerke hinterlegt.</p>
       ) : (
         <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
@@ -408,9 +416,38 @@ function KnownNetworks({
                   </td>
                 </tr>
               ))}
+              {systemNetworks.map((n) => (
+                <tr key={`sys-${n.name}`} className="border-t border-white/5 bg-slate-900/20">
+                  <td className="px-4 py-2 font-medium text-white">
+                    {n.ssid}
+                    <span
+                      className="ml-2 rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-normal text-sky-300"
+                      title={`NetworkManager-Profil „${n.name}“ — außerhalb von OffgridCloud angelegt (z. B. Raspberry Pi Imager)`}
+                    >
+                      System
+                    </span>
+                    {n.active && (
+                      <span className="ml-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-normal text-emerald-300">
+                        verbunden
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-400">{n.priority}</td>
+                  <td className="px-4 py-2 text-slate-400">{n.has_password ? "🔒" : "offen"}</td>
+                  <td className="px-4 py-2 text-slate-400">{n.autoconnect ? "ja" : "nein"}</td>
+                  <td className="px-4 py-2 text-right text-xs text-slate-500">vom System</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+      )}
+      {systemNetworks.length > 0 && (
+        <p className="mt-3 text-xs text-slate-500">
+          „System“-Netzwerke stammen aus der Betriebssystem-Einrichtung (z. B. Raspberry Pi Imager)
+          und werden ebenfalls automatisch verbunden. Sie lassen sich hier nicht bearbeiten — nur
+          per <code>nmtui</code>/<code>nmcli</code> auf der Box.
+        </p>
       )}
     </div>
   );

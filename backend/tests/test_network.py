@@ -200,3 +200,58 @@ def test_apply_exports_config_without_helper(client, admin_auth):
     assert exported["ap"]["passphrase"] == "feldpass1"  # decrypted for the helper
     uplink = [n for n in exported["known_networks"] if n["ssid"] == "Uplink"]
     assert uplink and uplink[0]["passphrase"] == "uplink12"
+
+
+# --------------------------------------------------------------------------- #
+# System Wi-Fi profiles (Raspberry Pi Imager / netplan)                        #
+# --------------------------------------------------------------------------- #
+def test_parse_connection_details_keeps_colons_in_value():
+    raw = "802-11-wireless.ssid:My:SSID\n802-11-wireless.mode:infrastructure\n"
+    assert network.parse_connection_details(raw) == {
+        "802-11-wireless.ssid": "My:SSID",
+        "802-11-wireless.mode": "infrastructure",
+    }
+
+
+def test_build_system_networks_picks_foreign_wifi_profiles():
+    raw = (
+        "netplan-wlan0-MartinRouterKing:802-11-wireless:yes:0:yes\n"
+        "offgridcloud-ap:802-11-wireless:no:0:no\n"
+        "ogc-wifi-office:802-11-wireless:yes:10:no\n"
+        "Wired connection 1:802-3-ethernet:yes:-999:no\n"
+        "hotspot:802-11-wireless:no:0:no\n"
+        "Cafe:802-11-wireless:yes:5:no\n"
+    )
+    rows = network.parse_connection_list(raw)
+    details = {
+        "netplan-wlan0-MartinRouterKing": {
+            "ssid": "MartinRouterKing",
+            "mode": "infrastructure",
+            "key_mgmt": "wpa-psk",
+        },
+        "hotspot": {"ssid": "x", "mode": "ap", "key_mgmt": "wpa-psk"},
+        "Cafe": {"ssid": "Cafe", "mode": "infrastructure", "key_mgmt": ""},
+    }
+    nets = network.build_system_networks(rows, details)
+    assert [n.ssid for n in nets] == ["Cafe", "MartinRouterKing"]
+    imager = nets[1]
+    assert imager.name == "netplan-wlan0-MartinRouterKing"
+    assert imager.has_password is True
+    assert imager.active is True
+    assert imager.autoconnect is True
+    assert nets[0].has_password is False
+
+
+def test_overview_includes_system_networks(client, admin_auth, monkeypatch):
+    from app.routers import network as router_mod
+
+    monkeypatch.setattr(
+        router_mod,
+        "get_system_networks",
+        lambda: [network.SystemNetwork(name="netplan-wlan0-Home", ssid="Home", active=True)],
+    )
+    r = client.get("/api/network", headers=admin_auth)
+    assert r.status_code == 200
+    sys_nets = r.json()["system_networks"]
+    assert sys_nets[0]["ssid"] == "Home"
+    assert sys_nets[0]["active"] is True

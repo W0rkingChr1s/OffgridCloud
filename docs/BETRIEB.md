@@ -145,7 +145,7 @@ mDNS-Namen und erzeugt:
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
-**Domain später ändern:** im Portal unter **System → HTTPS** die Domain
+**Domain später ändern:** im Portal unter **System → Erweitert → Öffentliche HTTPS-Domain** die Domain
 eintragen oder entfernen — kein Neu-Installieren nötig. Der lokale
 `.local`-Zugang bleibt immer erhalten. Damit ein echtes Zertifikat ausgestellt
 werden kann, muss die Domain per DNS auf die Box zeigen und die Ports 80/443
@@ -222,7 +222,7 @@ Wege und nimmt das erste Ergebnis:
 
 ## 5. Speicher-Management
 
-Unter **System**:
+Unter **System → Uploads**:
 - **Disk-Auslastung** des Puffers wird angezeigt; bei wenig freiem Platz erscheint
   eine Warnung (< 10 % oder < 500 MB frei).
 - **„Lokale Kopie nach Upload löschen"**: ist diese Option aktiv, wird die
@@ -438,7 +438,7 @@ Unterbrochene Transfers werden beim Start automatisch wieder eingereiht
 
 ### System steuern (Neustart & Herunterfahren)
 
-Unter **System → „System steuern"** lassen sich drei Aktionen direkt aus dem
+Unter **System → „Wartung"** lassen sich drei Aktionen direkt aus dem
 Web-UI auslösen:
 
 - **OffgridCloud neustarten** — startet nur den Dienst neu
