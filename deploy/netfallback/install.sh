@@ -59,6 +59,15 @@ if command -v systemctl >/dev/null 2>&1; then
     echo "   Could not enable NetworkManager — enable it before relying on the AP fallback." >&2
 fi
 
+# --- 1b. USB tethering: phone only as the uplink of last resort ------------
+if [[ -d /etc/NetworkManager/conf.d ]]; then
+  install -m 644 "$HERE/offgridcloud-tether.conf" /etc/NetworkManager/conf.d/offgridcloud-tether.conf
+  # Takes effect for the next activation; a phone already plugged in keeps its
+  # current route until it is replugged.
+  nmcli general reload conf >/dev/null 2>&1 || true
+  echo "   USB tethering ranks behind cable and Wi-Fi (route metric 700)."
+fi
+
 # --- 2. Watchdog service ----------------------------------------------------
 step "Installing the network watchdog service..."
 sed -e "s#/opt/offgridcloud/src/deploy/netfallback/watchdog.sh#$WATCHDOG#g" \

@@ -472,6 +472,9 @@ SYSTEM_FIELDS = [
     ("notify_on_bandwidth", "Bei Bandbreiten-Drosselung", "bool"),
 ]
 
+# USB-tethered phone as reported in the network status ("tether").
+TETHER_NAMES = {"iphone": "iPhone", "android": "Android"}
+
 # Fallback-AP / network-redundancy settings (PUT /api/network/settings).
 NETWORK_AP_FIELDS = [
     ("group", "Fallback-Access-Point"),
@@ -492,6 +495,9 @@ BANDWIDTH_FIELDS = [
     ("enabled", "Steuerung aktiv", "bool"),
     ("bwlimit_kbps", "Upload-Limit (KiB/s, 0 = unbegrenzt)", "int"),
     ("min_bandwidth_kbps", "Mindest-Bandbreite-Gate (KiB/s)", "int"),
+    ("group", "Getaktete Verbindung (USB-Tethering)"),
+    ("metered_mode", "Uploads: allow / pause / limit", "text"),
+    ("metered_budget_mb", "Tagesvolumen bei limit (MB)", "int"),
 ]
 
 # Top-level tabs: (key, label, short label). The dashboard is the landing view
@@ -1355,7 +1361,12 @@ class Console:
                 self.message = f"Konnte Netzwerk nicht laden: {exc.detail}"
                 return
             st = net.get("status", {})
-            hint = (f"Modus: {st.get('mode', '?')} · online: {'ja' if st.get('online') else 'nein'}"
+            mode = st.get("mode", "?")
+            if mode == "tether":
+                mode = f"USB-Tethering ({TETHER_NAMES.get(st.get('tether'), 'Handy')})"
+            if st.get("metered"):
+                mode += ", getaktet"
+            hint = (f"Modus: {mode} · online: {'ja' if st.get('online') else 'nein'}"
                     f" · AP: {'an' if st.get('ap_active') else 'aus'}")
             items = [
                 ("ap", "Fallback-AP & Watchdog"),

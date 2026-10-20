@@ -37,6 +37,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner)
 - 📝 **Beschreibungen & Themen** — Fotos/Videos thematisch gruppieren und erklären; direkt beim Upload mehrerer Dateien eine Beschreibung mitgeben. Daraus entsteht eine Text-Datei (`.txt`), die automatisch mit in **alle** verknüpften Cloud-Ziele geladen wird
 - 📡 **Netzwerk-Redundanz** — fällt der Router aus, hostet die Box ihr eigenes WLAN als Rückfallebene, bis ein hinterlegtes Netz wieder erreichbar ist
+- 📱 **USB-Tethering** — iPhone oder Android-Handy per Kabel als Uplink, automatisch erkannt und hinter Kabel und WLAN eingereiht; Uploads über die getaktete Verbindung wahlweise normal, bis zu einem Tagesvolumen oder pausiert
 - 🔐 **VPN-Client** — wählt sich per WireGuard/OpenVPN ins Heimnetz ein, damit intern-only Ziele (z. B. ein NAS) erreichbar sind
 - 🖥️ **OffgridCloud OS** — hängt ein Bildschirm an der Box, startet sie in ein **getabbtes Dashboard** (Live-Status, Provider, Netz/Bandbreite/VPN, Pool, Benutzer & Gruppen, System mit Version/Updates/Speicher) — die **komplette Verwaltung ohne Web-UI**, direkt an der Box oder per SSH. Ins darunterliegende Raspberry Pi OS geht es erst per **Admin-PIN**; optionaler Vollbild-Browser-Kiosk für Pi 4/5
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)

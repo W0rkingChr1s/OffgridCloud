@@ -117,6 +117,50 @@ def should_start(
     return True, ""
 
 
+# --- Metered uplink (USB tethering) -------------------------------------------
+# A phone tethered over USB is fast enough that uploads would happily run at
+# full speed — straight through the mobile data plan. These rules decide what
+# happens while the uplink is metered.
+METERED_MODES = ("allow", "pause", "limit")
+_MB = 1024 * 1024
+
+
+def metered_used_today(policy: BandwidthPolicy, today: str) -> int:
+    """Bytes already sent over a metered link today (0 once the day rolled over)."""
+    return policy.metered_used_bytes if policy.metered_day == today else 0
+
+
+def metered_gate(
+    mode: str, budget_mb: int, used_bytes: int, metered: bool, label: str
+) -> tuple[bool, str, int | None]:
+    """Decide whether uploads may run on the current uplink.
+
+    Returns ``(ok, reason, max_bytes)``. ``max_bytes`` is the remaining daily
+    budget in "limit" mode — the worker then only picks files that fit — and
+    ``None`` when no budget applies.
+    """
+    if not metered or mode not in ("pause", "limit"):
+        return True, "", None
+    if mode == "pause":
+        return False, f"Getaktete Verbindung ({label}) — Uploads pausiert", None
+    remaining = max(0, budget_mb) * _MB - used_bytes
+    if remaining <= 0:
+        return False, f"Tagesvolumen {budget_mb} MB über {label} aufgebraucht", None
+    return True, "", remaining
+
+
+def add_metered_usage(db: Session, num_bytes: int, today: str) -> None:
+    """Count ``num_bytes`` against today's metered budget."""
+    if num_bytes <= 0:
+        return
+    policy = get_policy(db)
+    if policy.metered_day != today:
+        policy.metered_day = today
+        policy.metered_used_bytes = 0
+    policy.metered_used_bytes += num_bytes
+    db.commit()
+
+
 def record_measurement(db: Session, kbps: float) -> None:
     if kbps <= 0:
         return

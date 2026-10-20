@@ -14,11 +14,12 @@ import os
 import posixpath
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from . import bandwidth, network
 from . import bandwidth, buffers
 from .config import get_settings
 from .crypto import decrypt
@@ -179,8 +180,12 @@ def process_job(
     job: TransferJob,
     upload_fn: UploadFn = _rclone_upload_fn,
     bwlimit_kbps: int = 0,
+    metered: bool = False,
 ) -> TransferJob:
-    """Run one transfer job through its state machine. Commits its own changes."""
+    """Run one transfer job through its state machine. Commits its own changes.
+
+    With ``metered`` the bytes sent count against today's metered data budget.
+    """
     media = db.get(MediaItem, job.media_id)
     provider = db.get(CloudProvider, job.provider_id)
     if media is None or provider is None:
@@ -226,14 +231,22 @@ def process_job(
     dest = _build_dest(dest_path, media.filename)
 
     job_id = job.id
+    sent = [0]  # last reported progress, so a failed upload still counts its bytes
 
     def _on_progress(bytes_done: int, total: int, kbps: float) -> None:
+        sent[0] = max(sent[0], bytes_done)
         set_live(job_id, bytes_done, total, kbps)
 
     try:
         result = upload_fn(media.stored_path, options, dest, bwlimit_kbps, _on_progress)
     finally:
         clear_live(job_id)
+
+    if metered:
+        used = max(sent[0], result.bytes_transferred)
+        if result.ok and used <= 0:
+            used = media.size
+        bandwidth.add_metered_usage(db, used, date.today().isoformat())
 
     # Feed observed throughput back into the bandwidth gate.
     if result.kbps > 0:
@@ -634,15 +647,18 @@ def _has_queued(db: Session) -> bool:
     ) is not None
 
 
-def _pick_eligible(db: Session) -> TransferJob | None:
-    return db.scalar(
-        select(TransferJob)
-        .where(
-            TransferJob.status == TransferStatus.QUEUED,
-            or_(TransferJob.next_attempt_at.is_(None), TransferJob.next_attempt_at <= _now()),
+def _pick_eligible(db: Session, max_bytes: int | None = None) -> TransferJob | None:
+    """Next due job; with ``max_bytes`` only one whose file fits that budget."""
+    query = select(TransferJob).where(
+        TransferJob.status == TransferStatus.QUEUED,
+        or_(TransferJob.next_attempt_at.is_(None), TransferJob.next_attempt_at <= _now()),
+    )
+    if max_bytes is not None:
+        query = query.join(MediaItem, MediaItem.id == TransferJob.media_id).where(
+            MediaItem.size <= max_bytes
         )
-        .order_by(TransferJob.priority.desc(), TransferJob.created_at)
-        .limit(1)
+    return db.scalar(
+        query.order_by(TransferJob.priority.desc(), TransferJob.created_at).limit(1)
     )
 
 
@@ -676,6 +692,21 @@ def _note_bandwidth_gate(db: Session, ok: bool, reason: str) -> None:
         logger.debug("Bandwidth-gate announcement skipped", exc_info=True)
 
 
+def _metered_check(db: Session, policy) -> tuple[bool, str, int | None, bool]:
+    """Apply the metered-uplink rule: ``(ok, reason, max_bytes, metered)``.
+
+    Skips the NetworkManager query entirely while uploads are allowed anyway.
+    """
+    if policy.metered_mode not in ("pause", "limit"):
+        return True, "", None, False
+    metered, label = network.metered_uplink()
+    used = bandwidth.metered_used_today(policy, date.today().isoformat())
+    ok, reason, max_bytes = bandwidth.metered_gate(
+        policy.metered_mode, policy.metered_budget_mb, used, metered, label
+    )
+    return ok, reason, max_bytes, metered
+
+
 def process_one() -> bool:
     """Process a single eligible job, respecting the bandwidth policy.
 
@@ -683,14 +714,17 @@ def process_one() -> bool:
     """
     with SessionLocal() as db:
         policy = bandwidth.get_policy(db)
-        ok, reason = bandwidth.should_start(
-            policy.enabled,
-            policy.min_bandwidth_kbps,
-            policy.last_kbps,
-            policy.last_measured_at,
-            _utcnow_naive(),
-        )
-        if not ok:
+        # Metered uplink first: if it blocks, don't even spend data on a probe.
+        ok, reason, max_bytes, metered = _metered_check(db, policy)
+        if ok:
+            ok, reason = bandwidth.should_start(
+                policy.enabled,
+                policy.min_bandwidth_kbps,
+                policy.last_kbps,
+                policy.last_measured_at,
+                _utcnow_naive(),
+            )
+        if not ok and not metered:
             # Try to self-heal: actively re-measure the link if a probe URL is
             # configured, then re-evaluate the gate.
             from .admin_ops import get_system_settings
@@ -709,14 +743,19 @@ def process_one() -> bool:
                         _utcnow_naive(),
                     )
 
+        job = _pick_eligible(db, max_bytes) if ok else None
+        if ok and job is None and max_bytes is not None and _pick_eligible(db) is not None:
+            ok = False
+            reason = (
+                f"Restvolumen {_format_bytes(max_bytes)} reicht für keine wartende Datei"
+            )
+
         # Announce a one-shot "paused"/"resumed" on bandwidth-gate transitions.
         _note_bandwidth_gate(db, ok, reason)
 
         if not ok:
             logger.debug("Upload gated: %s", reason)
             return False
-
-        job = _pick_eligible(db)
         if job is None:
             return False
 
@@ -725,7 +764,7 @@ def process_one() -> bool:
             policy.bwlimit_kbps,
             datetime.now(),
         )
-        process_job(db, job, bwlimit_kbps=bwlimit)
+        process_job(db, job, bwlimit_kbps=bwlimit, metered=metered)
         return True
 
 

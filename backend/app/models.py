@@ -348,6 +348,13 @@ class BandwidthPolicy(Base):
     # Last observed throughput (from real transfers) for the min-bandwidth gate.
     last_kbps: Mapped[float] = mapped_column(default=0.0)
     last_measured_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Metered uplink (USB-tethered phone, mobile hotspot): "allow" uploads as
+    # usual, "pause" them, or "limit" them to a daily data budget in MB.
+    metered_mode: Mapped[str] = mapped_column(String(8), default="allow")
+    metered_budget_mb: Mapped[int] = mapped_column(default=500)
+    # Bytes uploaded over a metered link on ``metered_day`` (local YYYY-MM-DD).
+    metered_used_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    metered_day: Mapped[str] = mapped_column(String(10), default="")
 
 
 class SystemSettings(Base):

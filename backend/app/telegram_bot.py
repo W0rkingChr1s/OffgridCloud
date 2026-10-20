@@ -504,13 +504,20 @@ def _cmd_retry(db: Session) -> str:
 
 
 def _cmd_netz(db: Session) -> str:
-    from . import netinfo
+    from . import netinfo, network
     from .announce import _vpn_connected, format_kbps
     from .bandwidth import get_policy
 
+    lines = ["🌐 <b>Netz</b>"]
+    status = network.get_status()
+    if status.supported:
+        uplink = network.describe_uplink(status)
+        lines.append(
+            f"Verbindung: {html.escape(uplink)}" + (" · getaktet" if status.metered else "")
+        )
     return "\n".join(
         [
-            "🌐 <b>Netz</b>",
+            *lines,
             f"Externe IP: {html.escape(netinfo.external_ip() or 'unbekannt')}",
             f"Interne IP: {html.escape(netinfo.internal_ip() or 'unbekannt')}",
             f"VPN: {'verbunden' if _vpn_connected() else 'getrennt'}",

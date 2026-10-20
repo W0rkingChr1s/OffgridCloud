@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -13,6 +13,8 @@ from ..bandwidth import (
     effective_bwlimit,
     get_policy,
     measure_probe,
+    metered_gate,
+    metered_used_today,
     parse_schedule,
     record_measurement,
     should_start,
@@ -21,6 +23,7 @@ from ..config import get_settings as get_app_settings
 from ..db import get_db
 from ..deps import require_admin
 from ..models import BandwidthPolicy, User
+from ..network import metered_uplink
 from ..schemas import BandwidthPolicyUpdate, BandwidthStatusOut, BandwidthWindow
 
 router = APIRouter(
@@ -32,13 +35,19 @@ router = APIRouter(
 
 def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
     schedule = parse_schedule(policy.schedule_json)
-    ok, reason = should_start(
-        policy.enabled,
-        policy.min_bandwidth_kbps,
-        policy.last_kbps,
-        policy.last_measured_at,
-        datetime.utcnow(),
+    metered, uplink = metered_uplink()
+    used = metered_used_today(policy, date.today().isoformat())
+    ok, reason, _ = metered_gate(
+        policy.metered_mode, policy.metered_budget_mb, used, metered, uplink
     )
+    if ok:
+        ok, reason = should_start(
+            policy.enabled,
+            policy.min_bandwidth_kbps,
+            policy.last_kbps,
+            policy.last_measured_at,
+            datetime.utcnow(),
+        )
     return BandwidthStatusOut(
         enabled=policy.enabled,
         min_bandwidth_kbps=policy.min_bandwidth_kbps,
@@ -49,6 +58,11 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
         effective_bwlimit_kbps=effective_bwlimit(schedule, policy.bwlimit_kbps, datetime.now()),
         gated=not ok,
         gate_reason=reason,
+        metered_mode=policy.metered_mode,
+        metered_budget_mb=policy.metered_budget_mb,
+        metered_used_bytes=used,
+        metered=metered,
+        uplink=uplink,
     )
 
 
@@ -74,13 +88,18 @@ def update_bandwidth(
         policy.bwlimit_kbps = payload.bwlimit_kbps
     if payload.schedule is not None:
         policy.schedule_json = json.dumps([w.model_dump() for w in payload.schedule])
+    if payload.metered_mode is not None:
+        policy.metered_mode = payload.metered_mode
+    if payload.metered_budget_mb is not None:
+        policy.metered_budget_mb = payload.metered_budget_mb
     db.commit()
     db.refresh(policy)
     audit(
         db,
         admin,
         "bandwidth.update",
-        f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}",
+        f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}"
+        f" metered={policy.metered_mode}/{policy.metered_budget_mb}MB",
     )
     return _status(policy)
 

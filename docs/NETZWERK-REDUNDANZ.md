@@ -97,6 +97,62 @@ Unter **Netzwerk** (nur Admin):
   die beiden Such-Intervalle im AP-Modus sind im UI einstellbar. Ein „Anwenden“ startet den Watchdog neu, damit ein
   geändertes Intervall sofort greift.
 
+## USB-Tethering (iPhone/Android)
+
+Kein Router, kein bekanntes WLAN, aber ein Handy mit Datenvertrag dabei? Per
+USB-Kabel an die Box gesteckt, wird das Handy zum Uplink. Für NetworkManager ist
+es ein ganz normales Kabel-Gerät (`usb0`, `eth1` oder `enx…`), es bekommt per
+DHCP eine Adresse vom Handy, und der Watchdog zählt es als Uplink. Die Box geht
+also **nicht** in den AP-Modus, solange das Handy Netz liefert.
+
+| | Android | iPhone |
+|---|---|---|
+| Treiber | `rndis_host` oder `cdc_ncm` (im Kernel) | `ipheth` (im Kernel) |
+| Zusatzpaket | keins | `usbmuxd` (installiert `install.sh` mit) |
+| Einmalig | – | Handy entsperren, „Diesem Computer vertrauen“ antippen |
+| Jedes Mal | Einstellungen → Hotspot & Tethering → **USB-Tethering** einschalten | **Persönlicher Hotspot** an, Handy beim Einstecken entsperrt |
+
+Android schaltet USB-Tethering beim Abstecken wieder aus. Wer das nicht jedes Mal
+antippen will: Entwickleroptionen → „Standard-USB-Konfiguration“ →
+„USB-Tethering“.
+
+**Erkennung:** Die Netzwerk-Seite zeigt dann den Modus **„USB-Tethering“** mit
+„iPhone“ bzw. „Android-Handy“ statt „Kabel“. Erkannt wird das am Treiber
+(`ipheth` = iPhone, `rndis_host`/`cdc_ncm` = Android). `cdc_ether` nutzen auch
+viele USB-Ethernet-Adapter. Es zählt deshalb nur dann als Handy, wenn
+NetworkManager die Verbindung zusätzlich als getaktet meldet (Android sendet
+dafür eine DHCP-Option).
+
+**Rangfolge:** NetworkManager gibt jedem Kabel-Gerät die Routen-Metrik 100, ein
+eingestecktes Handy würde also ein bekanntes WLAN (600) überstimmen und alle
+Uploads still übers Datenvolumen schicken. `deploy/netfallback/install.sh` legt
+deshalb `/etc/NetworkManager/conf.d/offgridcloud-tether.conf` an und setzt die
+Metrik für Handys auf **700**. Ergebnis: Kabel vor WLAN vor Handy. Das Handy ist
+die letzte Reserve, bevor die Box ihr eigenes WLAN aufmacht. Ein schon
+eingestecktes Handy übernimmt die neue Metrik erst nach dem nächsten Einstecken.
+
+**Datenvolumen:** Läuft der Upload über eine getaktete Verbindung (Handy per
+USB, oder ein Handy-Hotspot per WLAN, den NetworkManager als getaktet erkennt),
+greift die Regel unter **Bandbreite → Getaktete Verbindung**:
+
+- **normal senden** (Standard): wie bisher, ohne Rücksicht aufs Volumen.
+- **bis zum Tagesvolumen senden:** Uploads laufen, bis das eingestellte
+  Tagesvolumen (MB, Standard 500) verbraucht ist. Dateien, die nicht mehr ins
+  Restvolumen passen, werden übersprungen und warten auf Kabel oder WLAN. Der
+  Zähler beginnt jeden Tag (Ortszeit der Box) bei null.
+- **pausieren:** Über getaktete Verbindungen wird gar nicht gesendet. Hochladen
+  auf die Box geht weiter, die Uploads in die Cloud starten, sobald Kabel oder
+  WLAN wieder da ist.
+
+Pausen und Wiederaufnahmen meldet der Info-Service wie bei der Bandbreiten-
+Drosselung. `/netz` im Telegram-Bot nennt die aktive Verbindung und ob sie
+getaktet ist. Ohne NetworkManager kann die Box getaktete Verbindungen nicht
+erkennen, die Regel bleibt dann wirkungslos.
+
+**Strom:** Das Handy lädt am USB-Port der Box mit. Ein Pi 3 an einer schwachen
+Powerbank kann dabei in Unterspannung geraten (`vcgencmd get_throttled`). Im
+Zweifel das Handy separat laden oder ein Netzteil mit genug Reserve nehmen.
+
 ## Sicherheit & Grenzen
 
 - **Klartext-Passwörter:** `network.json` enthält die WLAN-Passwörter im Klartext

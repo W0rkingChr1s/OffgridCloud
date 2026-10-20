@@ -101,7 +101,15 @@ export interface BandwidthStatus {
   effective_bwlimit_kbps: number;
   gated: boolean;
   gate_reason: string;
+  metered_mode: MeteredMode;
+  metered_budget_mb: number;
+  metered_used_bytes: number;
+  metered: boolean;
+  uplink: string;
 }
+
+/** What uploads do while the uplink is metered (USB-tethered phone). */
+export type MeteredMode = "allow" | "pause" | "limit";
 
 export type TransferStatus = "queued" | "running" | "done" | "failed";
 
@@ -472,7 +480,7 @@ export interface MediaBulkDeleteResult {
 export interface NetworkStatus {
   supported: boolean;
   apply_wired: boolean;
-  mode: "ethernet" | "client" | "ap" | "offline" | "unknown";
+  mode: "ethernet" | "client" | "tether" | "ap" | "offline" | "unknown";
   online: boolean;
   connectivity: string;
   ethernet: boolean;
@@ -480,6 +488,10 @@ export interface NetworkStatus {
   wifi_ip: string | null;
   ap_active: boolean;
   ap_ssid: string | null;
+  tether: "iphone" | "android" | null;
+  tether_ip: string | null;
+  metered: boolean;
+  uplink_ip: string | null;
   detail: string;
 }
 
