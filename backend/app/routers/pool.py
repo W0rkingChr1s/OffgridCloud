@@ -1,15 +1,14 @@
 """Multi-server pooling: expose this node's status and aggregate the fleet.
 
 ``GET /api/pool/status`` and ``POST /api/pool/control`` are what a peer serves
-to a hub; both accept either an admin JWT or this node's shared pool token
-(header ``X-Pool-Token``). Control via token additionally needs this node's
-admin to have enabled it. Everything else is admin-only management + the
-aggregated overview.
+to a hub; both accept either an admin JWT or an access token this node issued
+to that hub (header ``X-Pool-Token``). Each hub gets its own token, scoped to
+"read" (status only) or "control" (also transfer actions), so one hub can be
+revoked without touching the others. Everything else is admin-only management
++ the aggregated overview.
 """
 
 from __future__ import annotations
-
-import secrets
 
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
@@ -18,20 +17,21 @@ from sqlalchemy.orm import Session
 
 from .. import pool as pool_core
 from .. import transfers as transfers_core
-from ..admin_ops import audit, get_system_settings
+from ..admin_ops import audit
 from ..crypto import encrypt
 from ..db import get_db
 from ..deps import require_admin
-from ..models import PoolPeer, Role, User
+from ..models import PoolAccessToken, PoolPeer, PoolTokenScope, Role, User
 from ..schemas import (
+    PoolAccessTokenCreate,
+    PoolAccessTokenCreated,
+    PoolAccessTokenOut,
+    PoolAccessTokenUpdate,
     PoolNodeStatus,
     PoolOverviewOut,
     PoolPeerCreate,
     PoolPeerOut,
     PoolPeerUpdate,
-    PoolSelfOut,
-    PoolSelfUpdate,
-    PoolTokenOut,
     PoolTotals,
     TransferControlIn,
     TransferControlOut,
@@ -39,6 +39,8 @@ from ..schemas import (
 from ..security import decode_access_token
 
 router = APIRouter(prefix="/api/pool", tags=["pool"])
+
+_SCOPE_LABEL = {PoolTokenScope.READ: "lesen", PoolTokenScope.CONTROL: "steuern"}
 
 
 def _peer_out(peer: PoolPeer) -> PoolPeerOut:
@@ -63,28 +65,27 @@ def _is_admin_bearer(db: Session, authorization: str | None) -> bool:
     return user is not None and user.active and user.role == Role.ADMIN
 
 
-def _valid_pool_token(db: Session, x_pool_token: str | None) -> bool:
-    expected = get_system_settings(db).pool_token
-    return bool(
-        expected
-        and x_pool_token is not None
-        and secrets.compare_digest(x_pool_token, expected)
+def _unauthorized() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Pool-Token erforderlich"
     )
 
 
 @router.get("/status", response_model=PoolNodeStatus)
 def pool_status(
     x_pool_token: str | None = Header(default=None, alias="X-Pool-Token"),
+    x_pool_hub: str | None = Header(default=None, alias="X-Pool-Hub"),
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> PoolNodeStatus:
-    """This node's compact status. For hubs (via pool token) and local admins."""
-    authorized = _valid_pool_token(db, x_pool_token) or _is_admin_bearer(db, authorization)
-    if not authorized:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Pool-Token erforderlich"
-        )
-    return PoolNodeStatus(**pool_core.node_status(db))
+    """This node's compact status. For hubs (via their token) and local admins."""
+    if _is_admin_bearer(db, authorization):
+        return PoolNodeStatus(**pool_core.node_status(db, control_enabled=True))
+    token = pool_core.authenticate(db, x_pool_token, x_pool_hub)
+    if token is None:
+        raise _unauthorized()
+    can_control = token.scope == PoolTokenScope.CONTROL
+    return PoolNodeStatus(**pool_core.node_status(db, control_enabled=can_control))
 
 
 @router.post("/control", response_model=TransferControlOut)
@@ -95,74 +96,90 @@ def pool_control(
     authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> TransferControlOut:
-    """A hub controls this node's transfers — only if this node's admin allows it."""
+    """A hub controls this node's transfers — only with a "control" token."""
     if _is_admin_bearer(db, authorization):
         caller = "lokal (Admin)"
-    elif _valid_pool_token(db, x_pool_token):
-        if not get_system_settings(db).pool_control_enabled:
+    else:
+        token = pool_core.authenticate(db, x_pool_token, x_pool_hub)
+        if token is None:
+            raise _unauthorized()
+        if token.scope != PoolTokenScope.CONTROL:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Fernsteuerung auf dieser Box nicht freigegeben",
+                detail="Dieses Pool-Token darf nur lesen, nicht steuern",
             )
-        caller = f"Hub {(x_pool_hub or 'unbekannt').strip()[:100]}"
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Pool-Token erforderlich"
-        )
+        caller = f"Hub „{token.name}“"
+        if token.last_used_hub:
+            caller += f" ({token.last_used_hub})"
     message = transfers_core.apply_control(db, payload.action)
     audit(db, None, f"pool.remote_{payload.action}", f"{message} – {caller}")
     return TransferControlOut(**transfers_core.control_state(db), message=message)
 
 
-# --- This node's poolability (own token) ----------------------------------
+# --- Access tokens this node issues, one per hub ---------------------------
 
 
-@router.get("/self", response_model=PoolSelfOut)
-def pool_self(
+def _token_or_404(db: Session, token_id: int) -> PoolAccessToken:
+    row = db.get(PoolAccessToken, token_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+    return row
+
+
+@router.get("/tokens", response_model=list[PoolAccessTokenOut])
+def list_tokens(
     _: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> PoolSelfOut:
-    row = get_system_settings(db)
-    return PoolSelfOut(
-        pool_token=row.pool_token,
-        token_set=bool(row.pool_token),
-        control_enabled=row.pool_control_enabled,
+) -> list[PoolAccessTokenOut]:
+    rows = db.scalars(select(PoolAccessToken).order_by(PoolAccessToken.name))
+    return [PoolAccessTokenOut.model_validate(r) for r in rows]
+
+
+@router.post("/tokens", response_model=PoolAccessTokenCreated, status_code=201)
+def create_token(
+    payload: PoolAccessTokenCreate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PoolAccessTokenCreated:
+    """Issue a token for one hub. The plaintext is returned only in this response."""
+    row, raw = pool_core.issue_token(db, payload.name.strip(), payload.scope)
+    audit(db, admin, "pool.token_create", f"{row.name} ({_SCOPE_LABEL[row.scope]})")
+    return PoolAccessTokenCreated(
+        **PoolAccessTokenOut.model_validate(row).model_dump(), token=raw
     )
 
 
-@router.put("/self", response_model=PoolSelfOut)
-def update_self(
-    payload: PoolSelfUpdate,
+@router.patch("/tokens/{token_id}", response_model=PoolAccessTokenOut)
+def update_token(
+    token_id: int,
+    payload: PoolAccessTokenUpdate,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> PoolSelfOut:
-    """Allow or forbid hubs to control this node's transfers."""
-    row = get_system_settings(db)
-    row.pool_control_enabled = payload.control_enabled
+) -> PoolAccessTokenOut:
+    row = _token_or_404(db, token_id)
+    if payload.name is not None:
+        row.name = payload.name.strip()
+    if payload.scope is not None:
+        row.scope = payload.scope
     db.commit()
-    audit(db, admin, "pool.control_" + ("allow" if payload.control_enabled else "deny"))
-    return pool_self(admin, db)
+    db.refresh(row)
+    audit(db, admin, "pool.token_update", f"{row.name} ({_SCOPE_LABEL[row.scope]})")
+    return PoolAccessTokenOut.model_validate(row)
 
 
-@router.post("/token", response_model=PoolTokenOut)
-def rotate_token(
-    admin: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> PoolTokenOut:
-    """Generate (or rotate) this node's shared pool token so hubs can read it."""
-    row = get_system_settings(db)
-    row.pool_token = secrets.token_urlsafe(32)
-    db.commit()
-    audit(db, admin, "pool.token_rotate")
-    return PoolTokenOut(pool_token=row.pool_token)
-
-
-@router.delete("/token", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def clear_token(
-    admin: User = Depends(require_admin), db: Session = Depends(get_db)
+@router.delete(
+    "/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+)
+def delete_token(
+    token_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
 ) -> Response:
-    row = get_system_settings(db)
-    row.pool_token = ""
+    """Revoke one hub's access immediately; other hubs are unaffected."""
+    row = _token_or_404(db, token_id)
+    name = row.name
+    db.delete(row)
     db.commit()
-    audit(db, admin, "pool.token_clear")
+    audit(db, admin, "pool.token_revoke", name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

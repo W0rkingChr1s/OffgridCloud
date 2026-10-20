@@ -25,6 +25,7 @@ from .config import get_settings
 from .db import init_db
 from .integrity import run_startup_checks
 from .network import ensure_network_settings
+from .pool import migrate_legacy_token as migrate_legacy_pool_token
 from .prtg import health_to_prtg
 from .rclone import check_rclone
 from .routers import (
@@ -62,6 +63,7 @@ async def lifespan(app: FastAPI):
     ensure_initial_admin()
     ensure_policy()
     ensure_system_settings()
+    migrate_legacy_pool_token()
     ensure_network_settings()
     # Mount buffer drives first, so their files are checked rather than
     # mistaken for lost ones.

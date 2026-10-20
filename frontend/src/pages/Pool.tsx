@@ -4,8 +4,10 @@ import {
   ApiError,
   type PoolNodeStatus,
   type PoolOverview,
+  type PoolAccessToken,
+  type PoolAccessTokenCreated,
   type PoolPeer,
-  type PoolSelf,
+  type PoolTokenScope,
   type TransferAction,
   type TransferControl,
 } from "../api";
@@ -121,7 +123,9 @@ function NodeCard({
       ) : (
         node.reachable &&
         !isSelf && (
-          <div className="mt-3 text-xs text-slate-500">Fernsteuerung auf dieser Box nicht freigegeben</div>
+          <div className="mt-3 text-xs text-slate-500">
+            Nur Lesezugriff — das Token dieses Hubs darf hier nicht steuern
+          </div>
         )
       )}
     </div>
@@ -131,20 +135,22 @@ function NodeCard({
 export default function Pool() {
   const [overview, setOverview] = useState<PoolOverview | null>(null);
   const [peers, setPeers] = useState<PoolPeer[]>([]);
-  const [self, setSelf] = useState<PoolSelf | null>(null);
+  const [tokens, setTokens] = useState<PoolAccessToken[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [token, setToken] = useState("");
-  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [revealedToken, setRevealedToken] = useState<PoolAccessTokenCreated | null>(null);
+  const [tokenName, setTokenName] = useState("");
+  const [tokenScope, setTokenScope] = useState<PoolTokenScope>("read");
   const [addingPeer, setAddingPeer] = useState(false);
   const [busyNode, setBusyNode] = useState<string | null>(null);
   const toast = useToast();
 
   const loadPeers = useCallback(() => {
     api<PoolPeer[]>("/api/pool/peers").then(setPeers).catch(() => setPeers([]));
-    api<PoolSelf>("/api/pool/self").then(setSelf).catch(() => setSelf(null));
+    api<PoolAccessToken[]>("/api/pool/tokens").then(setTokens).catch(() => setTokens([]));
   }, []);
 
   const loadOverview = useCallback(() => {
@@ -221,37 +227,44 @@ export default function Pool() {
     }
   }
 
-  async function toggleControl() {
-    if (!self) return;
-    if (
-      !self.control_enabled &&
-      !window.confirm(
-        "Jeder Hub mit dem Pool-Token dieser Box darf dann Uploads pausieren/fortsetzen und " +
-          "fehlgeschlagene Transfers neu anstoßen. Freigeben?",
-      )
-    )
-      return;
+  async function createToken(e: React.FormEvent) {
+    e.preventDefault();
     try {
-      const res = await api<PoolSelf>("/api/pool/self", {
-        method: "PUT",
-        body: JSON.stringify({ control_enabled: !self.control_enabled }),
+      const res = await api<PoolAccessTokenCreated>("/api/pool/tokens", {
+        method: "POST",
+        body: JSON.stringify({ name: tokenName, scope: tokenScope }),
       });
-      setSelf(res);
-      loadOverview();
+      setRevealedToken(res);
+      setTokenName("");
+      setTokenScope("read");
+      loadPeers();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Fehler");
     }
   }
 
-  async function rotateToken() {
-    const res = await api<{ pool_token: string }>("/api/pool/token", { method: "POST" });
-    setRevealedToken(res.pool_token);
-    loadPeers();
+  async function setScope(t: PoolAccessToken, scope: PoolTokenScope) {
+    if (
+      scope === "control" &&
+      !window.confirm(
+        `Hub „${t.name}" darf dann hier Uploads pausieren/fortsetzen und fehlgeschlagene ` +
+          "Transfers neu anstoßen. Erlauben?",
+      )
+    )
+      return;
+    try {
+      await api(`/api/pool/tokens/${t.id}`, { method: "PATCH", body: JSON.stringify({ scope }) });
+      loadPeers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Fehler");
+    }
   }
 
-  async function clearToken() {
-    await api("/api/pool/token", { method: "DELETE" });
-    setRevealedToken(null);
+  async function revokeToken(t: PoolAccessToken) {
+    if (!window.confirm(`Zugriff für „${t.name}" sofort entziehen? Andere Hubs bleiben verbunden.`))
+      return;
+    await api(`/api/pool/tokens/${t.id}`, { method: "DELETE" });
+    if (revealedToken?.id === t.id) setRevealedToken(null);
     loadPeers();
   }
 
@@ -406,56 +419,84 @@ export default function Pool() {
       )}
 
       <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-        Diese Box als Peer freigeben
+        Zugriff für Hubs auf diese Box
       </h3>
       <p className="mb-3 text-sm text-slate-400">
-        Damit eine andere Box <em>diese</em> hier abfragen darf, hier ein Pool-Token erzeugen und
-        dort als Peer mit dieser URL + Token eintragen.
+        Jede Box, die <em>diese</em> hier als Peer abfragen soll, bekommt ein eigenes Token. Dort
+        mit dieser URL + Token als Peer eintragen. Einzelne Hubs lassen sich jederzeit sperren, ohne
+        die anderen neu einzurichten.
       </p>
-      <div className="flex flex-wrap items-center gap-2">
+
+      <form onSubmit={createToken} className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
+        <input
+          className={`${field} sm:col-span-2`}
+          placeholder="Für welchen Hub? (z. B. ELW)"
+          value={tokenName}
+          onChange={(e) => setTokenName(e.target.value)}
+          required
+        />
+        <select
+          className={field}
+          value={tokenScope}
+          onChange={(e) => setTokenScope(e.target.value as PoolTokenScope)}
+        >
+          <option value="read">Nur lesen</option>
+          <option value="control">Lesen + Transfers steuern</option>
+        </select>
         <button
-          onClick={rotateToken}
+          type="submit"
           className="rounded-lg border border-white/10 px-4 py-2 text-sm hover:bg-white/5"
         >
-          {self?.token_set ? "Token neu erzeugen" : "Token erzeugen"}
+          Token erzeugen
         </button>
-        {self?.token_set && (
-          <button
-            onClick={clearToken}
-            className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10"
-          >
-            Token löschen
-          </button>
-        )}
-        {self && !self.token_set && !revealedToken && (
-          <span className="text-sm text-slate-500">Noch kein Token — diese Box ist nicht abfragbar.</span>
-        )}
-      </div>
+      </form>
+
       {revealedToken && (
-        <div className="mt-3 rounded-lg bg-slate-800/60 p-3 ring-1 ring-white/5">
+        <div className="mb-3 rounded-lg bg-slate-800/60 p-3 ring-1 ring-white/5">
           <div className="text-xs text-slate-400">
-            Token jetzt kopieren — er wird nur einmal angezeigt:
+            Token für „{revealedToken.name}" jetzt kopieren — er wird nur einmal angezeigt:
           </div>
-          <code className="mt-1 block break-all text-sm text-ogc-teal">{revealedToken}</code>
+          <code className="mt-1 block break-all text-sm text-ogc-teal">{revealedToken.token}</code>
         </div>
       )}
-      {self?.token_set && (
-        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg bg-slate-800/40 p-3 text-sm ring-1 ring-white/5">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={self.control_enabled}
-            onChange={toggleControl}
-          />
-          <span>
-            <span className="font-medium text-white">Fernsteuerung durch Hub erlauben</span>
-            <span className="block text-xs text-slate-400">
-              Ein Hub mit diesem Token darf hier Uploads pausieren/fortsetzen und fehlgeschlagene
-              Transfers neu anstoßen. Löschen oder Einstellungen ändern kann er nicht. Jede Aktion
-              landet im Audit-Log.
-            </span>
-          </span>
-        </label>
+
+      {tokens.length === 0 ? (
+        <p className="text-sm text-slate-500">Noch kein Token — diese Box ist nicht abfragbar.</p>
+      ) : (
+        <div className="space-y-2">
+          {tokens.map((t) => (
+            <div
+              key={t.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-800/60 p-3 text-sm ring-1 ring-white/5"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium text-white">
+                  {t.name} <span className="font-normal text-slate-500">…{t.hint}</span>
+                </div>
+                <div className="truncate text-xs text-slate-500">
+                  {t.last_used_at
+                    ? `zuletzt ${new Date(t.last_used_at + "Z").toLocaleString()}` +
+                      (t.last_used_hub ? ` von ${t.last_used_hub}` : "")
+                    : "noch nie benutzt"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label={`Recht für ${t.name}`}
+                  className="rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-xs text-white"
+                  value={t.scope}
+                  onChange={(e) => setScope(t, e.target.value as PoolTokenScope)}
+                >
+                  <option value="read">Nur lesen</option>
+                  <option value="control">Lesen + steuern</option>
+                </select>
+                <MoreMenu
+                  items={[{ label: "Zugriff entziehen …", danger: true, onClick: () => revokeToken(t) }]}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </Layout>
   );

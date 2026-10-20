@@ -9,10 +9,18 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 ### 🛰️ Pool: Transfers aus der Ferne steuern
 
 - **Vom Hub aus** lassen sich auf einer Peer-Box Uploads **pausieren/fortsetzen** und **alle fehlgeschlagenen Transfers neu anstoßen**, direkt auf der Kachel unter **Pool**.
-- **Nur mit Freigabe:** Die Peer-Box muss unter **Pool → „Fernsteuerung durch Hub erlauben“** zustimmen. Standard: aus, das Pool-Token allein erlaubt weiterhin nur Lesen. Löschen oder Einstellungen ändern kann der Hub nicht.
-- **Nachvollziehbar:** Jede Aktion steht im Audit-Log beider Boxen, auf dem Peer mit dem Namen des Hubs.
+- **Nur mit Recht „steuern“:** Das Token, das die Peer-Box dem Hub ausgestellt hat, muss dieses Recht haben (siehe unten). Standard ist „nur lesen“. Löschen oder Einstellungen ändern kann der Hub nicht.
+- **Nachvollziehbar:** Jede Aktion steht im Audit-Log beider Boxen, auf dem Peer mit Token-Namen und Hostnamen des Hubs.
 - **Auch lokal:** Die Seite **Transfers** hat jetzt „Uploads pausieren“ und „Alle fehlgeschlagenen erneut“. Ist die Box pausiert (von hier oder vom Hub), steht dort ein gelber Hinweis, **Bandbreite** nennt „Uploads manuell pausiert“ als Grund. Laufende Uploads werden beim Pausieren nicht abgebrochen.
 - Peers mit älterer Version zeigen keine Buttons. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
+
+### 🔑 Pool: ein Token pro Hub
+
+- **Jeder Hub bekommt sein eigenes Token** (**Pool → Zugriff für Hubs auf diese Box**), mit Namen und Recht *nur lesen* oder *lesen + steuern*. Einen Hub sperren heißt sein Token löschen, die anderen Hubs bleiben verbunden. Bisher teilten sich alle Hubs ein Token, und Sperren hieß: neu erzeugen und überall neu eintragen.
+- **Sieht, wer abfragt:** Pro Token steht, wann und von welchem Hub es zuletzt benutzt wurde.
+- **Nur noch als Hash gespeichert:** Die Box hält ausgestellte Tokens nur als SHA-256, der Klartext erscheint einmal beim Erzeugen. Das alte Token lag im Klartext in der Datenbank und war im Web-UI erneut abrufbar.
+- **Umstieg ohne Ausfall:** Das bisherige gemeinsame Token wird beim Start als „Bisheriges Token“ (*nur lesen*) übernommen, Hubs damit laufen weiter. Empfehlung: jedem Hub ein eigenes Token ausstellen und das bisherige danach löschen.
+- **API:** `/api/pool/token` und `/api/pool/self` entfallen, neu ist `/api/pool/tokens`. Die Konsole an der Box ist angepasst.
 
 ## [0.7.1] – 2026-10-20
 

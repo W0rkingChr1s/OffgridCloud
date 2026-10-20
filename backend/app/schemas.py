@@ -12,7 +12,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import MediaStatus, ProviderStatus, Role, TransferStatus, VpnType
+from .models import (
+    MediaStatus,
+    PoolTokenScope,
+    ProviderStatus,
+    Role,
+    TransferStatus,
+    VpnType,
+)
 
 
 def _normalise_email(value: str) -> str:
@@ -692,7 +699,7 @@ class PoolNodeStatus(BaseModel):
     # the hub from offering actions such a peer cannot perform.
     uploads_paused: bool = False
     failed_transfers: int = 0
-    control_enabled: bool = False  # this node lets a hub control its transfers
+    control_enabled: bool = False  # the caller's token may control transfers here
 
 
 class PoolTotals(BaseModel):
@@ -739,16 +746,32 @@ class PoolPeerUpdate(BaseModel):
     enabled: bool | None = None
 
 
-class PoolSelfOut(BaseModel):
-    """This node's own poolability: whether it exposes a token, and the value."""
+class PoolAccessTokenOut(BaseModel):
+    """A token this node issued to one hub. The plaintext is never returned."""
 
-    pool_token: str = ""
-    token_set: bool = False
-    control_enabled: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    hint: str  # last characters, to match it with what the hub has stored
+    scope: PoolTokenScope
+    created_at: datetime
+    last_used_at: datetime | None = None
+    last_used_hub: str = ""
 
 
-class PoolSelfUpdate(BaseModel):
-    control_enabled: bool
+class PoolAccessTokenCreated(PoolAccessTokenOut):
+    token: str  # shown exactly once
+
+
+class PoolAccessTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    scope: PoolTokenScope = PoolTokenScope.READ
+
+
+class PoolAccessTokenUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    scope: PoolTokenScope | None = None
 
 
 class TransferControlIn(BaseModel):
@@ -761,10 +784,6 @@ class TransferControlOut(BaseModel):
     uploads_paused: bool
     failed_transfers: int
     message: str = ""  # what the last action did, e.g. "3 … neu eingereiht"
-
-
-class PoolTokenOut(BaseModel):
-    pool_token: str
 
 
 # --- WebAuthn / passkeys ----------------------------------------------------

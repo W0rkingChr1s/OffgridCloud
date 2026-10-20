@@ -258,8 +258,8 @@ class PoolPeer(Base):
     one node acts as a hub that periodically reads each peer's compact
     ``/api/pool/status`` (authenticated by the peer's shared pool token, stored
     here encrypted at rest). It is read-only aggregation — no distributed
-    coordination. The only write is opt-in transfer control (pause/resume,
-    re-queue failed jobs), which the peer's admin must allow explicitly.
+    coordination. The only write is transfer control (pause/resume, re-queue
+    failed jobs), which needs a token the peer issued with the "control" scope.
     """
 
     __tablename__ = "pool_peers"
@@ -270,6 +270,32 @@ class PoolPeer(Base):
     token_encrypted: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class PoolTokenScope(str, enum.Enum):
+    READ = "read"  # GET /api/pool/status only
+    CONTROL = "control"  # additionally POST /api/pool/control
+
+
+class PoolAccessToken(Base):
+    """A token THIS node issued to one hub, so each hub can be revoked alone.
+
+    Only the SHA-256 of the token is stored; the plaintext is shown once when
+    it is created. ``last_used_*`` tell the admin which hub is actually polling.
+    """
+
+    __tablename__ = "pool_access_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))  # which hub, e.g. "ELW"
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    hint: Mapped[str] = mapped_column(String(8), default="")  # last chars, to tell tokens apart
+    scope: Mapped[PoolTokenScope] = mapped_column(
+        Enum(PoolTokenScope), default=PoolTokenScope.READ
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_used_hub: Mapped[str] = mapped_column(String(100), default="")  # X-Pool-Hub
 
 
 class CloudProvider(Base):
@@ -387,14 +413,10 @@ class SystemSettings(Base):
     probe_url: Mapped[str] = mapped_column(String(1000), default="")
     # Optional webhook called when a media item finishes uploading everywhere.
     webhook_url: Mapped[str] = mapped_column(String(1000), default="")
-    # Shared token a pool hub must present (header ``X-Pool-Token``) to read this
-    # node's ``/api/pool/status``. Empty = this node does not expose itself as a
-    # poolable peer. Rotate/clear from the Pool admin page.
+    # Legacy shared pool token (one for all hubs, stored in plaintext). Moved
+    # into ``pool_access_tokens`` on startup and then cleared; see
+    # ``pool.migrate_legacy_token``.
     pool_token: Mapped[str] = mapped_column(String(128), default="")
-    # Whether a hub holding the pool token may also *control* transfers here
-    # (pause/resume uploads, re-queue failed jobs) via ``POST /api/pool/control``.
-    # Off by default: the token alone only grants read access.
-    pool_control_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

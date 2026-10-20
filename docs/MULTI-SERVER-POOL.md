@@ -9,13 +9,14 @@ periodisch ab und zeigt eine **gemeinsame Flottenübersicht**.
 
 Pooling ist im Kern **read-only-Aggregation** — kein verteiltes Dateisystem,
 keine Konsens-Protokolle. Einzige Ausnahme ist die **Fernsteuerung von
-Transfers**, die jede Box ausdrücklich freigeben muss (siehe unten). Das hält es
+Transfers**, die jede Box pro Hub ausdrücklich erlauben muss (siehe unten). Das hält es
 sicher und sparsam genug für den Raspberry Pi:
 
 - Jede Box liefert unter `GET /api/pool/status` eine **kompakte Statuszusammen­-
   fassung** (Version, Medien nach Status, aktive Transfers, Durchsatz, Speicher).
 - Dieser Endpunkt ist geschützt: Er akzeptiert entweder einen Admin-Login **oder**
-  ein **Shared-Token** der Box (Header `X-Pool-Token`).
+  ein **Token, das die Box genau diesem Hub ausgestellt hat** (Header
+  `X-Pool-Token`). Jeder Hub hat sein eigenes.
 - Der Hub fragt alle aktiven Peers **nebenläufig** mit kurzem Timeout ab und
   summiert die Werte. Nicht erreichbare Peers werden markiert, blockieren aber
   nichts.
@@ -29,10 +30,20 @@ sicher und sparsam genug für den Raspberry Pi:
 
 ## Einrichtung
 
-### 1. Auf jeder Peer-Box: Token erzeugen
+### 1. Auf jeder Peer-Box: Token für den Hub erzeugen
 
-Web-UI → **Pool** → **„Token erzeugen“**. Das Token wird **einmalig** angezeigt
-— kopieren. Ohne Token ist die Box nicht abfragbar (Standard).
+Web-UI → **Pool** → *Zugriff für Hubs auf diese Box*: Namen des Hubs eintragen
+(z. B. `ELW`), Recht wählen, **„Token erzeugen“**. Das Token wird **einmalig**
+angezeigt — kopieren. Ohne Token ist die Box nicht abfragbar (Standard).
+
+| Recht | Darf |
+|-------|------|
+| **Nur lesen** (Standard) | Status abfragen |
+| **Lesen + Transfers steuern** | zusätzlich Uploads pausieren/fortsetzen, Fehlgeschlagene neu anstoßen |
+
+Fragen mehrere Hubs dieselbe Box ab, bekommt **jeder sein eigenes Token**. Die
+Liste zeigt pro Token, wann und von welchem Hub (Hostname) es zuletzt benutzt
+wurde. Recht ändern oder Zugriff entziehen wirkt sofort und nur für diesen Hub.
 
 Die URL der Box ist die, unter der der Hub sie erreicht, z. B.
 `https://box2.local:8000` oder `http://10.0.0.12:8000`.
@@ -53,7 +64,8 @@ aber nicht abgefragt) oder **entfernen**.
 
 ## Fernsteuerung von Transfers
 
-Vom Hub aus lassen sich auf jeder Box, die es erlaubt:
+Vom Hub aus lassen sich auf jeder Box, deren Token für diesen Hub das Recht
+*steuern* hat:
 
 - **Uploads pausieren / fortsetzen** — pausiert starten keine neuen Uploads;
   laufende werden noch fertig. Typisch: Eine Box soll die gemeinsame Leitung
@@ -64,12 +76,12 @@ Vom Hub aus lassen sich auf jeder Box, die es erlaubt:
 Die Buttons stehen direkt auf der Kachel des Knotens. Die eigene Box lässt sich
 immer steuern; dieselben Aktionen gibt es lokal auf der Seite **Transfers**.
 
-### Freigeben (auf der Peer-Box)
+### Erlauben (auf der Peer-Box)
 
-Web-UI → **Pool** → *Diese Box als Peer freigeben* → **„Fernsteuerung durch Hub
-erlauben“**. Der Schalter erscheint, sobald ein Pool-Token existiert.
-**Standard: aus** — das Token allein erlaubt nur Lesen. Ohne Freigabe zeigt der
-Hub auf der Kachel „Fernsteuerung auf dieser Box nicht freigegeben“.
+Web-UI → **Pool** → *Zugriff für Hubs auf diese Box* → beim Token des Hubs das
+Recht auf **„Lesen + steuern“** stellen (oder das Token gleich so erzeugen).
+**Standard: nur lesen.** Bei einem Lese-Token zeigt der Hub auf der Kachel
+„Nur Lesezugriff“ und keine Buttons.
 
 ### Was bewusst nicht geht
 
@@ -81,24 +93,28 @@ Hinweis auf **Transfers**, Status unter **Bandbreite**) und hebt es mit einem
 Klick wieder auf.
 
 Jede Aktion steht im **Audit-Log** beider Boxen: auf dem Hub mit dem
-ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Hostnamen des Hubs.
+ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Token-Namen und dem
+Hostnamen des Hubs.
 
 ## Sicherheit
 
-- **Token verschlüsselt at rest.** Peer-Tokens werden auf dem Hub mit demselben
+- **Auf der Peer-Box nur als Hash.** Ausgestellte Tokens speichert die Box nur
+  als SHA-256; der Klartext erscheint einmal beim Erzeugen. Wer die Datenbank
+  liest, kann sich damit nicht als Hub ausgeben.
+- **Auf dem Hub verschlüsselt.** Peer-Tokens werden auf dem Hub mit demselben
   Schlüssel wie die Provider-Credentials verschlüsselt (`OGC_SECRET_KEY`) und nie
   an den Browser zurückgegeben.
-- **Konstant­zeit-Vergleich.** Die Token-Prüfung nutzt `secrets.compare_digest`.
 - **TLS empfohlen.** Da das Token im Header über die Leitung geht, sollten die
   Boxen hinter einem Reverse-Proxy mit TLS stehen (siehe
   [docs/BETRIEB.md](BETRIEB.md), Abschnitt 3) — im Offline-Feld genügt ein
   self-signed Zertifikat.
-- **Lesen per Token, Steuern nur nach Freigabe.** Ohne den Schalter auf der
-  Peer-Box kann der Hub ausschließlich abfragen. Mit Freigabe kommen genau die
-  drei Transfer-Aktionen hinzu.
-- **Ein Token pro Box, nicht pro Hub.** Alle Hubs, die eine Box abfragen, teilen
-  sich ihr Token. Wer einem Hub den Zugriff entziehen will, muss das Token neu
-  erzeugen und bei den übrigen Hubs neu eintragen.
+- **Ein Token pro Hub, Rechte pro Token.** Ein verlorener oder fremder Hub wird
+  gesperrt, indem man sein Token löscht — die anderen Hubs merken nichts davon.
+  Tokens starten mit *nur lesen*; *steuern* muss man bewusst vergeben.
+- **Umstieg von älteren Versionen.** Das frühere gemeinsame Token wird beim
+  Start automatisch als „Bisheriges Token“ (*nur lesen*) übernommen; Hubs, die
+  es benutzen, laufen weiter. Empfehlung: jedem Hub ein eigenes Token ausstellen,
+  beim Hub eintragen und das bisherige danach löschen.
 
 ## Grenzen
 
@@ -114,18 +130,18 @@ ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Hostnamen des Hu
 | Methode & Pfad | Zweck |
 |----------------|-------|
 | `GET /api/pool/status` | Kompakter Status dieser Box (Admin **oder** `X-Pool-Token`). |
-| `POST /api/pool/control` | Transfer-Aktion auf dieser Box (Admin **oder** `X-Pool-Token` + Freigabe). Body: `{"action": "pause" \| "resume" \| "retry_failed"}`. |
+| `POST /api/pool/control` | Transfer-Aktion auf dieser Box (Admin **oder** `X-Pool-Token` mit Recht *steuern*). Body: `{"action": "pause" \| "resume" \| "retry_failed"}`. |
 | `POST /api/pool/peers/{id}/control` | Hub leitet eine Aktion an einen Peer weiter (Admin). |
-| `GET/PUT /api/pool/self` | Eigenes Token anzeigen, Fernsteuerung freigeben (`control_enabled`) (Admin). |
 | `GET/POST /api/transfers/control` | Dieselben Aktionen lokal (Admin). |
 | `GET /api/pool/overview` | Hub-Sicht: diese Box + alle Peers + Summen (Admin). |
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
-| `POST /api/pool/token` · `DELETE /api/pool/token` | Eigenes Pool-Token erzeugen/löschen (Admin). |
+| `GET/POST /api/pool/tokens` | Tokens für Hubs auflisten/erzeugen; Body `{"name", "scope": "read" \| "control"}`. Klartext nur in der POST-Antwort (Admin). |
+| `PATCH/DELETE /api/pool/tokens/{id}` | Recht/Name ändern, Zugriff entziehen (Admin). |
 
 ## Ausbauplan
 
 Wohin sich der Pool sinnvoll entwickeln kann — sortiert nach Nutzen pro Aufwand.
-Noch nichts davon ist umgesetzt.
+Umgesetzt ist bisher nur, was mit ☑ markiert ist.
 
 ### Vorweg: Wann bringt Lastverteilung überhaupt etwas?
 
@@ -148,7 +164,7 @@ Koordination vor dem Relay.
 | Baustein | Nutzen | Aufwand |
 |---|---|---|
 | **Job-Liste des Peers im Hub** | Fehlgeschlagene Jobs eines Peers mit Fehlertext ansehen und einzeln neu anstoßen, statt nur „alle“. Baut direkt auf der Fernsteuerung auf. | klein |
-| **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
+| ☑ **Peer-Tokens pro Hub** | Statt eines geteilten Tokens bekommt jeder Hub ein eigenes, mit Bereich *lesen* oder *steuern*. Einen Hub sperren, ohne alle anderen neu einzurichten. **Voraussetzung für Stufe 3**, da Relay deutlich mehr Rechte braucht. | klein–mittel |
 | **Peers automatisch finden** (mDNS, `_offgridcloud._tcp`) | Boxen im selben Netz tauchen als Vorschlag auf; Kopplung per 6-stelligem Code statt Token-Copy-Paste. Spart im Einsatz Minuten und Tippfehler. | mittel |
 | **Pool-Meldungen gebündelt** | Der Hub meldet Flotten-Ereignisse (Box offline, Box voll, Box pausiert) einmal per Telegram/E-Mail, statt dass jede Box einzeln funkt. Passt zum Telegram-Problem mehrerer Boxen aus 0.7.1. | mittel |
 

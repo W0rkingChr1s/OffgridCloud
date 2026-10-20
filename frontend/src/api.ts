@@ -635,10 +635,21 @@ export interface PoolPeer {
   created_at: string;
 }
 
-export interface PoolSelf {
-  pool_token: string;
-  token_set: boolean;
-  control_enabled: boolean;
+export type PoolTokenScope = "read" | "control";
+
+/** A token this box issued to one hub (plaintext only in PoolAccessTokenCreated). */
+export interface PoolAccessToken {
+  id: number;
+  name: string;
+  hint: string;
+  scope: PoolTokenScope;
+  created_at: string;
+  last_used_at: string | null;
+  last_used_hub: string;
+}
+
+export interface PoolAccessTokenCreated extends PoolAccessToken {
+  token: string;
 }
 
 export type TransferAction = "pause" | "resume" | "retry_failed";

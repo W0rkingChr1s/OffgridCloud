@@ -1,29 +1,26 @@
-"""Transfer remote control: local pause/resume/retry and the opt-in pool path."""
+"""Transfer remote control: local pause/resume/retry and the per-hub token path."""
 
 import io
 import urllib.error
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 import app.pool as pool_core
 from app import bandwidth, transfers
-from app.admin_ops import get_system_settings
 from app.db import SessionLocal
-from app.models import AuditEvent, TransferJob, TransferStatus
+from app.models import AuditEvent, PoolAccessToken, TransferJob, TransferStatus
 from tests.test_folders import _auth, _make_user
 from tests.test_parallel import only_these_jobs  # noqa: F401 (fixture)
 
 
 @pytest.fixture(autouse=True)
 def _restore_control_state():
-    """The DB is shared across tests: leave uploads running and control off."""
+    """The DB is shared across tests: leave uploads running and no hub tokens."""
     yield
     with SessionLocal() as db:
         bandwidth.get_policy(db).uploads_paused = False
-        row = get_system_settings(db)
-        row.pool_control_enabled = False
-        row.pool_token = ""
+        db.execute(delete(PoolAccessToken))
         db.commit()
 
 
@@ -93,30 +90,35 @@ def test_control_requires_admin(client, admin_auth):
     _make_user(client, admin_auth, "ctl@test.local")
     user_auth = _auth(client, "ctl@test.local")
     assert _control(client, user_auth, "pause").status_code == 403
-    assert client.put(
-        "/api/pool/self", headers=user_auth, json={"control_enabled": True}
+    assert client.post(
+        "/api/pool/tokens", headers=user_auth, json={"name": "x", "scope": "control"}
     ).status_code == 403
 
 
-def test_pool_token_controls_only_when_allowed(client, admin_auth):
-    token = client.post("/api/pool/token", headers=admin_auth).json()["pool_token"]
-    hub = {"X-Pool-Token": token, "X-Pool-Hub": "box1-elw"}
+def test_only_control_tokens_may_control(client, admin_auth):
+    created = client.post(
+        "/api/pool/tokens", headers=admin_auth, json={"name": "ELW"}
+    ).json()
+    assert created["scope"] == "read"  # least privilege by default
+    hub = {"X-Pool-Token": created["token"], "X-Pool-Hub": "box1-elw"}
 
-    # Token alone grants read access, not control.
+    # A read token sees the status but may not control.
     assert client.get("/api/pool/status", headers=hub).json()["control_enabled"] is False
     resp = _control(client, hub, "pause", "/api/pool/control")
     assert resp.status_code == 403
-    assert "nicht freigegeben" in resp.json()["detail"]
+    assert "nur lesen" in resp.json()["detail"]
 
-    me = client.put("/api/pool/self", headers=admin_auth, json={"control_enabled": True}).json()
-    assert me["control_enabled"] is True
+    # Upgrading the scope takes effect on the very next request.
+    client.patch(
+        f"/api/pool/tokens/{created['id']}", headers=admin_auth, json={"scope": "control"}
+    )
+    assert client.get("/api/pool/status", headers=hub).json()["control_enabled"] is True
     resp = _control(client, hub, "pause", "/api/pool/control")
     assert resp.status_code == 200
     assert resp.json()["uploads_paused"] is True
-    assert client.get("/api/pool/status", headers=hub).json()["uploads_paused"] is True
     event = _last_audit()
     assert event.action == "pool.remote_pause"
-    assert "box1-elw" in event.detail
+    assert "ELW" in event.detail and "box1-elw" in event.detail
 
     # A wrong token never gets through, permission or not.
     bad = {"X-Pool-Token": "nope"}
@@ -159,7 +161,7 @@ def test_hub_explains_refused_control(client, admin_auth, monkeypatch):
     monkeypatch.setattr(pool_core.urllib.request, "urlopen", refuse)
     resp = _control(client, admin_auth, "pause", f"/api/pool/peers/{peer['id']}/control")
     assert resp.status_code == 409
-    assert "nicht freigegeben" in resp.json()["detail"]
+    assert "Leserechte" in resp.json()["detail"]
 
     client.patch(f"/api/pool/peers/{peer['id']}", headers=admin_auth, json={"enabled": False})
     resp = _control(client, admin_auth, "pause", f"/api/pool/peers/{peer['id']}/control")

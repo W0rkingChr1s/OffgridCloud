@@ -5,19 +5,25 @@ peer's ``/api/pool/status`` (authenticated by the peer's shared token) and
 presents a combined fleet view. No distributed coordination — which keeps it
 safe and cheap enough for the Raspberry Pi target.
 
-The one write path is opt-in transfer control: a peer whose admin enabled it
-accepts ``POST /api/pool/control`` (pause/resume uploads, re-queue failed jobs).
-Nothing a hub can trigger deletes data or changes configuration.
+Each hub gets its own access token from the peer (scope "read" or "control"),
+so one hub can be revoked without re-pairing the others. The one write path is
+transfer control via ``POST /api/pool/control`` (pause/resume uploads, re-queue
+failed jobs) for "control" tokens. Nothing a hub can trigger deletes data or
+changes configuration.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
+import secrets
 import socket
 import ssl
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -27,11 +33,24 @@ from .admin_ops import disk_usage, get_system_settings
 from .bandwidth import get_policy
 from .config import get_settings
 from .crypto import decrypt
-from .models import MediaItem, PoolPeer, TransferJob, TransferStatus
+from .db import SessionLocal
+from .models import (
+    MediaItem,
+    PoolAccessToken,
+    PoolPeer,
+    PoolTokenScope,
+    TransferJob,
+    TransferStatus,
+)
 from .transfers import control_state
+
+logger = logging.getLogger(__name__)
 
 PEER_TIMEOUT = 6.0  # seconds per peer poll
 _MAX_POOL_WORKERS = 8
+TOKEN_PREFIX = "ogcp_"
+# Hubs poll every ~15 s; writing "last used" on every poll would be wasted I/O.
+_LAST_USED_EVERY = timedelta(seconds=60)
 
 
 def _node_name() -> str:
@@ -42,8 +61,83 @@ def _node_name() -> str:
     return host or get_settings().app_name
 
 
-def node_status(db: Session) -> dict:
-    """Compact status of THIS node, shared with the pool hub and shown locally."""
+# --- Access tokens this node issues to hubs ---------------------------------
+
+
+def hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def issue_token(db: Session, name: str, scope: PoolTokenScope) -> tuple[PoolAccessToken, str]:
+    """Create a token for one hub. Returns the row and the plaintext (shown once)."""
+    raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    row = PoolAccessToken(name=name, token_hash=hash_token(raw), hint=raw[-4:], scope=scope)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row, raw
+
+
+def authenticate(db: Session, raw: str | None, hub: str | None = None) -> PoolAccessToken | None:
+    """The token row for ``raw``, or None. Notes when and by whom it was used."""
+    if not raw:
+        return None
+    row = db.scalar(select(PoolAccessToken).where(PoolAccessToken.token_hash == hash_token(raw)))
+    if row is None:
+        return None
+    now = _utcnow()
+    hub = (hub or "").strip()[:100]
+    if (
+        row.last_used_at is None
+        or now - row.last_used_at >= _LAST_USED_EVERY
+        or (hub and hub != row.last_used_hub)
+    ):
+        row.last_used_at = now
+        if hub:
+            row.last_used_hub = hub
+        db.commit()
+    return row
+
+
+def migrate_legacy_token() -> None:
+    """Move the old shared plaintext token into ``pool_access_tokens`` (read-only).
+
+    Hubs configured with it keep working; the admin can then issue per-hub
+    tokens and delete this one. Runs at startup, idempotent.
+    """
+    with SessionLocal() as db:
+        settings_row = get_system_settings(db)
+        legacy = settings_row.pool_token
+        if not legacy:
+            return
+        digest = hash_token(legacy)
+        exists = db.scalar(
+            select(PoolAccessToken.id).where(PoolAccessToken.token_hash == digest)
+        )
+        if exists is None:
+            db.add(
+                PoolAccessToken(
+                    name="Bisheriges Token",
+                    token_hash=digest,
+                    hint=legacy[-4:],
+                    scope=PoolTokenScope.READ,
+                )
+            )
+        settings_row.pool_token = ""
+        db.commit()
+        logger.info("Migrated the shared pool token to a per-hub access token")
+
+
+def node_status(db: Session, control_enabled: bool = False) -> dict:
+    """Compact status of THIS node, shared with the pool hub and shown locally.
+
+    ``control_enabled`` tells the caller whether *its* credentials may control
+    transfers here, so the hub only offers actions that will work.
+    """
     rows = db.execute(
         select(MediaItem.status, func.count()).group_by(MediaItem.status)
     ).all()
@@ -71,7 +165,7 @@ def node_status(db: Session) -> dict:
         "disk_free": disk["free"],
         "disk_total": disk["total"],
         **control_state(db),
-        "control_enabled": get_system_settings(db).pool_control_enabled,
+        "control_enabled": control_enabled,
     }
 
 
@@ -131,7 +225,7 @@ def control_peer(peer: PoolPeer, action: str) -> dict:
             raise PeerControlError("Pool-Token ungültig") from exc
         if exc.code == 403:
             raise PeerControlError(
-                "Fernsteuerung auf dem Peer nicht freigegeben", status=409
+                "Token dieses Hubs hat auf dem Peer nur Leserechte", status=409
             ) from exc
         if exc.code in (404, 405):
             # Older peer without the endpoint.
