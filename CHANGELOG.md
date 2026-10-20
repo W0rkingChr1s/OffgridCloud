@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.7.1] – 2026-10-20
+
+Mehrere Boxen mit Telegram vertragen sich jetzt: Die Box erkennt einen geteilten Bot, und Befehle lassen sich gezielt an eine Box richten.
+
 ### 🤖 Telegram: mehrere Boxen sauber trennen
 
 - **Zwei Boxen, ein Bot-Token** gehen nicht: Telegram lässt pro Bot nur einen Empfänger Befehle abholen, die Boxen nehmen sich gegenseitig die Befehle weg. Die Box erkennt das jetzt (`409 Conflict` von einem anderen `getUpdates`), zeigt unter **System → Benachrichtigungen → Telegram** einen Hinweis und wartet 2 min statt 30 s, bevor sie es erneut versucht. Abhilfe: für jede Box bei @BotFather einen eigenen Bot anlegen.
