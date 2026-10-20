@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import socket
+import ssl
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -67,9 +68,36 @@ def node_status(db: Session) -> dict:
     }
 
 
+def normalize_base_url(raw: str) -> str:
+    """Trim, drop trailing slashes and default a missing scheme to ``http://``.
+
+    The backend port (8000) speaks plain HTTP, so a bare ``host:port`` means HTTP.
+    """
+    url = raw.strip().rstrip("/")
+    if url and "://" not in url:
+        url = f"http://{url}"
+    return url
+
+
+def _explain_error(exc: BaseException) -> str:
+    """Turn low-level connection errors into an actionable hint for the admin."""
+    reason = getattr(exc, "reason", exc)
+    text = str(reason)
+    if isinstance(reason, ssl.SSLError) and "WRONG_VERSION_NUMBER" in text:
+        # TLS handshake against a plain-HTTP port (uvicorn on :8000 has no TLS).
+        return "Peer spricht unter dieser Adresse kein HTTPS – URL mit http:// eintragen"
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        # Caddy's 'tls internal' cert on <host>.local is self-signed.
+        return (
+            "Zertifikat des Peers nicht vertrauenswürdig (selbstsigniert) – "
+            "http://<IP>:8000 verwenden"
+        )
+    return text
+
+
 def poll_peer(peer: PoolPeer) -> dict:
     """Fetch a peer's compact status. Never raises — errors become ``reachable=False``."""
-    url = f"{peer.base_url.rstrip('/')}/api/pool/status"
+    url = f"{normalize_base_url(peer.base_url)}/api/pool/status"
     token = decrypt(peer.token_encrypted) if peer.token_encrypted else ""
     headers = {"X-Pool-Token": token, "User-Agent": "OffgridCloud-Pool"}
     try:
@@ -85,9 +113,9 @@ def poll_peer(peer: PoolPeer) -> dict:
         detail = "Pool-Token ungültig" if exc.code == 401 else f"HTTP {exc.code}"
         return {"reachable": False, "error": detail}
     except (urllib.error.URLError, TimeoutError) as exc:
-        return {"reachable": False, "error": str(getattr(exc, "reason", exc))}
+        return {"reachable": False, "error": _explain_error(exc)}
     except (ValueError, OSError) as exc:  # JSON / socket errors
-        return {"reachable": False, "error": str(exc)}
+        return {"reachable": False, "error": _explain_error(exc)}
 
 
 def poll_peers(peers: list[PoolPeer]) -> dict[int, dict]:

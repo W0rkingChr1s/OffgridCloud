@@ -118,3 +118,31 @@ def test_overview_marks_unreachable_peer(client, admin_auth, monkeypatch):
     assert overview["peers"][0]["reachable"] is False
     assert overview["peers"][0]["error"] == "timed out"
     assert overview["totals"]["nodes_online"] == 1  # only self
+
+
+def test_poll_peer_explains_tls_on_plain_http_port(monkeypatch):
+    import ssl
+    import urllib.error
+
+    from app.models import PoolPeer
+
+    def boom(*a, **k):
+        raise urllib.error.URLError(
+            ssl.SSLError(1, "[SSL: WRONG_VERSION_NUMBER] wrong version number")
+        )
+
+    monkeypatch.setattr(pool_core.urllib.request, "urlopen", boom)
+    result = pool_core.poll_peer(PoolPeer(name="p", base_url="https://10.0.0.2:8000"))
+    assert result["reachable"] is False
+    assert "http://" in result["error"]
+
+
+def test_peer_url_without_scheme_defaults_to_http(client, admin_auth):
+    resp = client.post(
+        "/api/pool/peers",
+        json={"name": "bare", "base_url": " 192.168.178.128:8000/ "},
+        headers=admin_auth,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["base_url"] == "http://192.168.178.128:8000"
+    assert pool_core.normalize_base_url("https://box.local/") == "https://box.local"
