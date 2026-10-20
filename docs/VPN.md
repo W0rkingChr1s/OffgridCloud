@@ -46,13 +46,32 @@ Danach die VPN-Seite neu laden — der Hinweis „erhöhte Rechte" verschwindet.
 
 ### Docker
 
-Dem Container die Rechte beim Start mitgeben:
+Dem Container die Rechte beim Start mitgeben. Mit **docker compose** (Standardweg)
+in `docker-compose.yml` die beiden vorbereiteten Zeilen einkommentieren:
 
-```bash
-docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud
+```yaml
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun"]
 ```
 
-docker-compose: `cap_add: [NET_ADMIN]` und `devices: ["/dev/net/tun"]`.
+und den Container neu erstellen (Rechte lassen sich nicht nachträglich an einen
+laufenden Container hängen):
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Ohne compose — vollständiger Aufruf, nicht zusätzlich zu einem compose-Container
+starten (Name und Port wären doppelt belegt):
+
+```bash
+docker run -d --name offgridcloud --restart unless-stopped \
+  --cap-add=NET_ADMIN --device=/dev/net/tun \
+  -p 8000:8000 --env-file .env \
+  -e OGC_DATA_DIR=/data -e OGC_BUFFER_DIR=/data/buffer \
+  -v "$(pwd)/data:/data" \
+  ghcr.io/w0rkingchr1s/offgridcloud:latest
+```
 
 ## Grenzen
 

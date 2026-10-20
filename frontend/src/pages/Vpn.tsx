@@ -114,12 +114,19 @@ export default function Vpn() {
           <p className="mt-1 text-amber-200/90">{caps.message}</p>
           {caps.docker ? (
             <>
-              <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
-docker run --cap-add=NET_ADMIN --device=/dev/net/tun … offgridcloud</pre>
+              <p className="mt-2 text-xs text-amber-200/90">
+                docker compose: in <code className="text-amber-200">docker-compose.yml</code> die
+                beiden VPN-Zeilen einkommentieren und den Container neu erstellen:
+              </p>
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+{`    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun"]`}</pre>
+              <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900/70 px-3 py-2 text-xs text-slate-300">
+docker compose up -d --force-recreate</pre>
               <p className="mt-2 text-xs text-amber-200/70">
-                Bei docker-compose:{" "}
-                <code className="text-amber-200">cap_add: [NET_ADMIN]</code> und{" "}
-                <code className="text-amber-200">devices: ["/dev/net/tun"]</code>.
+                Ohne compose: den bestehenden Container entfernen und mit{" "}
+                <code className="text-amber-200">--cap-add=NET_ADMIN --device=/dev/net/tun</code>{" "}
+                zusätzlich zu den bisherigen Optionen (Port, Volume, env-file) neu starten.
               </p>
             </>
           ) : (
