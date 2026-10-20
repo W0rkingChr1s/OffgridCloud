@@ -1,0 +1,226 @@
+{
+  "_comment": "Testvektoren zu docs/BLE-PROTOKOLL.md (Version 1). Erzeugt mit scripts/ble_testvectors.py. Schlüssel nur für Tests.",
+  "protocol_version": 1,
+  "advertising": {
+    "manufacturer_data": "ffff0106",
+    "decoded": {
+      "company": 65535,
+      "version": 1,
+      "flags": 6
+    },
+    "local_name": "OGC-Kiste-1"
+  },
+  "framing": [
+    {
+      "msg_id": 4660,
+      "event": false,
+      "mtu": 23,
+      "payload": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627",
+      "frames": [
+        "1234000001000102030405060708090a0b0c0d0e",
+        "12340001000f101112131415161718191a1b1c1d",
+        "12340002021e1f2021222324252627"
+      ]
+    },
+    {
+      "msg_id": 7,
+      "event": true,
+      "mtu": 185,
+      "payload": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627",
+      "frames": [
+        "0007000007000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627"
+      ]
+    },
+    {
+      "msg_id": 9,
+      "event": false,
+      "mtu": 23,
+      "payload": "",
+      "frames": [
+        "0009000003"
+      ]
+    }
+  ],
+  "cbor": [
+    {
+      "name": "request",
+      "value": {
+        "id": 1,
+        "method": "GET",
+        "path": "/api/health"
+      },
+      "hex": "a362696401666d6574686f646347455464706174686b2f6170692f6865616c7468"
+    },
+    {
+      "name": "request_body_query",
+      "value": {
+        "id": 513,
+        "method": "POST",
+        "path": "/api/network/apply",
+        "query": {
+          "dry": "1"
+        },
+        "body": {
+          "ssid": "Fahrzeug",
+          "priority": 10,
+          "hidden": false
+        }
+      },
+      "hex": "a5626964190201666d6574686f6464504f53546470617468722f6170692f6e6574776f726b2f6170706c79657175657279a163647279613164626f6479a3647373696468466168727a657567687072696f726974790a6668696464656ef4"
+    },
+    {
+      "name": "response",
+      "value": {
+        "id": 1,
+        "status": 200,
+        "body": {
+          "status": "ok"
+        }
+      },
+      "hex": "a3626964016673746174757318c864626f6479a166737461747573626f6b"
+    },
+    {
+      "name": "response_empty",
+      "value": {
+        "id": 2,
+        "status": 204,
+        "body": null
+      },
+      "hex": "a3626964026673746174757318cc64626f6479f6"
+    },
+    {
+      "name": "bridge_error",
+      "value": {
+        "id": 3,
+        "status": 0,
+        "body": null,
+        "error": "not_allowed"
+      },
+      "hex": "a462696403667374617475730064626f6479f6656572726f726b6e6f745f616c6c6f776564"
+    },
+    {
+      "name": "event",
+      "value": {
+        "event": "status",
+        "body": {
+          "queued": 3,
+          "failed": 0
+        }
+      },
+      "hex": "a2656576656e746673746174757364626f6479a26671756575656403666661696c656400"
+    },
+    {
+      "name": "info",
+      "value": {
+        "v": 1,
+        "name": "Kiste-1",
+        "flags": 6,
+        "pk": {
+          "bytes_hex": "23e8608630fd6fc087424cb4da8dd73a77c6dbe29734d4a0a8da95dec6e88f52"
+        }
+      },
+      "hex": "a4617601646e616d65674b697374652d3165666c6167730662706b582023e8608630fd6fc087424cb4da8dd73a77c6dbe29734d4a0a8da95dec6e88f52"
+    }
+  ],
+  "pairing_code": {
+    "pid": 369601,
+    "secret": "0f1e2d3c4b5a69788796",
+    "code": "B8Y11-WF2TF-2BB9M-QH1WP",
+    "box_static_public": "23e8608630fd6fc087424cb4da8dd73a77c6dbe29734d4a0a8da95dec6e88f52",
+    "psk": "383bc0671a59003abd9566b7c45fc858eaaca8134b3f592ac71bcce1bb8cd963"
+  },
+  "handshake_pair": {
+    "suite": "Noise_IKpsk2_25519_ChaChaPoly_SHA256",
+    "prologue": "4f47432d424c452f31",
+    "app_static_private": "3647a7c4407e31f9b5a11a7c5fb2b9751fefe17cf9ff6acb51ba04046bbce8a3",
+    "app_static_public": "3cb9f662d3043ba21bbb2556535edc6ee5a735204c8492d6d563c55a75aa9a40",
+    "app_ephemeral_private": "ff1a12273f18ef1d6947294479c33d75bc4a6b1a23166c6a216d43cf99032f3b",
+    "box_static_private": "4b6df9d6dd50c98af3b0f57086d107e82f11e30252f728cd51a4e738f9bfbeb2",
+    "box_static_public": "23e8608630fd6fc087424cb4da8dd73a77c6dbe29734d4a0a8da95dec6e88f52",
+    "box_ephemeral_private": "804bd0e894b50cfc3c008554a822134e845647b3a2062d3e50085cb72079d3a5",
+    "psk": "383bc0671a59003abd9566b7c45fc858eaaca8134b3f592ac71bcce1bb8cd963",
+    "msg1_payload": "a4646d6f64656470616972637069641a0005a3c1636465766a54657374676572c3a4746361707065302e312e30",
+    "msg1": "9bd952340a3d8a5ac6f289e4b31c04ba083b1557b608d0c0331a639766e24302aaebbf970f908ed4b962f48b9686e714ef79e0810637eaa9a4eab7a501e3ea341ffd8f7e9a5a00001ea78ca075df0c35fd960ac6e743c83e9797b85cb981d1bcd9894f17ec4bec88a03ae457050e78f9358f1de79220c3c9b9f7dc994d5174ca7187766d3eb688fa250c4509d0",
+    "msg2_payload": "a2617601646e616d65674b697374652d31",
+    "msg2": "ae81ed0467d598bc05cdbcdf1bc31dd5c5f28a01e3c4892584df3532538de36686719ae08661ce9e1cbad40ac92d563be3bad7298edb030368b0373c81a9c0bf14",
+    "handshake_hash": "0c5fd663202364f2133d4eae29105c6ef3a9affb2219bc7e2b9b8274519f63e3",
+    "transport": [
+      {
+        "from": "app",
+        "nonce": 0,
+        "plaintext": "a362696401666d6574686f6464504f53546470617468712f626c652f706169722f636f6e6669726d",
+        "ciphertext": "681a46264b6aeab38e1b1e1231307e7a8a6a0d4ba03141f7507efa853d90d80908981210d1ba9876d95bb9c39da0b5e3383513d4ef2f38c5"
+      },
+      {
+        "from": "box",
+        "nonce": 0,
+        "plaintext": "a3626964016673746174757318c864626f6479a3666465765f69640764757365726561646d696e64726f6c656561646d696e",
+        "ciphertext": "e18029b1ef7a1817432d7e8cb8b393bf3fa2dd7b166b8dd42677934eb7aa2f1c280fb7591a7e81dfd9b5fa4a0a2d06a79bb1163677c54acbfa4ca6d0ed691351d3f8"
+      }
+    ],
+    "msg1_frames_mtu23": [
+      "00000000099bd952340a3d8a5ac6f289e4b31c04",
+      "0000000108ba083b1557b608d0c0331a639766e2",
+      "00000002084302aaebbf970f908ed4b962f48b96",
+      "000000030886e714ef79e0810637eaa9a4eab7a5",
+      "000000040801e3ea341ffd8f7e9a5a00001ea78c",
+      "0000000508a075df0c35fd960ac6e743c83e9797",
+      "0000000608b85cb981d1bcd9894f17ec4bec88a0",
+      "00000007083ae457050e78f9358f1de79220c3c9",
+      "0000000808b9f7dc994d5174ca7187766d3eb688",
+      "000000090afa250c4509d0"
+    ],
+    "request_frames_mtu23": [
+      "0001000001681a46264b6aeab38e1b1e1231307e",
+      "00010001007a8a6a0d4ba03141f7507efa853d90",
+      "0001000200d80908981210d1ba9876d95bb9c39d",
+      "0001000302a0b5e3383513d4ef2f38c5"
+    ]
+  },
+  "handshake_session": {
+    "suite": "Noise_IK_25519_ChaChaPoly_SHA256",
+    "prologue": "4f47432d424c452f31",
+    "app_static_private": "3647a7c4407e31f9b5a11a7c5fb2b9751fefe17cf9ff6acb51ba04046bbce8a3",
+    "app_static_public": "3cb9f662d3043ba21bbb2556535edc6ee5a735204c8492d6d563c55a75aa9a40",
+    "app_ephemeral_private": "f7889d40fbe46718c3c369125fecaf755057eeedd82ee1b871062e03a70b45a5",
+    "box_static_private": "4b6df9d6dd50c98af3b0f57086d107e82f11e30252f728cd51a4e738f9bfbeb2",
+    "box_static_public": "23e8608630fd6fc087424cb4da8dd73a77c6dbe29734d4a0a8da95dec6e88f52",
+    "box_ephemeral_private": "ba095adcba3f4fa66a426dcceadc6de9f8e8579878ba6997d26ca1ed7d506db1",
+    "psk": null,
+    "msg1_payload": "a2646d6f64656773657373696f6e6361707065302e312e30",
+    "msg1": "a2b9b92eb10931bd1b0e19813106207dab4ab679416bb0d53836d5ea7c2a937986c2308049185ce1bf5e8cc7defe27673110982db217b00f7aa43d56179af1be4c8d70c2b61ecb51a7bfa8f71f9966bea5c38b5dedc46b71fce65d70643baa3663830e8e1bb576b62e994df10e182242ace79230a9f692ce",
+    "msg2_payload": "a4617601666465765f69640764757365726561646d696e64726f6c656561646d696e",
+    "msg2": "eb4bdaf51191234bcdcebf7a7c1bc0a3d790c887038f8aa07fbe93092f566165d5f413bfb199730c9e8ed7fea81484581d30678cc18f27301c3d9faa0624bd1b62bf6c37d1719d9e5a17647f1224eab64ab9",
+    "handshake_hash": "b30a1bd48c8ed03ba80ccab2263dbcc8b06c3da5b9c8559386595a3edc4d94f7",
+    "transport": [
+      {
+        "from": "app",
+        "nonce": 0,
+        "plaintext": "a362696401666d6574686f646347455464706174686b2f6170692f6865616c7468",
+        "ciphertext": "832b5d15bb4e3ba7ef39205fdfa4dd8b9ea80d5ad6f521eec595c838d1a4f513d9c3f89572ab51aa8597caf58d209557b4"
+      },
+      {
+        "from": "box",
+        "nonce": 0,
+        "plaintext": "a3626964016673746174757318c864626f6479a166737461747573626f6b",
+        "ciphertext": "d370a3e2efc7d8b23c3885900b96b89173b2d706179d87ad5f58d8616fd96305dec18ff4a67fb4488affa866f9f4"
+      }
+    ],
+    "msg1_frames_mtu23": [
+      "0000000009a2b9b92eb10931bd1b0e1981310620",
+      "00000001087dab4ab679416bb0d53836d5ea7c2a",
+      "0000000208937986c2308049185ce1bf5e8cc7de",
+      "0000000308fe27673110982db217b00f7aa43d56",
+      "0000000408179af1be4c8d70c2b61ecb51a7bfa8",
+      "0000000508f71f9966bea5c38b5dedc46b71fce6",
+      "00000006085d70643baa3663830e8e1bb576b62e",
+      "000000070a994df10e182242ace79230a9f692ce"
+    ],
+    "request_frames_mtu23": [
+      "0001000001832b5d15bb4e3ba7ef39205fdfa4dd",
+      "00010001008b9ea80d5ad6f521eec595c838d1a4",
+      "0001000200f513d9c3f89572ab51aa8597caf58d",
+      "0001000302209557b4"
+    ]
+  }
+}

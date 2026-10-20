@@ -289,6 +289,7 @@ Die ausführlichen Anleitungen liegen unter [`docs/`](docs/) (und sind für das
 | 🔐 | [VPN-Client](docs/VPN.md) | Ins Heimnetz einwählen (WireGuard/OpenVPN) |
 | 🛰️ | [Multi-Server-Pool](docs/MULTI-SERVER-POOL.md) | Mehrere Boxen als Flotte |
 | 💻 | [Desktop-Client](docs/CLIENT.md) | Auto-Upload-Agent für macOS/Linux/Windows (in Arbeit) |
+| 📶 | [BLE-Protokoll](docs/BLE-PROTOKOLL.md) | Verwaltung per Bluetooth für die Companion-App: GATT, Noise, Kopplung, RPC (Spezifikation) |
 | 🗺️ | [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md) | Roadmap in Phasen & Meilensteinen |
 | 📝 | [Changelog](CHANGELOG.md) | Änderungen je Version |
 
