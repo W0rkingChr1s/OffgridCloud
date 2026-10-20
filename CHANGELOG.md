@@ -6,14 +6,27 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
-### 🔀 Neu: Leitungsbündelung mit net-merge
+## [0.7.0] – 2026-10-20
+
+Die Box kann Uploads jetzt über **alle Uplinks gleichzeitig** schicken (Kabel, WLAN, Handy) und **mehrere Dateien parallel** hochladen. Beides ist standardmäßig aus.
+
+### 🔀 Neu: Leitungsbündelung mit net-merge und parallele Uploads
 
 - **Alle Uplinks gleichzeitig:** Mit [net-merge](https://github.com/rohit267/net-merge) verteilt die Box ihre Cloud-Uploads auf Kabel, WLAN und ein angestecktes Handy zugleich. Das bringt vor allem bei großen Dateien zu S3, Azure und B2 etwas, deren Teile rclone parallel hochlädt.
 - **Nur für rclone:** net-merge läuft als SOCKS5-Proxy auf `127.0.0.1:1080` (Dienst `offgridcloud-netmerge`). Routing, Rückfall-WLAN und VPN der Box bleiben unberührt. Antwortet der Proxy nicht, gehen Uploads direkt.
 - **Vorsichtig:** Ziele im LAN oder hinter dem VPN, ein aktiver OpenVPN-Tunnel und ein getaktetes Handy bei Regel „Tagesvolumen“/„pausieren“ umgehen die Bündelung.
 - Einrichten mit `sudo deploy/netmerge/install.sh` (oder „Leitungsbündelung“ im Installer), einschalten unter **Bandbreite → Leitungsbündelung**. Standard: aus.
 - **Parallele Uploads:** Unter Bandbreite lassen sich 1–4 Uploads gleichzeitig einstellen (Standard 1). Mit Bündelung nimmt jeder Upload eine eigene Leitung, das bringt auch bei WebDAV und SFTP mehr Durchsatz. Das KB/s-Limit gilt für alle zusammen, laufende Uploads zählen beim Tagesvolumen schon mit.
+- Die Konsole an der Box kann beides einstellen, Telegram `/netz` zeigt die gebündelten Leitungen.
 - Anleitung und Grenzen: [docs/NETZWERK-REDUNDANZ.md](docs/NETZWERK-REDUNDANZ.md#leitungsbündelung-net-merge).
+
+### 🐛 Behoben
+
+- **Pool:** Eine Peer-URL ohne Schema (`192.168.178.128:8000`) führte zu „unknown url type“. Jetzt wird `http://` ergänzt, auch bei schon gespeicherten Peers. `https://` auf den Klartext-Port und selbstsignierte Zertifikate geben einen verständlichen Hinweis statt `WRONG_VERSION_NUMBER`. (#179)
+
+## [0.6.0] – 2026-10-20
+
+Ein **Handy per USB** wird zum Uplink, **USB-Sticks und Karten** dienen als zusätzlicher Puffer, und die **Konsole an der Box** kann jetzt alles, was die Speicher-Seite kann.
 
 ### 📱 Neu: USB-Tethering mit iPhone oder Android
 
@@ -34,6 +47,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Updates:** Mit „Nach Updates suchen“ fragt die Konsole sofort neu bei GitHub nach, statt den Cache zu nutzen. Nach „Jetzt aktualisieren“ zeigt sie den **Fortschritt live** an: Status, Versionen, Dauer und das Ende des Protokolls. Den Neustart mitten im Update überbrückt sie und blendet danach das Ergebnis ein. Ist One-Click aus, steht der passende Befehl da (auch für Docker).
 - **Behoben: Dienst-Neustart per SSH ging nicht.** Ohne root rief die Konsole `systemctl` direkt auf, und das schlug fehl. Jetzt versucht sie `sudo -n` und nimmt sonst die API (wie der Knopf in der Web-UI). Außerdem blockiert der Neustart die Konsole nicht mehr (`--no-block`), und eine Warte-Anzeige läuft, bis der Dienst wieder antwortet.
 - Die Tab-Leiste passt jetzt auch auf 80 Spalten (dann mit Kurznamen). Mehrzeilige Hinweise in Menüs. Ein abgelaufenes Login führt beim nächsten Schritt zu einer neuen Anmeldung statt zu Fehlermeldungen.
+
+## [0.5.3] – 2026-10-20
+
+**Fertiges Raspberry-Pi-Image** mit Setup-Assistent, **Docker-Image** auf GHCR, **Hell-Modus**, und die Box ist unter `offgridcloud.local` erreichbar. Dazu viele aufgeräumte Seiten (Tailwind 4).
 
 ### 🌗 Neu: Hell-Modus
 
@@ -70,6 +87,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 ### 🧹 Branch-Cleanup
 
 - Gemergte Branches werden automatisch gelöscht: sofort nach dem Merge und zusätzlich per wöchentlichem Durchlauf für Altlasten. Branches mit offenem PR oder neuen Commits bleiben stehen (`.github/workflows/branch-cleanup.yml`).
+
+## [0.5.0] – [0.5.2] – 2026-10-19
+
+- **Speicher-Verwaltung** für angeschlossene Medien mit Import für den Upload (#133), dazu **Galerie für Kamerakarten**, boxweite Duplikatprüfung und Cache-Laufwerk (#138).
+- Frontend auf Vite 8, React 19 (#136).
+- Behoben: Code, den `sudo` als root ausführt, liegt nicht mehr beim Dienstkonto (#135). Ein Update brach mit „No such file or directory“ bei `pip` ab (#137).
 
 ## [0.4.11] – 2026-10-19
 
