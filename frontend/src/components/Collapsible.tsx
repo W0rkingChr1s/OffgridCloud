@@ -31,7 +31,7 @@ export default function Collapsible({
           nested ? "px-4 py-3" : "p-5"
         }`}
       >
-        <span className={nested ? "text-sm font-medium text-slate-200" : "text-sm font-medium text-slate-400"}>
+        <span className={`whitespace-nowrap text-sm font-medium ${nested ? "text-slate-200" : "text-slate-400"}`}>
           {title}
         </span>
         {summary && <span className="min-w-0 truncate text-xs text-slate-500">{summary}</span>}

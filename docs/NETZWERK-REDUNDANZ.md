@@ -93,8 +93,8 @@ Unter **Netzwerk** (nur Admin):
   `offgridcloud-ap`, Clients `ogc-wifi-*`).
 - **Manuell anwenden** (falls sudoers nicht eingerichtet):
   `sudo /opt/offgridcloud/deploy/netfallback/apply.sh`
-- **Tuning:** Prüf-Intervall und die Zahl der Fehlversuche bis zum Umschalten
-  sind im UI einstellbar. Ein „Anwenden“ startet den Watchdog neu, damit ein
+- **Tuning:** Prüf-Intervall, die Zahl der Fehlversuche bis zum Umschalten und
+  die beiden Such-Intervalle im AP-Modus sind im UI einstellbar. Ein „Anwenden“ startet den Watchdog neu, damit ein
   geändertes Intervall sofort greift.
 
 ## Sicherheit & Grenzen
@@ -113,6 +113,10 @@ Unter **Netzwerk** (nur Admin):
 - **Rückkehr aus dem AP:** Weil der Funkchip im AP-Modus belegt ist, sucht der
   Watchdog aktiv nach bekannten WLANs. Berücksichtigt werden alle WLAN-Profile mit
   Autoconnect, auch das aus dem Raspberry Pi Imager (`netplan-wlan0-*`).
+  Solche Profile zeigt die Netzwerk-Seite in der Liste der bekannten WLANs mit dem
+  Kennzeichen „System“ (und „verbunden“, wenn aktiv) an. Sie lassen sich dort nicht
+  bearbeiten, sondern nur per `nmtui`/`nmcli` auf der Box. Der Status nennt die
+  tatsächlich verbundene SSID.
   1. Alle **2 Minuten** scannt er, ohne den AP abzuschalten. Ist ein bekanntes
      WLAN sichtbar, verbindet er sich damit.
   2. Viele Treiber, darunter der des Pi (`brcmfmac`), liefern im AP-Modus keine
@@ -121,11 +125,11 @@ Unter **Netzwerk** (nur Admin):
      AP sofort wieder her, wenn nichts Bekanntes in Reichweite ist. Laufende
      Uploads übers AP-WLAN brechen dabei kurz ab und müssen neu verbinden.
 
-  Die Intervalle lassen sich über `ap_probe_interval` und
-  `ap_blind_probe_interval` in `network.json` setzen (Standard 120/600 s). Die
-  App überschreibt diese Datei beim „Anwenden“, die Werte gelten also nur bis
-  dahin. Versteckte SSIDs tauchen in Scans nicht auf und werden deshalb nur über
-  einen Kabel-Uplink erkannt.
+  Beide Intervalle sind im UI einstellbar („Suche im AP-Modus“ und „AP kurz
+  abschalten zum Suchen“, Standard 120/600 s). Kürzere Werte bringen die Box
+  schneller zurück ins WLAN, unterbrechen den AP aber öfter. Versteckte SSIDs
+  tauchen in Scans nicht auf und werden deshalb nur über einen Kabel-Uplink
+  erkannt.
 - **Kein NetworkManager?** Auf Systemen mit `dhcpcd`/`systemd-networkd` steuert
   die App nichts aktiv. Die Konfiguration wird trotzdem exportiert; die
   Umsetzung müsste dann ein eigenes Setup (hostapd/dnsmasq) übernehmen.

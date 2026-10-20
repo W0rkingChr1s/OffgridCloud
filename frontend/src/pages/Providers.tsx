@@ -7,7 +7,9 @@ import {
   type ProviderField,
   type ProviderTypeDef,
 } from "../api";
+import Collapsible from "../components/Collapsible";
 import Layout from "../components/Layout";
+import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -23,6 +25,7 @@ export default function Providers() {
   const [error, setError] = useState<string | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [editing, setEditing] = useState<Provider | null>(null);
+  const [testing, setTesting] = useState<number | null>(null);
 
   function load() {
     api<Provider[]>("/api/providers").then(setProviders).catch(report);
@@ -38,11 +41,14 @@ export default function Providers() {
 
   async function testSaved(p: Provider) {
     setError(null);
+    setTesting(p.id);
     try {
       await api<Provider>(`/api/providers/${p.id}/test`, { method: "POST" });
-      load();
     } catch (e) {
       report(e);
+    } finally {
+      setTesting(null);
+      load();
     }
   }
 
@@ -83,7 +89,7 @@ export default function Providers() {
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Cloud-Provider</h2>
           <p className="text-sm text-slate-400">
@@ -92,7 +98,7 @@ export default function Providers() {
         </div>
         <button
           onClick={startCreate}
-          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
+          className="whitespace-nowrap rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white"
         >
           + Provider
         </button>
@@ -116,38 +122,50 @@ export default function Providers() {
       )}
 
       {providers.length === 0 ? (
-        <p className="text-sm text-slate-500">Noch keine Provider verknüpft.</p>
+        !showWizard && (
+          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
+            Noch kein Cloud-Ziel verknüpft. Mit „+ Provider“ das erste einrichten.
+          </div>
+        )
       ) : (
         <div className="space-y-3">
-          <div className="flex justify-end">
-            <SortMenu sort={sort} />
-          </div>
+          {/* Sorting only pays off once the list no longer fits at a glance. */}
+          {providers.length > 4 && (
+            <div className="flex justify-end">
+              <SortMenu sort={sort} />
+            </div>
+          )}
           {sort.sorted.map((p) => {
             const s = STATUS[p.status] ?? STATUS.unknown;
             const typeLabel = types.find((t) => t.key === p.type)?.label ?? p.type;
             return (
               <div key={p.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-48 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-lg font-semibold text-white">{p.name}</span>
                       <span className={`rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                     </div>
-                    <div className="text-sm text-slate-400">{typeLabel}</div>
+                    {p.name !== typeLabel && <div className="text-sm text-slate-400">{typeLabel}</div>}
                     {p.status === "error" && p.last_error && (
-                      <div className="mt-1 text-xs text-red-300">{p.last_error}</div>
+                      <div className="mt-1 wrap-break-word text-xs text-red-300">{p.last_error}</div>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => testSaved(p)} className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
-                      Testen
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => testSaved(p)}
+                      disabled={testing !== null}
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5 disabled:opacity-50"
+                    >
+                      {testing === p.id ? "Teste …" : "Testen"}
                     </button>
-                    <button onClick={() => startEdit(p)} className="rounded-sm border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5">
+                    <button
+                      onClick={() => startEdit(p)}
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"
+                    >
                       Bearbeiten
                     </button>
-                    <button onClick={() => remove(p)} className="rounded-sm border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10">
-                      Löschen
-                    </button>
+                    <MoreMenu items={[{ label: "Löschen …", danger: true, onClick: () => remove(p) }]} />
                   </div>
                 </div>
               </div>
@@ -428,16 +446,21 @@ function CredentialsStep({
 
   const input =
     "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
+  // Required fields first; the optional ones (region, endpoint, storage class …)
+  // fold away unless an existing provider already uses one of them.
+  const required = def.fields.filter((f) => f.required);
+  const optional = def.fields.filter((f) => !f.required);
+  const optionalSet = optional.some((f) => (editing?.config?.[f.key] ?? f.default) !== f.default);
 
   return (
     <form onSubmit={save}>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="font-semibold text-white">{def.label}</div>
           {def.description && <div className="text-xs text-slate-400">{def.description}</div>}
         </div>
         {onBack && (
-          <button type="button" onClick={onBack} className="text-sm text-slate-400 hover:text-white">
+          <button type="button" onClick={onBack} className="whitespace-nowrap text-sm text-slate-400 hover:text-white">
             ‹ Anbieter
           </button>
         )}
@@ -458,7 +481,7 @@ function CredentialsStep({
       </label>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {def.fields.map((f) => (
+        {required.map((f) => (
           <FieldInput
             key={f.key}
             field={f}
@@ -467,6 +490,28 @@ function CredentialsStep({
           />
         ))}
       </div>
+
+      {optional.length > 0 && (
+        <div className="mt-3">
+          <Collapsible
+            nested
+            defaultOpen={optionalSet}
+            title="Weitere Optionen"
+            summary={optional.map((f) => f.label).join(", ")}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {optional.map((f) => (
+                <FieldInput
+                  key={f.key}
+                  field={f}
+                  value={config[f.key] ?? f.default}
+                  onChange={(v) => setField(f.key, v)}
+                />
+              ))}
+            </div>
+          </Collapsible>
+        </div>
+      )}
 
       {testMsg && (
         <div

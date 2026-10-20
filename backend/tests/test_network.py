@@ -138,6 +138,32 @@ def test_update_settings_and_audit(client, admin_auth):
     assert any(e["action"] == "network.settings" for e in events)
 
 
+def test_probe_intervals_roundtrip_and_export(client, admin_auth):
+    defaults = client.get("/api/network", headers=admin_auth).json()["settings"]
+    assert defaults["ap_probe_interval"] == 120
+    assert defaults["ap_blind_probe_interval"] == 600
+
+    resp = client.put(
+        "/api/network/settings",
+        headers=admin_auth,
+        json={"ap_probe_interval": 60, "ap_blind_probe_interval": 900},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ap_probe_interval"] == 60
+    assert resp.json()["ap_blind_probe_interval"] == 900
+
+    client.post("/api/network/apply", headers=admin_auth)
+    exported = json.loads(get_settings().network_config_path.read_text())
+    assert exported["ap_probe_interval"] == 60
+    assert exported["ap_blind_probe_interval"] == 900
+
+
+@pytest.mark.parametrize("patch", [{"ap_probe_interval": 10}, {"ap_blind_probe_interval": 30}])
+def test_probe_intervals_reject_too_short(client, admin_auth, patch):
+    resp = client.put("/api/network/settings", headers=admin_auth, json=patch)
+    assert resp.status_code == 422
+
+
 def test_update_settings_rejects_bad_password(client, admin_auth):
     resp = client.put(
         "/api/network/settings", headers=admin_auth, json={"ap_password": "short"}
