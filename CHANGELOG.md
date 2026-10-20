@@ -16,6 +16,10 @@ Mehrere Boxen mit Telegram vertragen sich jetzt: Die Box erkennt einen geteilten
 - Bisher hat die Box in diesem Fall fälschlich einen Webhook vermutet und `deleteWebhook` aufgerufen. Das passiert jetzt nur noch, wenn tatsächlich ein Webhook gesetzt ist.
 - **Mehrere Boxen in einer Gruppe:** Jede Box hat ihren eigenen Bot. Ein Befehl mit Bot-Namen (`/status@Box2_bot`) wird nur noch von diesem Bot beantwortet, die anderen schweigen. Ohne Namen (`/status`) antworten weiterhin alle.
 
+### 🐛 Behoben
+
+- **VPN in Docker:** Der Hinweis auf fehlende Rechte zeigte `docker run … offgridcloud` mit Auslassungspunkten, wörtlich kopiert scheiterte das mit „invalid reference format“. Jetzt stehen zuerst die zwei VPN-Zeilen für `docker-compose.yml` und `docker compose up -d --force-recreate` zum Kopieren da. Ohne compose nennt der Hinweis die Flags `--cap-add=NET_ADMIN --device=/dev/net/tun`, die zu den bisherigen Optionen dazukommen. (#178)
+
 ## [0.7.0] – 2026-10-20
 
 Die Box kann Uploads jetzt über **alle Uplinks gleichzeitig** schicken (Kabel, WLAN, Handy) und **mehrere Dateien parallel** hochladen. Beides ist standardmäßig aus.
