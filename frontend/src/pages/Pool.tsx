@@ -43,7 +43,7 @@ function NodeCard({ node, isSelf }: { node: PoolNodeStatus; isSelf?: boolean }) 
             />
             <span className="truncate font-semibold text-white">{node.name}</span>
             {isSelf && (
-              <span className="rounded bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] text-ogc-teal">
+              <span className="rounded-sm bg-ogc-teal/20 px-1.5 py-0.5 text-[10px] text-ogc-teal">
                 diese Box
               </span>
             )}
@@ -161,7 +161,7 @@ export default function Pool() {
   }
 
   const field =
-    "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-none focus:border-ogc-teal/50";
+    "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-hidden focus:border-ogc-teal/50";
   const totals = overview?.totals;
 
   const nodeSort = useSort(overview?.peers ?? [], NODE_SORT, { key: "name" });
@@ -247,7 +247,7 @@ export default function Pool() {
         />
         <button
           type="submit"
-          className="rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-medium text-white"
+          className="rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-medium text-white"
         >
           Peer hinzufügen
         </button>
@@ -266,19 +266,19 @@ export default function Pool() {
               </div>
               <div className="flex items-center gap-2">
                 {!p.has_token && (
-                  <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
+                  <span className="rounded-sm bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300">
                     kein Token
                   </span>
                 )}
                 <button
                   onClick={() => togglePeer(p)}
-                  className="rounded border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
+                  className="rounded-sm border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
                 >
                   {p.enabled ? "Aktiv" : "Pausiert"}
                 </button>
                 <button
                   onClick={() => removePeer(p)}
-                  className="rounded border border-red-500/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                  className="rounded-sm border border-red-500/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
                 >
                   Entfernen
                 </button>
