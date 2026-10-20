@@ -86,6 +86,14 @@ jobs:
           rsync -a --exclude 'frontend/node_modules' --exclude 'deploy/image/stage-offgridcloud/00-offgridcloud/files' \
             ./ "$DEST/"
 
+      - name: Free disk space (best effort)
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h /
+
       - name: Build image with pi-gen
         id: build
         uses: usimd/pi-gen-action@v1
@@ -105,7 +113,9 @@ jobs:
           keyboard-keymap: de
           keyboard-layout: German
           wpa-country: DE
-          increase-runner-disk-size: true
+          # The action's own cleanup apt-removes x86 runner packages and fails
+          # (exit 100) on the arm64 image — see the step above instead.
+          increase-runner-disk-size: false
 
       - name: Checksum
         id: sum
