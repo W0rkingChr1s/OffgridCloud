@@ -20,6 +20,7 @@ from ..updater import (
     read_state,
     start_update,
 )
+from ..vpn import in_docker
 
 router = APIRouter(prefix="/api/updates", tags=["updates"], dependencies=[Depends(require_admin)])
 
@@ -60,6 +61,7 @@ def get_update_status(
         notes=info.notes,
         error=info.error,
         self_update_enabled=bool(settings.self_update and settings.update_command),
+        in_docker=in_docker(),
     )
 
 

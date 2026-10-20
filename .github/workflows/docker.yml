@@ -1,0 +1,164 @@
+name: Docker image
+
+# Builds the multi-arch Docker image (linux/amd64 + linux/arm64) and pushes it
+# to the GitHub Container Registry: ghcr.io/<owner>/offgridcloud.
+#
+#   - every push to main      → :main, :sha-<short>    (update channel "main")
+#   - every release (called by release.yml)
+#                             → :<version>, :<major>.<minor>, :latest
+#   - by hand: Actions → "Docker image" → "Run workflow" (branch build, :main
+#     only when run on main)
+#
+# arm64 is built natively on an arm64 runner — no QEMU, so a release doesn't
+# wait an hour on emulated npm/pip. The per-arch images are pushed by digest
+# and joined into one manifest list at the end.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Tag to build"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-${{ inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Tags are needed for `git describe` (version stamp).
+          fetch-depth: 0
+
+      - name: Image name + version stamps
+        id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/offgridcloud" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.ref }}" ]; then
+            echo "version=${INPUT_REF#v}" >> "$GITHUB_OUTPUT"
+            echo "channel=release" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="$(git describe --tags 2>/dev/null | sed -E 's/^v//' || true)"
+            echo "version=${VERSION:-$(git rev-parse --short HEAD)}" >> "$GITHUB_OUTPUT"
+            echo "channel=main" >> "$GITHUB_OUTPUT"
+          fi
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "pair=$(echo '${{ matrix.platform }}' | tr / -)" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build + push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            OGC_VERSION=${{ steps.meta.outputs.version }}
+            OGC_COMMIT=${{ steps.meta.outputs.commit }}
+            OGC_CHANNEL=${{ steps.meta.outputs.channel }}
+          labels: |
+            org.opencontainers.image.title=OffgridCloud
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.commit }}
+            org.opencontainers.image.licenses=GPL-3.0
+          outputs: type=image,name=${{ steps.meta.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.meta.outputs.pair }}
+          cache-to: type=gha,mode=max,scope=${{ steps.meta.outputs.pair }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ steps.meta.outputs.pair }}
+          path: ${{ runner.temp }}/digests/*
+          retention-days: 1
+
+  manifest:
+    name: Publish multi-arch manifest
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Tags
+        id: tags
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/offgridcloud"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          TAGS=()
+          if [ -n "$INPUT_REF" ]; then
+            VERSION="${INPUT_REF#v}"
+            TAGS+=("$IMAGE:$VERSION")
+            # Pre-releases (0.5.0-rc.1) get only their exact tag.
+            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+              TAGS+=("$IMAGE:${BASH_REMATCH[1]}.${BASH_REMATCH[2]}" "$IMAGE:latest")
+            fi
+          else
+            TAGS+=("$IMAGE:sha-${SHA:0:7}")
+            if [ "$REF" = refs/heads/main ]; then TAGS+=("$IMAGE:main"); fi
+          fi
+          echo "first=${TAGS[0]}" >> "$GITHUB_OUTPUT"
+          echo "args=$(printf -- '-t %s ' "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+          { echo "### Docker image"; printf -- '- `%s`\n' "${TAGS[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create + push manifest list
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create ${{ steps.tags.outputs.args }} \
+            $(printf '${{ steps.tags.outputs.image }}@sha256:%s ' *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect "${{ steps.tags.outputs.first }}"
