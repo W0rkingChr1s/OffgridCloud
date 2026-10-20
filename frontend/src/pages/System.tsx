@@ -847,7 +847,7 @@ function UpdateCard() {
               href={info.release_url}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-ogc-teal hover:underline"
+              className="inline-block text-sm text-ogc-teal hover:underline"
             >
               {onMain ? "Änderungen ansehen ↗" : "Release-Notes ansehen ↗"}
             </a>
