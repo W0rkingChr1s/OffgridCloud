@@ -17,6 +17,7 @@ export default function Bandwidth() {
   const [meteredMode, setMeteredMode] = useState<MeteredMode>("allow");
   const [budgetMb, setBudgetMb] = useState(500);
   const [bonding, setBonding] = useState(false);
+  const [parallel, setParallel] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -29,6 +30,7 @@ export default function Bandwidth() {
     setMeteredMode(s.metered_mode);
     setBudgetMb(s.metered_budget_mb);
     setBonding(s.bonding_enabled);
+    setParallel(s.parallel_uploads);
   }
 
   function load() {
@@ -61,6 +63,7 @@ export default function Bandwidth() {
           schedule,
           metered_mode: meteredMode,
           metered_budget_mb: budgetMb,
+          parallel_uploads: parallel,
           // Only sent once net-merge is installed — the API refuses it otherwise.
           bonding_enabled: status?.bonding_available ? bonding : undefined,
         }),
@@ -141,6 +144,23 @@ export default function Bandwidth() {
             </span>
           </label>
         </div>
+
+        <label className="mt-4 block text-sm">
+          <span className="mb-1 block text-slate-400">Parallele Uploads</span>
+          <select className={field} value={parallel} onChange={(e) => setParallel(Number(e.target.value))}>
+            {[1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? "1 (nacheinander)" : `${n} gleichzeitig`}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-slate-500">
+            Mehrere Dateien gleichzeitig hochladen. Lohnt sich vor allem mit Leitungsbündelung (jeder Upload kann
+            eine andere Leitung nehmen) und bei vielen kleinen Dateien. Das Limit oben gilt für alle zusammen.
+            Auf einem Pi 3 höchstens 2.
+            {status && status.running_uploads > 0 && ` Gerade aktiv: ${status.running_uploads}.`}
+          </span>
+        </label>
 
         <div className="mt-6">
           <div className="mb-2 flex items-center justify-between">

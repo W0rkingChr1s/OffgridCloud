@@ -21,6 +21,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import BandwidthPolicy
@@ -49,7 +50,12 @@ def get_policy(db: Session) -> BandwidthPolicy:
     if policy is None:
         policy = BandwidthPolicy(id=1)
         db.add(policy)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Another worker slot created it at the same moment.
+            db.rollback()
+            return db.get(BandwidthPolicy, 1)
         db.refresh(policy)
     return policy
 

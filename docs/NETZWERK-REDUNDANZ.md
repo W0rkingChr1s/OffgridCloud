@@ -185,9 +185,10 @@ Leitungen net-merge sieht und warum andere übersprungen werden.
 
 - net-merge verteilt **Verbindungen**, keine einzelnen Pakete. Ein Upload über eine
   einzige Verbindung (WebDAV/Nextcloud, SFTP, kleine Dateien) bleibt auf einer
-  Leitung. Schneller werden vor allem **große Dateien zu S3, Azure Blob und B2**:
-  rclone schickt deren Teile über mehrere Verbindungen parallel, und die landen
-  dann auf verschiedenen Leitungen.
+  Leitung. Schneller werden **große Dateien zu S3, Azure Blob und B2** (rclone
+  schickt deren Teile über mehrere Verbindungen parallel) und **mehrere Dateien
+  gleichzeitig**: Unter **Bandbreite → Parallele Uploads** 2 bis 4 einstellen,
+  dann kann jeder Upload eine andere Leitung nehmen. Das gilt für jeden Zieltyp.
 - Es hilft nur, wenn die Leitungen **unabhängig** ins Internet gehen (WLAN + LTE).
   Kabel und WLAN am selben Router teilen sich eine Leitung, da kommt nichts dazu.
 - net-merge prüft jede Leitung auf echten Internetzugang. Ein Handy ohne Daten
@@ -210,6 +211,14 @@ Leitungen net-merge sieht und warum andere übersprungen werden.
 Welche Entscheidung gerade gilt, steht im Log (`journalctl -u offgridcloud`,
 „Leitungsbündelung: Uploads …“). Telegram `/netz` zeigt die gebündelten
 Leitungen.
+
+**Parallele Uploads** (Bandbreite, Standard 1) gehen auch ohne Bündelung. Dann
+teilen sich die Uploads die eine Leitung, was bei vielen kleinen Dateien oder einer
+schnellen Leitung trotzdem hilft. Ein gesetztes Limit (KB/s) gilt für alle
+zusammen, jeder Upload bekommt seinen Anteil. Bei „bis zum Tagesvolumen“ zählen
+laufende Uploads schon mit, damit zwei gleichzeitige Dateien das Volumen nicht
+gemeinsam überziehen. Auf einem Pi 3 höchstens 2 nehmen: jeder Upload ist ein
+eigener rclone-Prozess.
 
 **Docker:** Nicht vorgesehen. Wer es trotzdem will, startet net-merge auf dem Host
 und setzt `OGC_NETMERGE_PROXY` auf eine Adresse, die der Container erreicht.

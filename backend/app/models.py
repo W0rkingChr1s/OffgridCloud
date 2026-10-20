@@ -358,6 +358,9 @@ class BandwidthPolicy(Base):
     # Link bundling: send uploads through net-merge over every uplink at once
     # (see app/bonding.py). Off by default — it needs deploy/netmerge/install.sh.
     bonding_enabled: Mapped[bool] = mapped_column(default=False)
+    # How many uploads run at the same time (1-4). More than one mainly pays
+    # off together with bonding, or for many small files on a fast line.
+    parallel_uploads: Mapped[int] = mapped_column(default=1)
 
 
 class SystemSettings(Base):

@@ -31,6 +31,7 @@ from ..schemas import (
     BandwidthWindow,
     BondingLinkOut,
 )
+from ..transfers import inflight_count
 
 router = APIRouter(
     prefix="/api/bandwidth",
@@ -71,6 +72,8 @@ def _status(policy: BandwidthPolicy) -> BandwidthStatusOut:
         metered=metered,
         uplink=uplink,
         bonding_enabled=policy.bonding_enabled,
+        parallel_uploads=policy.parallel_uploads,
+        running_uploads=inflight_count(),
         bonding_available=bond.installed,
         bonding_running=bond.running,
         bonding_links=[
@@ -116,6 +119,8 @@ def update_bandwidth(
                 ),
             )
         policy.bonding_enabled = payload.bonding_enabled
+    if payload.parallel_uploads is not None:
+        policy.parallel_uploads = payload.parallel_uploads
     db.commit()
     db.refresh(policy)
     audit(
@@ -124,7 +129,7 @@ def update_bandwidth(
         "bandwidth.update",
         f"enabled={policy.enabled} bwlimit={policy.bwlimit_kbps} min={policy.min_bandwidth_kbps}"
         f" metered={policy.metered_mode}/{policy.metered_budget_mb}MB"
-        f" bonding={policy.bonding_enabled}",
+        f" bonding={policy.bonding_enabled} parallel={policy.parallel_uploads}",
     )
     return _status(policy)
 

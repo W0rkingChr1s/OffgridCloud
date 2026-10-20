@@ -350,6 +350,7 @@ class BandwidthPolicyUpdate(BaseModel):
     metered_mode: Literal["allow", "pause", "limit"] | None = None
     metered_budget_mb: int | None = Field(default=None, ge=1, le=10_000_000)
     bonding_enabled: bool | None = None
+    parallel_uploads: int | None = Field(default=None, ge=1, le=4)
 
 
 class BondingLinkOut(BaseModel):
@@ -377,6 +378,8 @@ class BandwidthStatusOut(BaseModel):
     bonding_available: bool = False  # net-merge installed (deploy/netmerge/install.sh)
     bonding_running: bool = False  # its SOCKS5 proxy answers
     bonding_links: list[BondingLinkOut] = []  # what net-merge sees
+    parallel_uploads: int = 1  # uploads running at the same time (1-4)
+    running_uploads: int = 0  # how many run right now
 
 
 class DiskUsageOut(BaseModel):

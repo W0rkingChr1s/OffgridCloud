@@ -110,6 +110,8 @@ export interface BandwidthStatus {
   bonding_available: boolean;
   bonding_running: boolean;
   bonding_links: BondingLink[];
+  parallel_uploads: number;
+  running_uploads: number;
 }
 
 /** A network link as net-merge sees it (link bundling). */
