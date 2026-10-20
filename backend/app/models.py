@@ -272,6 +272,10 @@ class PoolPeer(Base):
     # The peer's node_id, known when it was paired via code; empty for peers
     # added by URL + token. Marks it as "already paired" in the discovery list.
     node_id: Mapped[str] = mapped_column(String(32), default="")
+    # Rank when boxes share one uplink: 0 = not managed, 1 = high … 3 = low.
+    priority: Mapped[int] = mapped_column(default=0)
+    # Its uploads were paused by the priority rule (only the rule resumes them).
+    priority_paused: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -425,6 +429,11 @@ class SystemSettings(Base):
     node_id: Mapped[str] = mapped_column(String(32), default="")
     # Announce this box via mDNS so hubs in the LAN can find it.
     pool_announce: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Hub only: priorities between boxes sharing one uplink (app.pool_priority).
+    pool_priority_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    pool_priority_self: Mapped[int] = mapped_column(default=0)  # 0 = not managed, 1 = high … 3
+    # This box's uploads were paused by that rule (only the rule resumes them).
+    pool_priority_paused: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # --- Notifications ("Info-Service") ----------------------------------
     # Which events emit a notification on every configured channel (webhook,

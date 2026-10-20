@@ -216,14 +216,14 @@ def node_status(db: Session, control_enabled: bool = False) -> dict:
     ).all()
     media = {st.value: count for st, count in rows}
     total = sum(media.values())
-    active = (
-        db.scalar(
-            select(func.count(TransferJob.id)).where(
-                TransferJob.status == TransferStatus.RUNNING
-            )
-        )
-        or 0
+    jobs = dict(
+        db.execute(
+            select(TransferJob.status, func.count())
+            .where(TransferJob.status.in_([TransferStatus.RUNNING, TransferStatus.QUEUED]))
+            .group_by(TransferJob.status)
+        ).all()
     )
+    active = jobs.get(TransferStatus.RUNNING, 0)
     policy = get_policy(db)
     disk = disk_usage()
     return {
@@ -234,6 +234,8 @@ def node_status(db: Session, control_enabled: bool = False) -> dict:
         "media": media,
         "media_total": total,
         "active_transfers": int(active),
+        # Waiting + running: whether this box needs the line (pool priorities).
+        "pending_transfers": int(active + jobs.get(TransferStatus.QUEUED, 0)),
         "throughput_kbps": round(policy.last_kbps, 1),
         "disk_free": disk["free"],
         "disk_total": disk["total"],

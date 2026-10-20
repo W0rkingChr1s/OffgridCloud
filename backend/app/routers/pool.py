@@ -41,6 +41,9 @@ from ..schemas import (
     PoolPeerCreate,
     PoolPeerOut,
     PoolPeerUpdate,
+    PoolPriorityIn,
+    PoolPriorityNode,
+    PoolPriorityOut,
     PoolTotals,
     TransferControlIn,
     TransferControlOut,
@@ -506,6 +509,43 @@ def retry_peer_job(
     return job
 
 
+# --- Priorities on a shared uplink (hub) -----------------------------------
+
+
+@router.get("/priority", response_model=PoolPriorityOut)
+def get_priority(
+    _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> PoolPriorityOut:
+    row = get_system_settings(db)
+    own = PoolPriorityNode(peer_id=None, name=pool_core.node_name(), level=row.pool_priority_self)
+    nodes = [own]
+    for peer in db.scalars(select(PoolPeer).order_by(PoolPeer.name)):
+        nodes.append(PoolPriorityNode(peer_id=peer.id, name=peer.name, level=peer.priority))
+    return PoolPriorityOut(enabled=row.pool_priority_enabled, nodes=nodes)
+
+
+@router.put("/priority", response_model=PoolPriorityOut)
+def update_priority(
+    payload: PoolPriorityIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> PoolPriorityOut:
+    """Rank boxes that share one uplink. Takes effect on the next watch round."""
+    row = get_system_settings(db)
+    row.pool_priority_enabled = payload.enabled
+    for node in payload.nodes:
+        if node.peer_id is None:
+            row.pool_priority_self = node.level
+            continue
+        peer = db.get(PoolPeer, node.peer_id)
+        if peer is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Peer not found")
+        peer.priority = node.level
+    db.commit()
+    result = get_priority(admin, db)
+    ranks = ", ".join(f"{n.name}={n.level}" for n in result.nodes if n.level)
+    audit(db, admin, "pool.priority", f"{'an' if row.pool_priority_enabled else 'aus'}: {ranks}")
+    return result
+
+
 # --- Aggregated overview --------------------------------------------------
 
 
@@ -514,7 +554,12 @@ def overview(
     _: User = Depends(require_admin), db: Session = Depends(get_db)
 ) -> PoolOverviewOut:
     """This node plus every enabled peer, polled concurrently, with fleet totals."""
-    self_status = PoolNodeStatus(**pool_core.node_status(db))
+    settings_row = get_system_settings(db)
+    self_status = PoolNodeStatus(
+        **pool_core.node_status(db),
+        priority=settings_row.pool_priority_self,
+        priority_paused=settings_row.pool_priority_paused,
+    )
 
     peers = list(db.scalars(select(PoolPeer).order_by(PoolPeer.name)))
     enabled = [p for p in peers if p.enabled]
@@ -538,6 +583,8 @@ def overview(
         data["name"] = peer.name
         data["base_url"] = peer.base_url
         data["peer_id"] = peer.id
+        data["priority"] = peer.priority
+        data["priority_paused"] = peer.priority_paused
         peer_nodes.append(PoolNodeStatus(**data))
 
     online = [self_status, *[n for n in peer_nodes if n.reachable]]

@@ -75,6 +75,12 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
     ("system_settings", "pool_announce", "BOOLEAN NOT NULL DEFAULT 1"),
     ("pool_peers", "node_id", "VARCHAR(32) NOT NULL DEFAULT ''"),
+    # Pool priorities between boxes on a shared uplink.
+    ("system_settings", "pool_priority_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_priority_self", "INTEGER NOT NULL DEFAULT 0"),
+    ("system_settings", "pool_priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("pool_peers", "priority", "INTEGER NOT NULL DEFAULT 0"),
+    ("pool_peers", "priority_paused", "BOOLEAN NOT NULL DEFAULT 0"),
     # Operational status announcements (startup / reconnect / bandwidth gate).
     ("system_settings", "notify_on_startup", "BOOLEAN NOT NULL DEFAULT 1"),
     ("system_settings", "notify_on_reconnect", "BOOLEAN NOT NULL DEFAULT 1"),

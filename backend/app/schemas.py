@@ -734,6 +734,10 @@ class PoolNodeStatus(BaseModel):
     uploads_paused: bool = False
     failed_transfers: int = 0
     control_enabled: bool = False  # the caller's token may control transfers here
+    pending_transfers: int | None = None  # waiting + running; None from older peers
+    # Hub view only: rank on a shared uplink and whether that rule paused it.
+    priority: int = 0
+    priority_paused: bool = False
 
 
 class PoolTotals(BaseModel):
@@ -856,6 +860,22 @@ class PeerPairIn(BaseModel):
     base_url: str = Field(min_length=1, max_length=500)
     code: str = Field(min_length=1, max_length=12)
     name: str | None = Field(default=None, max_length=200)
+
+
+class PoolPriorityNode(BaseModel):
+    peer_id: int | None = None  # None = this box (the hub)
+    name: str = ""
+    level: int = Field(default=0, ge=0, le=3)  # 0 = not managed, 1 = high … 3 = low
+
+
+class PoolPriorityOut(BaseModel):
+    enabled: bool
+    nodes: list[PoolPriorityNode]
+
+
+class PoolPriorityIn(BaseModel):
+    enabled: bool
+    nodes: list[PoolPriorityNode] = []
 
 
 class TransferControlIn(BaseModel):

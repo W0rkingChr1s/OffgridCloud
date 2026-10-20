@@ -138,6 +138,44 @@ Jede Aktion steht im **Audit-Log** beider Boxen: auf dem Hub mit dem
 ausführenden Admin, auf dem Peer als `pool.remote_…` mit dem Token-Namen und dem
 Hostnamen des Hubs.
 
+## Vorrang bei gemeinsamer Leitung
+
+Teilen sich mehrere Boxen **eine** Leitung — etwa ein Starlink am Einsatzort —,
+konkurrieren ihre Uploads um dieselbe Bandbreite. Mit **Vorrang** legt man am
+Hub eine Reihenfolge fest: Web-UI → **Pool** → *Vorrang bei gemeinsamer
+Leitung*, pro Box **1 – hoch**, **2 – mittel**, **3 – niedrig** oder **nicht
+verwaltet**, dann „aktiv“ und **Speichern**.
+
+Der Hub prüft jede Minute: **Hat eine Box mit höherem Rang etwas zu senden,
+pausiert er die Boxen mit niedrigerem Rang, die ebenfalls senden wollen** —
+und setzt sie fort, sobald die Leitung wieder frei ist. Gleicher Rang teilt
+sich die Leitung. Beispiel: ELW-Lagebilder (Rang 1) vor Drohnen-Rohmaterial
+(Rang 3).
+
+**Wichtig:** Nur Boxen eintragen, die sich wirklich eine Leitung teilen. Eine
+Box mit eigenem Uplink zu pausieren, verschenkt nur Bandbreite — die bleibt auf
+„nicht verwaltet“.
+
+Regeln, damit Hub und Team nicht gegeneinander arbeiten:
+
+- Der Hub setzt **nur fort, was er selbst pausiert hat** (das merkt er sich
+  auch über einen Neustart hinweg). Eine von Hand pausierte Box bleibt
+  pausiert und gilt nicht als „sendend“.
+- Setzt jemand an einer Box eine Vorrang-Pause **von Hand fort**, lässt der Hub
+  diese Box in Ruhe, bis die höherrangige Box fertig ist („✋ … Vorrang ruht für
+  diese Box“).
+- Ausschalten oder eine Box aus der Reihenfolge nehmen gibt pausierte Boxen
+  sofort wieder frei.
+- Pausieren braucht das Recht **steuern** im Token, das der Peer diesem Hub
+  ausgestellt hat. Fehlt es, sagt die Pool-Seite das, und die Meldungen nennen
+  es einmal („⚠️ … Vorrang nicht anwendbar“). Für die Box mit dem höchsten Rang
+  ist es nicht nötig — sie wird nie pausiert.
+- Laufende Uploads werden nicht abgebrochen; die niedrigeren Boxen starten nur
+  keine neuen. Reaktionszeit: bis zu einer Minute.
+- Was der Vorrang tut, steht in den gebündelten Meldungen
+  („⏸ Drohne: Uploads pausiert – Vorrang für ELW“) und auf den Kacheln
+  („Rang 3“, „pausiert (Vorrang)“).
+
 ## Meldungen vom Hub
 
 Der Hub prüft seine aktiven Peers **jede Minute** und schickt bei Änderungen
@@ -224,6 +262,7 @@ weiterhin auch. Abschalten am Hub: **System → Benachrichtigungen → „Pool-
 | `GET /api/pool/overview` | Hub-Sicht: diese Box + alle Peers + Summen (Admin). |
 | `GET/POST/PATCH/DELETE /api/pool/peers` | Peers verwalten (Admin). |
 | `GET /api/pool/discovery` · `PUT /api/pool/discovery` | Per mDNS gefundene Boxen (mit Hinweis, ob schon Peer); eigene Ankündigung an/aus (Admin). |
+| `GET/PUT /api/pool/priority` | Vorrang an/aus und Rang pro Box (`peer_id` null = diese Box; 0 = nicht verwaltet, 1–3) (Admin). |
 | `GET/POST/DELETE /api/pool/pairing` | Kopplungscode dieser Box anzeigen/erzeugen/verwerfen (Admin). |
 | `POST /api/pool/pair` | Hub tauscht Code gegen Lese-Token (ohne Login; der Code ist der Nachweis). |
 | `POST /api/pool/peers/pair` | Hub koppelt sich mit `{base_url, code}` und legt den Peer an (Admin). |
@@ -264,7 +303,7 @@ Koordination vor dem Relay.
 
 | Baustein | Nutzen | Aufwand |
 |---|---|---|
-| **Prioritäten pro Box** | Der Hub legt eine Reihenfolge fest (z. B. „ELW-Lagebilder vor Drohnen-Rohmaterial“). Boxen mit niedriger Priorität pausieren automatisch, solange eine höhere etwas sendet. Technisch: der Hub nutzt die vorhandene Fernsteuerung im Takt der Abfrage. | mittel |
+| ☑ **Prioritäten pro Box** | Der Hub legt eine Reihenfolge fest (z. B. „ELW-Lagebilder vor Drohnen-Rohmaterial“). Boxen mit niedriger Priorität pausieren automatisch, solange eine höhere etwas sendet. Technisch: der Hub nutzt die vorhandene Fernsteuerung im Takt der Abfrage. | mittel |
 | **Bandbreite fair teilen** | Teilen sich Boxen einen Uplink, verteilt der Hub das KB/s-Limit (`bwlimit`) auf die Boxen mit wartenden Jobs. Braucht eine zusätzliche Steuer-Aktion „Limit setzen“ und eine Angabe pro Peer „hängt am selben Uplink wie …“. | mittel |
 | **Fernsteuerung im Companion** | Pool-Übersicht und die drei Aktionen in der App (steht im Companion-Plan schon als „Pool-Übersicht“). | mittel |
 

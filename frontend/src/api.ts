@@ -609,6 +609,9 @@ export interface PoolNodeStatus {
   uploads_paused: boolean;
   failed_transfers: number;
   control_enabled: boolean;
+  pending_transfers: number | null;
+  priority: number; // 0 = not managed, 1 = high … 3 = low (hub view)
+  priority_paused: boolean;
 }
 
 export interface PoolTotals {
@@ -668,6 +671,17 @@ export interface PoolDiscovery {
   error: string;
   announce: boolean;
   boxes: DiscoveredBox[];
+}
+
+export interface PoolPriorityNode {
+  peer_id: number | null; // null = this box
+  name: string;
+  level: number;
+}
+
+export interface PoolPriority {
+  enabled: boolean;
+  nodes: PoolPriorityNode[];
 }
 
 export interface PairingCode {

@@ -15,6 +15,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Job-Liste eines Peers:** „Jobs ansehen“ auf der Kachel zeigt die Transfers der Box mit Datei, Ziel und **Fehlertext**, gefiltert nach Fehlgeschlagen/Wartend/Läuft/Alle. Mit Recht „steuern“ lässt sich jeder Job einzeln neu anstoßen. Für die eigene Box gibt es dieselbe Liste.
 - Peers mit älterer Version zeigen keine Buttons bzw. melden „Update nötig“. Anleitung: [docs/MULTI-SERVER-POOL.md](docs/MULTI-SERVER-POOL.md#fernsteuerung-von-transfers).
 
+### 🥇 Pool: Vorrang bei gemeinsamer Leitung
+
+- **Reihenfolge für Boxen an einer Leitung:** Unter **Pool → Vorrang bei gemeinsamer Leitung** bekommt jede Box Rang 1 (hoch) bis 3 (niedrig) oder bleibt „nicht verwaltet“. Solange eine höherrangige Box senden will, pausiert der Hub die niedrigeren und setzt sie danach fort, z. B. ELW-Lagebilder vor Drohnen-Rohmaterial.
+- **Nur für eine gemeinsame Leitung gedacht:** Boxen mit eigenem Uplink nicht eintragen, sonst verschenken sie Bandbreite.
+- **Kein Gegeneinander:** Der Hub setzt nur fort, was er selbst pausiert hat, auch über einen Neustart hinweg. Von Hand pausierte Boxen bleiben pausiert. Setzt jemand eine Vorrang-Pause von Hand fort, lässt der Hub die Box in Ruhe, bis der Vorrang vorbei ist. Ausschalten gibt alles sofort frei.
+- Braucht das Recht „steuern“ im Token des Peers (die Seite warnt, wo es fehlt). Reaktionszeit bis zu einer Minute, laufende Uploads werden nicht abgebrochen. Aktionen erscheinen in den Pool-Meldungen und auf den Kacheln („Rang 3“, „pausiert (Vorrang)“).
+
 ### 🛰️ Pool: gebündelte Meldungen vom Hub
 
 - **Eine Nachricht statt vieler:** Der Hub prüft seine Peers jede Minute und schickt Änderungen gesammelt über Telegram, E-Mail oder Webhook: Box nicht erreichbar (erst nach 2 Fehlversuchen) bzw. wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers.

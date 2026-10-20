@@ -5,6 +5,7 @@ import {
   type DiscoveredBox,
   type PairingCode,
   type PoolDiscovery,
+  type PoolPriority,
   type PoolNodeStatus,
   type PoolOverview,
   type PoolAccessToken,
@@ -76,9 +77,17 @@ function NodeCard({
                 diese Box
               </span>
             )}
+            {node.priority > 0 && (
+              <span
+                title="Rang bei gemeinsamer Leitung"
+                className="rounded-sm bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300"
+              >
+                Rang {node.priority}
+              </span>
+            )}
             {node.reachable && node.uploads_paused && (
               <span className="rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-300">
-                Uploads pausiert
+                {node.priority_paused ? "pausiert (Vorrang)" : "Uploads pausiert"}
               </span>
             )}
           </div>
@@ -305,6 +314,124 @@ function NodeJobs({
       {jobs !== null && jobs.length >= 100 && (
         <p className="mt-2 text-xs text-slate-500">Es werden nur die neuesten Jobs angezeigt.</p>
       )}
+    </div>
+  );
+}
+
+const LEVELS = [
+  { value: 0, label: "nicht verwaltet" },
+  { value: 1, label: "1 – hoch" },
+  { value: 2, label: "2 – mittel" },
+  { value: 3, label: "3 – niedrig" },
+];
+
+/** Ranks for boxes on ONE shared uplink; the hub pauses lower ranks while higher ones send. */
+function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; onSaved: () => void }) {
+  const [prio, setPrio] = useState<PoolPriority | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const toast = useToast();
+
+  const load = useCallback(() => {
+    api<PoolPriority>("/api/pool/priority").then((p) => {
+      setPrio(p);
+      setDirty(false);
+    });
+  }, []);
+  useEffect(load, [load]);
+
+  if (!prio || prio.nodes.length < 2) return null; // needs at least the hub + one peer
+
+  function update(patch: Partial<PoolPriority>) {
+    setPrio((p) => (p ? { ...p, ...patch } : p));
+    setDirty(true);
+  }
+
+  async function save() {
+    try {
+      setPrio(await api<PoolPriority>("/api/pool/priority", { method: "PUT", body: JSON.stringify(prio) }));
+      setDirty(false);
+      toast.success("Vorrang", "Gespeichert – wirkt ab der nächsten Minute.");
+      onSaved();
+    } catch (e) {
+      toast.error("Vorrang", e instanceof ApiError ? e.message : "Fehler");
+    }
+  }
+
+  const ranked = prio.nodes.filter((n) => n.level > 0);
+  // Only boxes below the top rank ever get paused — they need the "control" right.
+  const top = Math.min(...ranked.map((n) => n.level));
+  const readOnly = ranked.filter(
+    (n) =>
+      n.level > top &&
+      n.peer_id !== null &&
+      overview?.peers.find((p) => p.peer_id === n.peer_id && p.reachable && !p.control_enabled),
+  );
+
+  return (
+    <div className="mb-8 rounded-2xl bg-slate-800/40 p-4 ring-1 ring-white/10">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Vorrang bei gemeinsamer Leitung
+        </h3>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={prio.enabled}
+            onChange={(e) => update({ enabled: e.target.checked })}
+          />
+          aktiv
+        </label>
+      </div>
+      <p className="mb-3 text-sm text-slate-400">
+        Nur für Boxen, die sich <strong>eine</strong> Leitung teilen (z. B. ein Starlink am
+        Einsatzort). Solange eine Box mit höherem Rang etwas sendet, pausiert der Hub Boxen mit
+        niedrigerem Rang und setzt sie danach fort. Boxen mit eigenem Uplink auf „nicht verwaltet“
+        lassen — sonst verschenken sie Bandbreite.
+      </p>
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {prio.nodes.map((n, i) => (
+          <label
+            key={n.peer_id ?? "self"}
+            className="flex items-center justify-between gap-2 rounded-xl bg-slate-800/60 px-3 py-2 text-sm ring-1 ring-white/5"
+          >
+            <span className="truncate text-white">
+              {n.name}
+              {n.peer_id === null && <span className="ml-1 text-xs text-slate-500">(diese Box)</span>}
+            </span>
+            <select
+              className="rounded-lg border border-white/10 bg-slate-800/60 px-2 py-1 text-xs text-white"
+              value={n.level}
+              onChange={(e) => {
+                const nodes = prio.nodes.slice();
+                nodes[i] = { ...n, level: Number(e.target.value) };
+                update({ nodes });
+              }}
+            >
+              {LEVELS.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+      {prio.enabled && ranked.length === 1 && (
+        <p className="mb-2 text-xs text-amber-300">Mindestens zwei Boxen brauchen einen Rang.</p>
+      )}
+      {prio.enabled && readOnly.length > 0 && (
+        <p className="mb-2 text-xs text-amber-300">
+          Wirkt nicht bei {readOnly.map((n) => n.name).join(", ")}: deren Token für diesen Hub darf
+          nur lesen. Dort unter „Zugriff für Hubs“ auf „Lesen + steuern“ stellen.
+        </p>
+      )}
+      <button
+        onClick={save}
+        disabled={!dirty}
+        className="rounded-lg border border-white/10 px-4 py-1.5 text-sm hover:bg-white/5 disabled:opacity-40"
+      >
+        Speichern
+      </button>
     </div>
   );
 }
@@ -790,6 +917,8 @@ export default function Pool() {
           onChanged={loadOverview}
         />
       )}
+
+      <PriorityPanel key={peers.length} overview={overview} onSaved={loadOverview} />
 
       <NearbyBoxes
         onPaired={() => {

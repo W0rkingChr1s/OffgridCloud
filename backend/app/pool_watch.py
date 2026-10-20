@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import pool as pool_core
+from . import pool_priority
 from .admin_ops import LOW_SPACE_FRACTION, LOW_SPACE_MIN_BYTES
 from .models import PoolPeer
 
@@ -128,20 +129,30 @@ _states: dict[int, PeerState] = {}
 
 
 def check_once(db: Session) -> list[str]:
-    """Poll the enabled peers, update state, send one bundled alert if needed."""
+    """Poll the enabled peers, update state, apply priorities, send one bundled alert."""
     peers = list(db.scalars(select(PoolPeer).where(PoolPeer.enabled.is_(True))))
     polled = pool_core.poll_peers(peers) if peers else {}
-    lines: list[str] = []
+    lines: list[tuple[str, str]] = []  # (box key, alert line)
     with _lock:
         for gone in set(_states) - {p.id for p in peers}:
             del _states[gone]  # removed or paused peers start fresh later
         for peer in sorted(peers, key=lambda p: p.name.lower()):
             status = polled.get(peer.id, {"reachable": False, "error": "keine Antwort"})
             _states[peer.id], peer_lines = evaluate(peer.name, _states.get(peer.id), status)
-            lines += peer_lines
-    if lines:
-        _send(db, lines)
-    return lines
+            lines += [(f"peer:{peer.id}", line) for line in peer_lines]
+        # Priorities between boxes on a shared line act on what we just polled.
+        for key, line, paused in pool_priority.apply_round(db, peers, polled):
+            if line.startswith("✋"):
+                # Says more than the plain "Uploads fortgesetzt" for the same box.
+                lines = [(k, x) for k, x in lines if not (k == key and x.startswith("▶️"))]
+            lines.append((key, line))
+            state = _states.get(int(key.split(":")[1])) if key.startswith("peer:") else None
+            if state is not None and paused is not None:
+                state.paused = paused  # our own doing: no extra "Uploads pausiert" next round
+    texts = [line for _, line in lines]
+    if texts:
+        _send(db, texts)
+    return texts
 
 
 def _send(db: Session, lines: list[str]) -> None:
