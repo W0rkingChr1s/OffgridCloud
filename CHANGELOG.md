@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🌗 Neu: Hell-Modus
+
+- Im Menü unter **Darstellung**: Dunkel (Standard), Hell oder System (folgt der Einstellung des Geräts und wechselt live mit). Die Wahl wird pro Browser gespeichert und vor dem ersten Rendern angewendet, deshalb blitzt nichts dunkel auf.
+- Umgesetzt über die Farbvariablen von Tailwind 4 (`html.light` in `index.css`), ohne `dark:`-Varianten im Markup. Ältere Browser ohne `color-mix()` (Chrome < 111, Safari < 16.2) bekommen die Option nicht angezeigt, dort bleibt alles dunkel.
+- Behoben: Im Dunkel-Modus schimmerte der Hintergrund rechts unten hell, wenn das Gerät auf hell eingestellt war (`color-scheme` ist jetzt fest `dark`).
+
 ### 🌐 Box unter `offgridcloud.local` und per IP erreichbar
 
 - Neben dem eindeutigen `https://offgridcloud-XXXXX.local` hört die Box jetzt auch auf den festen Alias **`https://offgridcloud.local`**. Den veröffentlicht der neue Dienst `offgridcloud-mdns-alias` per avahi, je Netzwerk-Schnittstelle mit der passenden IP (LAN und Rückfall-WLAN). Bei mehreren Boxen im selben Netz bekommt nur die erste den Alias.
