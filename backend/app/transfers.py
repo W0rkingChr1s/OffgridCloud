@@ -19,8 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from . import bandwidth, network
-from . import bandwidth, buffers
+from . import bandwidth, buffers, network
 from .config import get_settings
 from .crypto import decrypt
 from .db import SessionLocal
