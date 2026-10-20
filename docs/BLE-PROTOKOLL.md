@@ -221,6 +221,11 @@ Beide Handshake-Nachrichten laufen als Frames mit `HANDSHAKE`-Flag und
 authentisiert ist, DARF die App sie nur als Hinweis anzeigen und KEINE
 gespeicherten Daten deswegen löschen.
 
+**Unterscheidung:** Eine gültige Nachricht 2 ist mindestens **48 Byte** lang
+(ephemerer Schlüssel 32 + Tag 16). Eine Handshake-Antwort mit weniger als 48
+Byte ist eine Ablehnung; die Box MUSS Ablehnungen deshalb kürzer als 48 Byte
+halten (alle Codes oben erfüllen das).
+
 | Code | Bedeutung |
 |---|---|
 | `unknown_device` | statischer Schlüssel der App ist nicht (mehr) gekoppelt |
@@ -230,8 +235,17 @@ gespeicherten Daten deswegen löschen.
 | `busy` | Box nimmt gerade keine Verbindungen an |
 | `ble_disabled` | BLE wurde im Web-Portal abgeschaltet |
 
-Ein Fehler bei `read_message` (falscher Schlüssel, falsche psk, manipulierte
-Daten) führt ohne Antwort zum Trennen.
+Ein Fehler bei `read_message` (falscher Schlüssel, manipulierte Daten) führt
+ohne Antwort zum Trennen.
+
+**Muster erkennen (Box):** Nachricht 1 sagt nicht im Klartext, ob sie zu `IK`
+oder `IKpsk2` gehört — die Protokollnamen fließen in den Hash ein. Die Box
+versucht deshalb zuerst `IK` (Sitzung) und, wenn das Entschlüsseln scheitert,
+`IKpsk2` (Kopplung). Bei `IKpsk2` hängt Nachricht 1 **nicht** von der psk ab:
+Die Box liest sie mit einer beliebigen Platzhalter-psk, entnimmt dem Payload
+die `pid` und setzt erst danach die richtige psk für Nachricht 2. Ein falsches
+Kopplungsgeheimnis bemerkt deshalb erst die App beim Lesen von Nachricht 2; die
+Box erfährt es nur daran, dass die Bestätigung (§6.3) ausbleibt.
 
 ### 5.4 Transportphase
 
@@ -287,8 +301,9 @@ Testvektor: `pairing_code`.
 
 1. App verbindet sich, liest `info`, prüft Version und ggf. `pk`.
 2. Handshake `IKpsk2` mit `mode: "pair"`, `pid`, `dev`.
-3. Die Box sucht den offenen Code zu `pid`, leitet die psk ab und antwortet mit
-   Nachricht 2. Die App liest sie nur mit der richtigen psk erfolgreich.
+3. Die Box liest Nachricht 1 (ohne psk möglich, §5.3), sucht den offenen Code
+   zu `pid`, leitet die psk ab und antwortet mit Nachricht 2. Die App liest sie
+   nur mit der richtigen psk erfolgreich.
 4. **Schlüsselbestätigung:** Die erste Transportnachricht der App MUSS
    `POST /ble/pair/confirm` sein (§7.4). Erst wenn die Box diese Nachricht
    entschlüsseln kann, ist die psk auf beiden Seiten bestätigt. Dann trägt die Box
