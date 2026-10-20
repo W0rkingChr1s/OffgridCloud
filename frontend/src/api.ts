@@ -658,6 +658,33 @@ export interface SetupResult {
   finish_started: boolean;
 }
 
+export interface TelegramNames {
+  box_name: string;
+  label: string;
+  display_names: string[];
+  usernames: string[];
+}
+
+export interface TelegramTokenCheck {
+  ok: boolean;
+  message: string;
+  username: string;
+  name: string;
+}
+
+export interface TelegramChat {
+  id: string;
+  type: "private" | "group" | "supergroup" | "channel" | string;
+  title: string;
+  seen_at: number;
+}
+
+export interface TelegramChats {
+  configured: boolean;
+  conflict: boolean;
+  chats: TelegramChat[];
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
