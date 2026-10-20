@@ -10,6 +10,7 @@ import {
 } from "../api";
 import Layout from "../components/Layout";
 import MediaBrowser from "../components/MediaBrowser";
+import MoreMenu, { type MoreMenuItem } from "../components/MoreMenu";
 import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
@@ -160,21 +161,109 @@ export default function Storage() {
     }
   }
 
+  async function markCache(p: StoragePartition) {
+    try {
+      await api("/api/storage/caches", { method: "POST", body: JSON.stringify({ device: p.path }) });
+      toast.success("Cache eingerichtet", `${partTitle(p)} nimmt jetzt Kartensicherungen auf.`);
+    } catch (e) {
+      report(e);
+    } finally {
+      loadCaches();
+      load();
+    }
+  }
+  async function unmarkCache(c: StorageCache) {
+    if (!confirm(`„${c.label}“ nicht mehr als Cache nutzen? Die Sicherungen darauf bleiben erhalten.`)) return;
+    try {
+      await api(`/api/storage/caches/${encodeURIComponent(c.uuid)}`, { method: "DELETE" });
+    } catch (e) {
+      report(e);
+    } finally {
+      loadCaches();
+      load();
+    }
+  }
+
   const manage = overview?.manage_enabled ?? false;
   const buf = overview?.buffer;
+  const disks = overview?.disks ?? [];
+  const media = disks.filter((d) => !d.protected);
+  const systemDisks = disks.filter((d) => d.protected);
+  const bufferDisk = disks.find((d) => d.buffer) ?? disks.find((d) => d.system);
+
+  function diskMenu(d: StorageDisk): MoreMenuItem[] {
+    const isCache = d.partitions.some((p) => p.cache);
+    return [
+      {
+        label: "Komplett formatieren …",
+        danger: true,
+        disabled: !manage || busy !== null || d.read_only || isCache,
+        title: isCache ? "Als Cache markiert — erst die Markierung entfernen" : undefined,
+        onClick: () => setFormatTarget({ device: d.path, name: d.name, whole: true }),
+      },
+    ];
+  }
+
+  function partMenu(d: StorageDisk, p: StoragePartition): MoreMenuItem[] {
+    const items: MoreMenuItem[] = [];
+    const cache = caches.find((c) => c.device === p.path);
+    if (p.mountpoint) {
+      items.push({
+        label: "Aushängen",
+        disabled: !manage || busy !== null || p.busy,
+        onClick: () => act("/api/storage/unmount", p.path, `${partTitle(p)} ausgehängt.`),
+      });
+      if (!p.cache && !p.read_only) {
+        items.push({ label: "Als Cache nutzen", disabled: busy !== null, onClick: () => markCache(p) });
+      }
+    }
+    if (p.cache && cache) items.push({ label: "Nicht mehr als Cache nutzen", onClick: () => unmarkCache(cache) });
+    if (p.path !== d.path && !p.cache) {
+      items.push({
+        label: "Partition formatieren …",
+        danger: true,
+        disabled: !manage || busy !== null || p.busy || p.read_only,
+        onClick: () => setFormatTarget({ device: p.path, name: p.name, whole: false }),
+      });
+    }
+    return items;
+  }
+
+  function partButtons(d: StorageDisk, p: StoragePartition) {
+    if (!p.mountpoint) {
+      return (
+        <button
+          className={btnPrimary}
+          disabled={!manage || busy !== null || !p.fstype}
+          onClick={() => act("/api/storage/mount", p.path, `${partTitle(p)} eingehängt.`)}
+        >
+          {busy === p.path ? "…" : "Einhängen"}
+        </button>
+      );
+    }
+    const isOpen = browsing?.device === p.path && !browsing.basePath;
+    return (
+      <>
+        <button
+          className={btnPrimary}
+          onClick={() => (isOpen ? setBrowsing(null) : open(p.path, `${partTitle(p)} · ${diskTitle(d)}`))}
+        >
+          {isOpen ? "Schließen" : "Fotos & Dateien"}
+        </button>
+        {!p.cache && cacheReady && (
+          <button className={btn} disabled={p.busy} onClick={() => setBackupFrom(p)}>
+            Auf Cache sichern
+          </button>
+        )}
+      </>
+    );
+  }
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">Speicher</h2>
-          <p className="text-sm text-slate-400">
-            Angeschlossene Medien verwalten und Dateien davon für den Cloud-Upload übernehmen.
-          </p>
-        </div>
-        <button onClick={load} className={btn}>
-          Aktualisieren
-        </button>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold">Speicher</h2>
+        <p className="text-sm text-slate-400">Karten und Laufwerke einstecken, Fotos auswählen, hochladen.</p>
       </div>
 
       {error && (
@@ -196,19 +285,6 @@ export default function Storage() {
             richtet ihn <code className="text-amber-200">install.sh</code> (bzw. ein Update) automatisch ein.
             Anzeigen, Durchsuchen und Importieren von bereits eingehängten Medien funktioniert trotzdem.
           </p>
-        </div>
-      )}
-
-      {buf && (
-        <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-          <div className="flex items-baseline justify-between">
-            <div className="text-sm font-medium text-slate-400">Puffer (Ziel für Importe)</div>
-            <div className="text-sm text-slate-300">
-              <span className="font-semibold text-white">{formatBytes(buf.free)}</span> frei von{" "}
-              {formatBytes(buf.total)}
-            </div>
-          </div>
-          <UsageBar used={buf.used} total={buf.total} />
         </div>
       )}
 
@@ -237,43 +313,50 @@ export default function Storage() {
         </div>
       )}
 
-      {caches.length > 0 && (
-        <CachePanel caches={caches} onOpen={open} onChange={() => { loadCaches(); load(); }} onError={report} toast={toast} />
-      )}
-
-      {overview && overview.disks.length === 0 && !overview.error && (
-        <div className="rounded-2xl bg-slate-800/60 p-8 text-center text-slate-400 ring-1 ring-white/10">
-          Keine Laufwerke gefunden. USB-Stick oder SD-Karte anschließen — die Liste aktualisiert sich selbst.
+      {overview && media.length === 0 && !overview.error && (
+        <div className="mb-6 rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-400">
+          Keine Karte und kein Laufwerk angeschlossen. Einstecken genügt — die Liste aktualisiert sich selbst.
         </div>
       )}
 
-      <div className="grid gap-4">
-        {overview?.disks.map((d) => (
-          <div key={d.path} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+      <div className="mb-6 grid gap-4">
+        {media.map((d) => {
+          // The usual case — a card or stick with one partition — renders as one flat row
+          // instead of a card inside a card.
+          const single = d.partitions.length === 1 ? d.partitions[0] : null;
+          return (
+            <div key={d.path} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-[14rem] flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-lg font-semibold text-white" title={d.path}>
+                      {single?.label || diskTitle(d)}
+                    </span>
+                    {single?.cache && <Badge tone="amber">Cache</Badge>}
+                    {single?.busy && <Badge tone="teal">in Arbeit</Badge>}
+                    {d.read_only && <Badge tone="slate">schreibgeschützt</Badge>}
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    {single?.label && `${diskTitle(d)} · `}
+                    {single?.mountpoint && single.total > 0
+                      ? `${formatBytes(single.free)} frei von ${formatBytes(single.total)}`
+                      : formatBytes(d.size)}
+                    {d.transport && ` · ${TRANSPORT_LABEL[d.transport] ?? d.transport.toUpperCase()}`}
+                    {single && !single.mountpoint && " · nicht eingehängt"}
+                  </div>
+                  {single?.mountpoint && single.total > 0 && <UsageBar used={single.used} total={single.total} />}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate text-lg font-semibold text-white">{diskTitle(d)}</span>
-                  {d.system && <Badge tone="red">System</Badge>}
-                  {d.buffer && <Badge tone="amber">Puffer</Badge>}
-                  {d.removable && !d.protected && <Badge tone="teal">Wechselmedium</Badge>}
-                  {d.read_only && <Badge tone="slate">schreibgeschützt</Badge>}
-                </div>
-                <div className="mt-0.5 text-xs text-slate-500">
-                  {d.path} · {formatBytes(d.size)}
-                  {d.transport && ` · ${TRANSPORT_LABEL[d.transport] ?? d.transport.toUpperCase()}`}
-                </div>
-              </div>
-              {!d.protected && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className={btn}
-                    disabled={!manage || busy !== null || d.read_only || d.partitions.some((p) => p.cache)}
-                    title={d.partitions.some((p) => p.cache) ? "Als Cache markiert — erst die Markierung entfernen" : undefined}
-                    onClick={() => setFormatTarget({ device: d.path, name: d.name, whole: true })}
-                  >
-                    Komplett formatieren
-                  </button>
+                  {single && partButtons(d, single)}
+                  {d.partitions.length === 0 && (
+                    <button
+                      className={btnPrimary}
+                      disabled={!manage || busy !== null || d.read_only}
+                      onClick={() => setFormatTarget({ device: d.path, name: d.name, whole: true })}
+                    >
+                      Formatieren
+                    </button>
+                  )}
                   <button
                     className={btn}
                     disabled={!manage || busy !== null || d.partitions.some((p) => p.busy)}
@@ -281,129 +364,107 @@ export default function Storage() {
                   >
                     {busy === d.path ? "…" : "Auswerfen"}
                   </button>
+                  {d.partitions.length > 0 && (
+                    <MoreMenu items={[...(single ? partMenu(d, single) : []), ...diskMenu(d)]} />
+                  )}
+                </div>
+              </div>
+
+              {d.partitions.length === 0 && (
+                <p className="mt-2 text-sm text-slate-400">Kein Dateisystem erkannt — zum Nutzen formatieren.</p>
+              )}
+
+              {!single && d.partitions.length > 0 && (
+                <div className="mt-4 divide-y divide-white/5">
+                  {d.partitions.map((p) => (
+                    <div key={p.path} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="min-w-[14rem] flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-white" title={p.path}>
+                            {partTitle(p)}
+                          </span>
+                          {p.cache && <Badge tone="amber">Cache</Badge>}
+                          {p.busy && <Badge tone="teal">in Arbeit</Badge>}
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {p.mountpoint
+                            ? p.total > 0
+                              ? `${formatBytes(p.free)} frei von ${formatBytes(p.total)}`
+                              : formatBytes(p.size)
+                            : `${formatBytes(p.size)} · ${p.fstype ? "nicht eingehängt" : "kein Dateisystem"}`}
+                        </div>
+                        {p.mountpoint && p.total > 0 && <UsageBar used={p.used} total={p.total} />}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {partButtons(d, p)}
+                        <MoreMenu items={partMenu(d, p)} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
+          );
+        })}
+      </div>
 
-            {d.protected && (
-              <p className="mt-3 text-xs text-slate-500">
-                {d.system
-                  ? "Enthält das Betriebssystem — hier nicht verwaltbar."
-                  : "Enthält den OffgridCloud-Puffer — hier nicht verwaltbar."}
-              </p>
-            )}
+      {caches.length > 0 && (
+        <CachePanel
+          caches={caches}
+          onOpen={open}
+          onUnmark={unmarkCache}
+          onChange={() => {
+            loadCaches();
+            load();
+          }}
+          onError={report}
+          toast={toast}
+        />
+      )}
 
-            {d.partitions.length === 0 && !d.protected && (
-              <p className="mt-3 text-sm text-slate-400">
-                Kein Dateisystem erkannt. Mit „Komplett formatieren“ nutzbar machen.
-              </p>
-            )}
-
-            <div className="mt-4 grid gap-2">
-              {d.partitions.map((p) => (
-                <div
-                  key={p.path}
-                  className={`rounded-xl bg-slate-900/50 px-4 py-3 ring-1 ${
-                    browsing?.device === p.path ? "ring-ogc-teal/50" : "ring-white/5"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-white">{partTitle(p)}</span>
-                        <span className="text-xs text-slate-500">
-                          {p.path} · {p.fstype || "kein Dateisystem"} · {formatBytes(p.size)}
-                        </span>
-                        {p.cache && <Badge tone="amber">Cache</Badge>}
-                        {p.busy && <Badge tone="teal">in Arbeit</Badge>}
-                      </div>
-                      {p.mountpoint ? (
-                        <div className="mt-1 text-xs text-slate-400">
-                          {p.total > 0 && (
-                            <>
-                              {formatBytes(p.free)} frei · {formatBytes(p.used)} belegt ·{" "}
-                            </>
-                          )}
-                          <code className="text-slate-500">{p.mountpoint}</code>
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-xs text-slate-500">nicht eingehängt</div>
-                      )}
-                      {p.mountpoint && p.total > 0 && <UsageBar used={p.used} total={p.total} />}
-                    </div>
-                    {!p.protected && (
-                      <div className="flex flex-wrap gap-2">
-                        {p.mountpoint ? (
-                          <>
-                            <button
-                              className={btnPrimary}
-                              onClick={() =>
-                                browsing?.device === p.path && !browsing.basePath
-                                  ? setBrowsing(null)
-                                  : open(p.path, `${partTitle(p)} · ${diskTitle(d)}`)
-                              }
-                            >
-                              {browsing?.device === p.path && !browsing.basePath ? "Schließen" : "Fotos & Dateien"}
-                            </button>
-                            {!p.cache && cacheReady && (
-                              <button className={btn} disabled={p.busy} onClick={() => setBackupFrom(p)}>
-                                Auf Cache sichern
-                              </button>
-                            )}
-                            {!p.cache && !p.read_only && (
-                              <button
-                                className={btn}
-                                disabled={busy !== null}
-                                title="Dieses Laufwerk als Zwischenspeicher für Speicherkarten nutzen"
-                                onClick={async () => {
-                                  try {
-                                    await api("/api/storage/caches", { method: "POST", body: JSON.stringify({ device: p.path }) });
-                                    toast.success("Cache eingerichtet", `${partTitle(p)} nimmt jetzt Kartensicherungen auf.`);
-                                    loadCaches();
-                                    load();
-                                  } catch (e) {
-                                    report(e);
-                                  }
-                                }}
-                              >
-                                Als Cache nutzen
-                              </button>
-                            )}
-                            <button
-                              className={btn}
-                              disabled={!manage || busy !== null || p.busy}
-                              onClick={() => act("/api/storage/unmount", p.path, `${partTitle(p)} ausgehängt.`)}
-                            >
-                              {busy === p.path ? "…" : "Aushängen"}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className={btnPrimary}
-                            disabled={!manage || busy !== null || !p.fstype}
-                            onClick={() => act("/api/storage/mount", p.path, `${partTitle(p)} eingehängt.`)}
-                          >
-                            {busy === p.path ? "…" : "Einhängen"}
-                          </button>
-                        )}
-                        {p.path !== d.path && !p.cache && (
-                          <button
-                            className={btn}
-                            disabled={!manage || busy !== null || p.busy || p.read_only}
-                            onClick={() => setFormatTarget({ device: p.path, name: p.name, whole: false })}
-                          >
-                            Formatieren
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+      {buf && (
+        <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-sm font-medium text-slate-400">Puffer auf der Box</div>
+            <div className="text-sm text-slate-300">
+              <span className="font-semibold text-white">{formatBytes(buf.free)}</span> frei von{" "}
+              {formatBytes(buf.total)}
             </div>
           </div>
-        ))}
-      </div>
+          <UsageBar used={buf.used} total={buf.total} />
+          {systemDisks.length > 0 && (
+            <details className="mt-3 text-xs text-slate-500">
+              <summary className="cursor-pointer select-none hover:text-slate-300">
+                {bufferDisk
+                  ? `${diskTitle(bufferDisk)} · ${TRANSPORT_LABEL[bufferDisk.transport] ?? bufferDisk.transport} — Details`
+                  : "Systemlaufwerke"}
+              </summary>
+              <div className="mt-2 grid gap-1">
+                {systemDisks.map((d) => (
+                  <div key={d.path}>
+                    <div className="text-slate-400">
+                      {diskTitle(d)} · {d.path} · {formatBytes(d.size)}
+                      {d.system ? " · Betriebssystem" : " · OffgridCloud-Puffer"} — hier nicht verwaltbar
+                    </div>
+                    {d.partitions.map((p) => (
+                      <div key={p.path} className="pl-3">
+                        {partTitle(p)} · {p.path} · {p.fstype}
+                        {p.total > 0 && ` · ${formatBytes(p.free)} frei von ${formatBytes(p.total)}`}
+                        {p.mountpoint && (
+                          <>
+                            {" · "}
+                            <code>{p.mountpoint}</code>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       {backupFrom && (
         <BackupModal
@@ -639,12 +700,14 @@ const snapFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyl
 function CachePanel({
   caches,
   onOpen,
+  onUnmark,
   onChange,
   onError,
   toast,
 }: {
   caches: StorageCache[];
   onOpen: (device: string, title: string, basePath: string) => void;
+  onUnmark: (c: StorageCache) => void;
   onChange: () => void;
   onError: (e: unknown) => void;
   toast: ReturnType<typeof useToast>;
@@ -660,61 +723,48 @@ function CachePanel({
       onChange();
     }
   }
-  async function unmark(c: StorageCache) {
-    if (!confirm(`„${c.label}“ nicht mehr als Cache nutzen? Die Sicherungen darauf bleiben erhalten.`)) return;
-    try {
-      await api(`/api/storage/caches/${encodeURIComponent(c.uuid)}`, { method: "DELETE" });
-    } catch (e) {
-      onError(e);
-    } finally {
-      onChange();
-    }
-  }
 
   return (
-    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-amber-500/20">
-      <div className="mb-1 text-sm font-medium text-slate-400">Cache — Kartensicherungen</div>
-      <p className="mb-4 text-xs text-slate-500">
-        Karte auf den Cache sichern, auswerfen, weiterfotografieren. Ausgewählt und hochgeladen wird später aus der Sicherung.
-      </p>
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <div className="mb-3 text-sm font-medium text-slate-400">Kartensicherungen</div>
       <div className="grid gap-4">
         {caches.map((c) => (
           <div key={c.uuid}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-white">{c.label}</span>
-                {c.device ? (
-                  <span className="text-xs text-slate-500">
-                    {c.device}
-                    {c.mountpoint ? ` · ${formatBytes(c.free)} frei von ${formatBytes(c.total)}` : ""}
-                  </span>
-                ) : null}
-                {c.error && <Badge tone="amber">{c.error}</Badge>}
+            {/* Free space and "stop using as cache" live on the drive's own card; only a
+                drive that is gone needs them here. */}
+            {(caches.length > 1 || !c.device || c.error) && (
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium text-white">{c.label}</span>
+                  {c.error && <Badge tone="amber">{c.error}</Badge>}
+                </div>
+                {!c.device && (
+                  <button className={btn} onClick={() => onUnmark(c)}>
+                    Als Cache entfernen
+                  </button>
+                )}
               </div>
-              <button className={btn} onClick={() => unmark(c)}>
-                Nicht mehr als Cache nutzen
-              </button>
-            </div>
-            {c.mountpoint && c.total > 0 && <UsageBar used={c.total - c.free} total={c.total} />}
-            {c.snapshots.length === 0 && c.mountpoint && (
-              <p className="mt-3 text-sm text-slate-500">Noch keine Sicherungen. Bei einer Karte auf „Auf Cache sichern“ tippen.</p>
             )}
-            <div className="mt-3 grid gap-2">
+            {c.snapshots.length === 0 && c.mountpoint && (
+              <p className="text-sm text-slate-500">
+                Noch keine Sicherungen. Mit „Auf Cache sichern“ an einer Karte wird sie hierher kopiert — danach kann
+                sie sofort zurück in die Kamera, ausgewählt und hochgeladen wird später.
+              </p>
+            )}
+            <div className="divide-y divide-white/5">
               {c.snapshots.map((s) => (
-                <div key={s.name} className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-900/50 px-4 py-2.5 ring-1 ring-white/5">
-                  <div className="min-w-0 flex-1">
+                <div key={s.name} className="flex flex-wrap items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-[14rem] flex-1">
                     <div className="truncate font-medium text-white">{s.name}</div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-slate-500">
                       {s.files} Dateien · {formatBytes(s.size)}
-                      {s.modified && ` · zuletzt ${snapFmt.format(new Date(s.modified))}`}
+                      {s.modified && ` · ${snapFmt.format(new Date(s.modified))}`}
                     </div>
                   </div>
                   <button className={btnPrimary} disabled={!c.device} onClick={() => c.device && onOpen(c.device, `Cache · ${s.name}`, s.path)}>
                     Öffnen
                   </button>
-                  <button className={btn} onClick={() => removeSnapshot(c, s.name)}>
-                    Löschen
-                  </button>
+                  <MoreMenu items={[{ label: "Sicherung löschen …", danger: true, onClick: () => removeSnapshot(c, s.name) }]} />
                 </div>
               ))}
             </div>

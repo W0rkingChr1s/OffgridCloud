@@ -232,8 +232,12 @@ Unter **System**:
 ### 5.1 Angeschlossene Speichermedien (Admin → Speicher)
 
 Die Seite **Speicher** listet alle angeschlossenen Laufwerke (USB-Sticks, SD-Karten,
-externe Platten) samt Partitionen, Dateisystem, Belegung und Einhängepunkt. Die
-Liste aktualisiert sich alle paar Sekunden — Medium einstecken genügt.
+externe Platten) mit Belegung. Die Liste aktualisiert sich alle paar Sekunden — Medium
+einstecken genügt. Jede Karte zeigt nur die Hauptaktionen („Fotos & Dateien“,
+„Auf Cache sichern“, „Auswerfen“); Seltenes und Zerstörerisches (Aushängen, Als Cache
+nutzen, Formatieren) liegt im **⋯-Menü**. Gerätepfade (`/dev/…`) stehen im Tooltip des
+Namens. Das System-/Puffer-Laufwerk erscheint nicht als eigene Karte, sondern
+eingeklappt unter **„Puffer auf der Box“**.
 
 - **Einhängen / Aushängen / Auswerfen** — Medien werden unter
   `/media/offgridcloud/<Bezeichnung>` eingehängt (`nosuid,nodev,noexec`; FAT/exFAT/NTFS
