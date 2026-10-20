@@ -6,12 +6,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
-### 🤖 Telegram: Warnung bei geteiltem Bot
+### 🤖 Telegram: mehrere Boxen sauber trennen
 
 - **Zwei Boxen, ein Bot-Token** gehen nicht: Telegram lässt pro Bot nur einen Empfänger Befehle abholen, die Boxen nehmen sich gegenseitig die Befehle weg. Die Box erkennt das jetzt (`409 Conflict` von einem anderen `getUpdates`), zeigt unter **System → Benachrichtigungen → Telegram** einen Hinweis und wartet 2 min statt 30 s, bevor sie es erneut versucht. Abhilfe: für jede Box bei @BotFather einen eigenen Bot anlegen.
 - Bisher hat die Box in diesem Fall fälschlich einen Webhook vermutet und `deleteWebhook` aufgerufen. Das passiert jetzt nur noch, wenn tatsächlich ein Webhook gesetzt ist.
+- **Mehrere Boxen in einer Gruppe:** Jede Box hat ihren eigenen Bot. Ein Befehl mit Bot-Namen (`/status@Box2_bot`) wird nur noch von diesem Bot beantwortet, die anderen schweigen. Ohne Namen (`/status`) antworten weiterhin alle.
 
-### 🔀 Neu: Leitungsbündelung mit net-merge
 ## [0.7.0] – 2026-10-20
 
 Die Box kann Uploads jetzt über **alle Uplinks gleichzeitig** schicken (Kabel, WLAN, Handy) und **mehrere Dateien parallel** hochladen. Beides ist standardmäßig aus.

@@ -1009,10 +1009,28 @@ def parse_command(text: str) -> str | None:
     return word.split("@", 1)[0].lower() or None
 
 
-def handle_message(db: Session, message: dict, allowed_chat_id: str) -> Reply | None:
-    """Return the reply for one incoming message (``None`` = stay silent)."""
-    command = parse_command(message.get("text", ""))
+def command_target(text: str) -> str:
+    """``"/status@Box2_bot"`` -> ``"box2_bot"``; no ``@`` -> ``""``."""
+    text = (text or "").strip()
+    if not text.startswith("/"):
+        return ""
+    word = text.split()[0]
+    return word.split("@", 1)[1].lower() if "@" in word else ""
+
+
+def handle_message(
+    db: Session, message: dict, allowed_chat_id: str, bot_username: str = ""
+) -> Reply | None:
+    """Return the reply for one incoming message (``None`` = stay silent).
+
+    ``/status@OtherBot`` is meant for another bot in the same group (e.g. a
+    second box), so it is ignored once our own username is known."""
+    text = message.get("text", "")
+    command = parse_command(text)
     if command is None:
+        return None
+    target = command_target(text)
+    if target and bot_username and target != bot_username.lower():
         return None
     chat_id = str((message.get("chat") or {}).get("id", ""))
     if command == "id":
@@ -1070,6 +1088,18 @@ class BotPoller:
     def __init__(self) -> None:
         self._offset: int | None = None
         self._token: str = ""
+        self._username: str = ""
+
+    def _own_username(self, token: str) -> str:
+        """Our bot's @username, fetched once per token (best-effort: until it
+        is known, addressed commands are answered like plain ones)."""
+        if not self._username:
+            try:
+                me = api_call(token, "getMe") or {}
+                self._username = str(me.get("username") or "")
+            except Exception:  # noqa: BLE001 - offline: retry next round
+                pass
+        return self._username
 
     def _credentials(self) -> tuple[str, str]:
         from .admin_ops import get_system_settings
@@ -1091,7 +1121,7 @@ class BotPoller:
         if token != self._token:
             # New/changed bot: reset the cursor and (re)install the profile so
             # existing installs get the command menu after an update too.
-            self._token, self._offset = token, None
+            self._token, self._offset, self._username = token, None, ""
             _set_poll_conflict(False)
             setup_profile(token, chat_id)
         try:
@@ -1142,7 +1172,7 @@ class BotPoller:
             if not message or now - message.get("date", now) > MAX_COMMAND_AGE:
                 continue
             with SessionLocal() as db:
-                reply = handle_message(db, message, chat_id)
+                reply = handle_message(db, message, chat_id, self._own_username(token))
             if reply:
                 reply_chat = str(message["chat"]["id"])
                 try:
