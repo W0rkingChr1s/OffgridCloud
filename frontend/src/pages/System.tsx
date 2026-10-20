@@ -10,6 +10,7 @@ import {
   type UpdateInfo,
   type UpdateProgress,
 } from "../api";
+import Collapsible from "../components/Collapsible";
 import InfoTip from "../components/InfoTip";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
@@ -65,135 +66,62 @@ export default function System() {
   const pct = disk ? Math.round(disk.percent_used) : 0;
   const resyncMinutes = status ? Math.round(status.reconcile_interval / 60) : 0;
   const auditSort = useSort(audit, AUDIT_SORT, { key: "time", dir: "desc" });
+  const [auditShown, setAuditShown] = useState(10);
 
   return (
     <Layout>
       <h2 className="mb-1 text-2xl font-bold">System</h2>
-      <p className="mb-6 text-sm text-slate-400">Speicher, Einstellungen und Aktivitätsprotokoll.</p>
+      <p className="mb-6 text-sm text-slate-400">Updates, Upload-Verhalten, Benachrichtigungen und Wartung.</p>
 
       {error && <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>}
 
       <UpdateCard />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-          <div className="mb-2 text-sm font-medium text-slate-400">Puffer-Speicher</div>
-          {disk ? (
-            <>
-              <div className="text-2xl font-bold text-white">
-                {formatBytes(disk.free)} <span className="text-sm font-normal text-slate-400">frei</span>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700">
-                <div
-                  className={`h-full rounded-full ${disk.low_space ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <div className="mt-2 text-xs text-slate-500">
-                {formatBytes(disk.used)} / {formatBytes(disk.total)} belegt ({pct}%)
-              </div>
-              {disk.low_space && <div className="mt-2 text-xs text-red-300">⚠ Wenig freier Speicher</div>}
-            </>
-          ) : (
-            <div className="text-slate-500">…</div>
+      <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="text-sm font-medium text-slate-400">Uploads</div>
+          {disk && (
+            <div className="text-sm text-slate-300">
+              Puffer: <span className="font-semibold text-white">{formatBytes(disk.free)}</span> frei von{" "}
+              {formatBytes(disk.total)}
+            </div>
           )}
         </div>
-
-        <div className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-          <div className="mb-2 text-sm font-medium text-slate-400">Transfer-Engine</div>
-          <div className="text-2xl font-bold text-white">
-            {status ? (status.rclone_available ? "rclone bereit" : "rclone fehlt") : "…"}
+        {disk && (
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-700">
+            <div
+              className={`h-full rounded-full ${disk.low_space ? "bg-red-500" : "bg-gradient-to-r from-ogc-teal to-ogc-blue"}`}
+              style={{ width: `${pct}%` }}
+            />
           </div>
+        )}
+        {disk?.low_space && <div className="mt-2 text-xs text-red-300">⚠ Wenig freier Speicher</div>}
+        {status && !status.rclone_available && (
+          <div className="mt-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">
+            rclone fehlt — Übertragungen in die Cloud laufen nicht. Installer bzw. Update erneut ausführen.
+          </div>
+        )}
 
-          <label className="mt-4 flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={status?.delete_local_after_upload ?? false}
-              onChange={(e) => toggleDelete(e.target.checked)}
-            />
-            <span className="text-slate-300">
-              <span className="inline-flex items-center gap-1.5">
-                Lokale Kopie nach erfolgreichem Upload löschen
-                <InfoTip text="Sobald ein Medium an ALLE verknüpften Ziele bestätigt hochgeladen wurde, wird die lokale Pufferdatei entfernt, um Speicher (z. B. auf der SD-Karte) zu sparen. Erst nach erfolgreicher Prüfung – nie vorher. Danach ist kein lokaler Download mehr möglich." />
-              </span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Entfernt die Pufferdatei, sobald alle Zielprovider bestätigt sind.
-              </span>
-            </span>
-          </label>
-
-          <label className="mt-4 flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={status?.delete_remote_on_local_delete ?? false}
-              onChange={(e) => toggleRemoteDelete(e.target.checked)}
-            />
-            <span className="text-slate-300">
-              <span className="inline-flex items-center gap-1.5">
-                Beim lokalen Löschen auch remote löschen
-                <InfoTip text="Wenn du eine Datei aus einem Ordner löschst, wird sie zusätzlich bei allen Zielen entfernt, zu denen sie bereits hochgeladen wurde (per rclone). Achtung: unwiderruflich – die Cloud-Kopie ist danach weg. Ohne diesen Haken bleibt die Remote-Kopie als Backup erhalten." />
-              </span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Standard: aus. Löscht die Cloud-Kopien mit – unwiderruflich.
-              </span>
-            </span>
-          </label>
-
-          <label className="mt-4 flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={status?.auto_resync ?? false}
-              onChange={(e) => toggleAutoResync(e.target.checked)}
-            />
-            <span className="text-slate-300">
-              <span className="inline-flex items-center gap-1.5">
-                Automatischer Re-Sync
-                <InfoTip text={`Prüft im Hintergrund regelmäßig${resyncMinutes ? ` (alle ~${resyncMinutes} Min.)` : ""} alle Ziele: fehlgeschlagene Transfers werden erneut eingereiht und fehlende Jobs nachgezogen. So heilt eine kurze Störung (offline, Ziel nicht erreichbar) von selbst, sobald die Verbindung zurück ist – ganz ohne manuelles „Erneut".`} />
-              </span>
-              <span className="mt-0.5 block text-xs text-slate-500">
-                Wiederholt hängengebliebene Uploads automatisch, sobald wieder Verbindung besteht.
-              </span>
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-        <div className="mb-3 text-sm font-medium text-slate-400">Integrationen</div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm">
-            <span className="mb-1 flex items-center gap-1.5 text-slate-400">
-              Bandbreiten-Probe-URL (optional)
-              <InfoTip text="Ziel-Datei, die für die aktive Durchsatzmessung heruntergeladen wird. Leer lassen nutzt eine öffentliche Cloudflare-Testdatei – für „Jetzt messen“ musst du hier nichts eintragen. Nur setzen, wenn du bewusst ein eigenes Testziel (z. B. im lokalen Netz) verwenden willst." />
-            </span>
-            <input
-              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
-              placeholder="Standard: öffentliche Test-Datei (Cloudflare)"
-              value={probeUrl}
-              onChange={(e) => setProbeUrl(e.target.value)}
-              onBlur={() => probeUrl !== status?.probe_url && save({ probe_url: probeUrl })}
-            />
-            <span className="mt-1 block text-xs text-slate-500">
-              Leer lassen — „Jetzt messen“ (unter Bandbreite) funktioniert ohne Eingabe. Nur setzen, um ein eigenes Testziel zu nutzen.
-            </span>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 flex items-center gap-1.5 text-slate-400">
-              Webhook-URL (bei „fertig“)
-              <InfoTip text="Sobald ein Medium an alle Ziele hochgeladen ist, wird an diese URL einmalig ein JSON-POST gesendet (Dateiname, Größe, SHA-256, Ordner). Ideal, um andere Systeme zu benachrichtigen oder Automatisierungen anzustoßen. Leer lassen = deaktiviert." />
-            </span>
-            <input
-              className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
-              placeholder="https://… (POST bei fertigem Upload)"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              onBlur={() => webhookUrl !== status?.webhook_url && save({ webhook_url: webhookUrl })}
-            />
-            <span className="mt-1 block text-xs text-slate-500">Erhält ein JSON, sobald ein Medium überallhin hochgeladen wurde.</span>
-          </label>
+        <div className="mt-4 grid gap-3">
+          <Toggle
+            checked={status?.delete_local_after_upload ?? false}
+            onChange={toggleDelete}
+            label="Lokale Kopie nach erfolgreichem Upload löschen"
+            help="Sobald ein Medium an ALLE verknüpften Ziele bestätigt hochgeladen wurde, wird die lokale Pufferdatei entfernt, um Speicher (z. B. auf der SD-Karte) zu sparen. Erst nach erfolgreicher Prüfung – nie vorher. Danach ist kein lokaler Download mehr möglich."
+          />
+          <Toggle
+            checked={status?.delete_remote_on_local_delete ?? false}
+            onChange={toggleRemoteDelete}
+            label="Beim lokalen Löschen auch in der Cloud löschen"
+            help="Wenn du eine Datei aus einem Ordner löschst, wird sie zusätzlich bei allen Zielen entfernt, zu denen sie bereits hochgeladen wurde (per rclone). Ohne diesen Haken bleibt die Cloud-Kopie als Backup erhalten."
+            warn="Unwiderruflich — die Cloud-Kopie ist danach weg."
+          />
+          <Toggle
+            checked={status?.auto_resync ?? false}
+            onChange={toggleAutoResync}
+            label="Hängengebliebene Uploads automatisch wiederholen"
+            help={`Prüft im Hintergrund regelmäßig${resyncMinutes ? ` (alle ~${resyncMinutes} Min.)` : ""} alle Ziele: fehlgeschlagene Transfers werden erneut eingereiht und fehlende Jobs nachgezogen. So heilt eine kurze Störung (offline, Ziel nicht erreichbar) von selbst, sobald die Verbindung zurück ist – ganz ohne manuelles „Erneut".`}
+          />
         </div>
       </div>
 
@@ -201,38 +129,113 @@ export default function System() {
 
       {status && <PowerCard status={status} />}
 
-      <HttpsCard />
+      <Collapsible title="Erweitert" summary="Webhook, Bandbreiten-Messziel, HTTPS-Domain">
+        <div className="grid gap-5">
+          <label className="text-sm">
+            <span className="mb-1 flex items-center gap-1.5 text-slate-300">
+              Webhook-URL
+              <InfoTip text="Sobald ein Medium an alle Ziele hochgeladen ist, wird an diese URL einmalig ein JSON-POST gesendet (Dateiname, Größe, SHA-256, Ordner). Ideal, um andere Systeme zu benachrichtigen oder Automatisierungen anzustoßen. Leer lassen = deaktiviert." />
+            </span>
+            <input
+              className={inputCls}
+              placeholder="https://… (POST, sobald ein Medium überall angekommen ist)"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+              onBlur={() => webhookUrl !== status?.webhook_url && save({ webhook_url: webhookUrl })}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 flex items-center gap-1.5 text-slate-300">
+              Bandbreiten-Messziel
+              <InfoTip text="Ziel-Datei, die für die aktive Durchsatzmessung heruntergeladen wird. Leer lassen nutzt eine öffentliche Cloudflare-Testdatei – für „Jetzt messen“ musst du hier nichts eintragen. Nur setzen, wenn du bewusst ein eigenes Testziel (z. B. im lokalen Netz) verwenden willst." />
+            </span>
+            <input
+              className={inputCls}
+              placeholder="Leer = öffentliche Test-Datei (Cloudflare)"
+              value={probeUrl}
+              onChange={(e) => setProbeUrl(e.target.value)}
+              onBlur={() => probeUrl !== status?.probe_url && save({ probe_url: probeUrl })}
+            />
+          </label>
+          <HttpsSettings />
+        </div>
+      </Collapsible>
 
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Aktivität</h3>
       {audit.length === 0 ? (
         <p className="text-sm text-slate-500">Noch keine Einträge.</p>
       ) : (
-        <div className="overflow-hidden rounded-2xl ring-1 ring-white/10">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-800/80 text-slate-400">
-              <tr>
-                <SortTh sort={auditSort} field="time">Zeit</SortTh>
-                <SortTh sort={auditSort} field="user">Benutzer</SortTh>
-                <SortTh sort={auditSort} field="action">Aktion</SortTh>
-                <SortTh sort={auditSort} field="detail">Detail</SortTh>
-              </tr>
-            </thead>
-            <tbody>
-              {auditSort.sorted.map((e) => (
-                <tr key={e.id} className="border-t border-white/5 bg-slate-900/40">
-                  <td className="px-4 py-3 text-slate-400">{new Date(e.created_at + "Z").toLocaleString()}</td>
-                  <td className="px-4 py-3 text-slate-300">{e.user_email || "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded bg-slate-700/60 px-2 py-0.5 text-xs text-slate-200">{e.action}</span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400">{e.detail}</td>
+        <>
+          <div className="overflow-x-auto rounded-2xl ring-1 ring-white/10">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-800/80 text-slate-400">
+                <tr>
+                  <SortTh sort={auditSort} field="time">Zeit</SortTh>
+                  <SortTh sort={auditSort} field="user" className="hidden sm:table-cell">Benutzer</SortTh>
+                  <SortTh sort={auditSort} field="action">Aktion</SortTh>
+                  <SortTh sort={auditSort} field="detail" className="hidden sm:table-cell">Detail</SortTh>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {auditSort.sorted.slice(0, auditShown).map((e) => (
+                  <tr key={e.id} className="border-t border-white/5 bg-slate-900/40">
+                    <td className="whitespace-nowrap px-4 py-2.5 align-top text-slate-400">{auditFmt.format(new Date(e.created_at + "Z"))}</td>
+                    <td className="hidden px-4 py-2.5 text-slate-300 sm:table-cell">{e.user_email || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="rounded bg-slate-700/60 px-2 py-0.5 text-xs text-slate-200">{e.action}</span>
+                      {e.detail && <div className="mt-1 text-xs text-slate-400 sm:hidden">{e.detail}</div>}
+                    </td>
+                    <td className="hidden px-4 py-2.5 text-slate-400 sm:table-cell">{e.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {audit.length > auditShown && (
+            <button
+              type="button"
+              onClick={() => setAuditShown((n) => n + 25)}
+              className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
+            >
+              Ältere anzeigen ({audit.length - auditShown} weitere)
+            </button>
+          )}
+        </>
       )}
     </Layout>
+  );
+}
+
+const inputCls =
+  "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
+
+const auditFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" });
+
+/** Checkbox with label, an ⓘ for the details and an optional always-visible warning. */
+function Toggle({
+  checked,
+  onChange,
+  label,
+  help,
+  warn,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  help: string;
+  warn?: string;
+}) {
+  return (
+    <label className="flex items-start gap-3 text-sm">
+      <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="text-slate-300">
+        <span className="inline-flex items-center gap-1.5">
+          {label}
+          <InfoTip text={help} />
+        </span>
+        {warn && <span className="mt-0.5 block text-xs text-amber-300/80">{warn}</span>}
+      </span>
+    </label>
   );
 }
 
@@ -272,7 +275,7 @@ const POWER_ACTIONS: {
   },
 ];
 
-function HttpsCard() {
+function HttpsSettings() {
   const toast = useToast();
   const [https, setHttps] = useState<HttpsStatus | null>(null);
   const [domain, setDomain] = useState("");
@@ -303,77 +306,53 @@ function HttpsCard() {
 
   if (!https) return null;
 
-  return (
-    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
-        HTTPS
-        <InfoTip text="Die Box ist im lokalen Netz per https://<name>.local mit einem selbstsignierten Zertifikat erreichbar. Trägst du eine öffentliche Domain ein, holt Caddy zusätzlich automatisch ein echtes Zertifikat (Let's Encrypt) — der lokale Zugriff bleibt bestehen." />
-      </div>
+  const urls = https.lan_url && (
+    <span className="mt-1 block text-xs text-slate-500">
+      Erreichbar unter <code className="text-slate-300">{https.lan_url}</code>
+      {https.public_url && (
+        <>
+          {" "}und <code className="text-slate-300">{https.public_url}</code>
+        </>
+      )}
+    </span>
+  );
 
+  return (
+    <div className="text-sm">
+      <div className="mb-1 flex items-center gap-1.5 text-slate-300">
+        Öffentliche HTTPS-Domain
+        <InfoTip text="Die Box ist im lokalen Netz per https://<name>.local mit einem selbstsignierten Zertifikat erreichbar. Trägst du eine öffentliche Domain ein, holt Caddy zusätzlich automatisch ein echtes Zertifikat (Let's Encrypt) — der lokale Zugriff bleibt bestehen. Voraussetzung: Die Domain zeigt per DNS auf diese Box und die Ports 80/443 sind von außen erreichbar (Portweiterleitung am Router). Das Zertifikat zu holen kann bis zu einer Minute dauern." />
+      </div>
       {!https.enabled ? (
-        <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-          HTTPS ist auf dieser Box nicht eingerichtet. Den{" "}
-          <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">Installer</code>{" "}
-          erneut ausführen und HTTPS aktivieren.
-        </div>
+        <span className="block text-xs text-slate-500">
+          HTTPS ist auf dieser Box nicht eingerichtet — dazu den Installer erneut ausführen und HTTPS aktivieren.
+        </span>
       ) : !https.manageable ? (
         <>
-          {https.lan_url && (
-            <p className="mb-3 text-xs text-slate-500">
-              Lokal erreichbar unter{" "}
-              <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.lan_url}</code>
-              {https.public_url && (
-                <>
-                  {" "}und öffentlich unter{" "}
-                  <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.public_url}</code>
-                </>
-              )}
-              .
-            </p>
-          )}
-          <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
-            HTTPS ist aktiv. Um die Domain aus der Weboberfläche zu ändern, den{" "}
-            <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">Installer</code>{" "}
-            erneut ausführen und HTTPS aktivieren.
-          </div>
+          <span className="block text-xs text-slate-500">
+            Ändern geht nur über den Installer (erneut ausführen und HTTPS aktivieren).
+          </span>
+          {urls}
         </>
       ) : (
         <>
-          <p className="mb-3 text-xs text-slate-500">
-            Lokal erreichbar unter{" "}
-            <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.lan_url}</code>
-            {https.public_url && (
-              <>
-                {" "}und öffentlich unter{" "}
-                <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">{https.public_url}</code>
-              </>
-            )}
-            .
-          </p>
-          <label className="block text-sm">
-            <span className="mb-1 block text-slate-300">Öffentliche Domain (optional)</span>
-            <div className="flex gap-2">
-              <input
-                className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
-                placeholder="z. B. cloud.example.com"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={saveDomain}
-                disabled={busy || domain.trim() === https.domain}
-                className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy ? "…" : "Speichern"}
-              </button>
-            </div>
-            <span className="mt-1 block text-xs text-slate-500">
-              Wichtig: Die Domain muss per DNS auf diese Box zeigen und die Ports 80/443 müssen von
-              außen erreichbar sein (Portweiterleitung am Router). Das Zertifikat wird dann
-              automatisch geholt — das kann bis zu einer Minute dauern.
-            </span>
-          </label>
+          <div className="flex gap-2">
+            <input
+              className={inputCls}
+              placeholder="z. B. cloud.example.com (optional)"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={saveDomain}
+              disabled={busy || domain.trim() === https.domain}
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy ? "…" : "Speichern"}
+            </button>
+          </div>
+          {urls}
         </>
       )}
     </div>
@@ -403,45 +382,42 @@ function PowerCard({ status }: { status: SystemStatus }) {
 
   return (
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
-        System steuern
-        <InfoTip text="Steuert Dienst und Box direkt aus dem Portal: den OffgridCloud-Dienst neu starten, die ganze Box neu starten oder herunterfahren. Standardmäßig aktiv — der Installer richtet die nötigen sudoers-Regeln automatisch ein." />
+      <div className="mb-3 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+        Wartung
+        <InfoTip
+          text={`${POWER_ACTIONS.map((a) => `${a.label}: ${a.help}`).join(" ")} Laufende Übertragungen werden unterbrochen und nach einem Neustart automatisch fortgesetzt.`}
+        />
       </div>
-      <p className="mb-4 text-xs text-slate-500">
-        Neustart und Herunterfahren wirken sofort – laufende Übertragungen werden unterbrochen und
-        nach einem Neustart automatisch fortgesetzt.
-      </p>
 
-      {!anyEnabled && (
-        <div className="mb-4 rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+      {!anyEnabled ? (
+        <div className="rounded-lg bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
           Alle Aktionen sind deaktiviert (Befehle leer). In der{" "}
           <code className="rounded bg-black/30 px-1.5 py-0.5 text-slate-200">.env</code> die
           <code className="ml-1 rounded bg-black/30 px-1.5 py-0.5 text-slate-200">OGC_*_COMMAND</code>
           -Werte setzen oder den Installer erneut ausführen.
         </div>
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        {POWER_ACTIONS.map((a) => {
-          const enabled = Boolean(status[a.enabled]);
-          const cls = a.danger
-            ? "border border-red-500/40 text-red-300 hover:bg-red-500/10"
-            : "border border-white/10 text-slate-200 hover:bg-white/5";
-          return (
-            <span key={a.action} className="inline-flex items-center gap-1.5">
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {POWER_ACTIONS.map((a) => {
+            const enabled = Boolean(status[a.enabled]);
+            const cls = a.danger
+              ? "border border-red-500/40 text-red-300 hover:bg-red-500/10"
+              : "border border-white/10 text-slate-200 hover:bg-white/5";
+            return (
               <button
+                key={a.action}
                 type="button"
+                title={a.help}
                 onClick={() => run(a)}
                 disabled={!enabled || busy !== null}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${cls}`}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${cls}`}
               >
                 {busy === a.action ? "…" : a.label}
               </button>
-              <InfoTip text={a.help} />
-            </span>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -544,23 +520,20 @@ function NotificationsCard({
     setSmtpPassword("");
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal";
   const btnCls =
     "rounded-lg bg-gradient-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+  const configured = (on: boolean, text = "eingerichtet") =>
+    on ? <span className="text-emerald-300">{text}</span> : "nicht eingerichtet";
 
   return (
     <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
-      <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-slate-400">
-        Benachrichtigungen (Info-Service)
-        <InfoTip text="Statusmeldungen an zusätzliche Kanäle: Telegram und E-Mail (der Webhook oben läuft parallel weiter). Wähle unten, welche Ereignisse eine Nachricht auslösen. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt." />
+      <div className="mb-3 flex items-center gap-1.5 text-sm font-medium text-slate-400">
+        Benachrichtigungen
+        <InfoTip text="Statusmeldungen per Telegram und/oder E-Mail (der Webhook unter „Erweitert“ läuft parallel weiter). Ohne eingerichteten Kanal passiert nichts. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt." />
       </div>
-      <p className="mb-4 text-xs text-slate-500">
-        Sendet Statusmeldungen an Telegram und/oder E-Mail. Ohne konfigurierten Kanal passiert nichts.
-      </p>
 
       {/* Which events notify */}
-      <div className="mb-5 grid gap-2 sm:grid-cols-2">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2">
         {EVENT_TOGGLES.map((t) => (
           <label key={t.key} className="flex items-start gap-3 text-sm">
             <input
@@ -579,40 +552,36 @@ function NotificationsCard({
         ))}
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        {/* Telegram */}
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-300">
-            Telegram
-            {status.telegram_configured && (
-              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
-                konfiguriert
-              </span>
-            )}
-            <InfoTip text="Erstelle bei @BotFather einen Bot und trage hier den Bot-Token ein. Die Chat-ID bekommst du, indem du dem Bot /id schickst. Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin, benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Im freigeschalteten Chat versteht er u. a. /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart, /reboot, /shutdown und /update (nur nach Bestätigung per Button) – kein eigener Server und kein offener Port nötig." />
+      <div className="grid gap-2">
+        <Collapsible nested title="Telegram" summary={configured(status.telegram_configured && !!status.telegram_chat_id)}>
+          <p className="mb-3 flex items-center gap-1.5 text-xs text-slate-500">
+            Bot bei @BotFather anlegen, Token eintragen, Chat-ID per /id beim Bot erfragen.
+            <InfoTip text="Nach dem Speichern meldet sich der Bot mit „OffgridCloud verbunden“ im Chat und richtet sein Befehlsmenü ein. Ist der Chat eine Gruppe oder ein Kanal und der Bot dort Admin (Infos ändern, Anheften), benennt er sie in „OffgridCloud · <Box>“ um, setzt Beschreibung und Logo und pinnt die Begrüßung. Befehle: /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart, /reboot, /shutdown und /update (jeweils mit Bestätigung per Button), /hilfe – kein eigener Server und kein offener Port nötig." />
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Bot-Token</span>
+              <input
+                className={inputCls}
+                type="password"
+                placeholder={status.telegram_configured ? "•••••• (gespeichert)" : "123456:ABC-DEF…"}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-slate-400">Chat-ID</span>
+              <input
+                className={inputCls}
+                placeholder="z. B. 123456789 oder -100…"
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+              />
+            </label>
           </div>
-          <label className="mb-2 block text-sm">
-            <span className="mb-1 block text-slate-400">Bot-Token</span>
-            <input
-              className={inputCls}
-              type="password"
-              placeholder={status.telegram_configured ? "•••••• (gespeichert – zum Ändern neu eingeben)" : "123456:ABC-DEF…"}
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <label className="mb-3 block text-sm">
-            <span className="mb-1 block text-slate-400">Chat-ID</span>
-            <input
-              className={inputCls}
-              placeholder="z. B. 123456789 oder -100…"
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value)}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={saveTelegram} className={btnCls}>
-              Telegram speichern
+              Speichern
             </button>
             <button
               type="button"
@@ -623,25 +592,20 @@ function NotificationsCard({
               {testing ? "Sende …" : "Testnachricht"}
             </button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Befehle im Chat: /status, /queue, /speicher, /fehler, /retry, /netz, /speedtest, /ping, /restart (Dienst), /reboot, /shutdown und /update (jeweils mit Bestätigung), /hilfe. In Gruppen/Kanälen als Admin (Infos ändern, Anheften) passt der Bot Name, Beschreibung und Bild an.
-          </p>
-        </div>
+        </Collapsible>
 
-        {/* E-Mail (SMTP) */}
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-slate-300">
-            E-Mail (SMTP)
-            {status.smtp_configured && (
-              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
-                Passwort gespeichert
-              </span>
-            )}
-            <InfoTip text="Trage die Zugangsdaten eines erreichbaren SMTP-Servers ein. STARTTLS empfohlen (Port 587). Die Box verschickt Statusmeldungen dann als E-Mail an den Empfänger." />
-          </div>
+        <Collapsible
+          nested
+          title="E-Mail"
+          summary={
+            status.smtp_host && status.smtp_to
+              ? configured(true, `an ${status.smtp_to}`)
+              : configured(false)
+          }
+        >
           <div className="grid grid-cols-3 gap-2">
             <label className="col-span-2 block text-sm">
-              <span className="mb-1 block text-slate-400">Server</span>
+              <span className="mb-1 block text-slate-400">SMTP-Server</span>
               <input
                 className={inputCls}
                 placeholder="smtp.example.com"
@@ -679,8 +643,6 @@ function NotificationsCard({
                 onChange={(e) => setSmtpPassword(e.target.value)}
               />
             </label>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2">
             <label className="block text-sm">
               <span className="mb-1 block text-slate-400">Absender</span>
               <input
@@ -700,20 +662,20 @@ function NotificationsCard({
               />
             </label>
           </div>
-          <label className="mt-3 flex items-center gap-2 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              checked={smtp.smtp_tls}
-              onChange={(e) => setSmtp((s) => ({ ...s, smtp_tls: e.target.checked }))}
-            />
-            STARTTLS verwenden (empfohlen)
-          </label>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-4">
             <button type="button" onClick={saveEmail} className={btnCls}>
-              E-Mail speichern
+              Speichern
             </button>
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={smtp.smtp_tls}
+                onChange={(e) => setSmtp((s) => ({ ...s, smtp_tls: e.target.checked }))}
+              />
+              STARTTLS (empfohlen, Port 587)
+            </label>
           </div>
-        </div>
+        </Collapsible>
       </div>
     </div>
   );
