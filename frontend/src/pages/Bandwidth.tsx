@@ -118,7 +118,7 @@ export default function Bandwidth() {
             })()}
             hint={
               status.pool_limit_kbps > 0
-                ? `Anteil an gemeinsamer Leitung: ${status.pool_limit_kbps} KB/s (${status.pool_limit_by}) – gilt ab der nächsten Datei`
+                ? `Anteil an gemeinsamer Leitung: ${status.pool_limit_kbps} KB/s (${status.pool_limit_by})`
                 : undefined
             }
           />

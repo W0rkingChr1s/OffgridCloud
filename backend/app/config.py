@@ -135,6 +135,9 @@ class Settings(BaseSettings):
 
     # --- Transfer engine ---------------------------------------------------
     rclone_binary: str = "rclone"
+    # Change the bandwidth limit of running uploads (rclone rc on localhost with
+    # a one-off password). Off = limits only apply from the next upload on.
+    rclone_live_limits: bool = True
     # Link bundling: the SOCKS5 address of the local net-merge helper (e.g.
     # ``127.0.0.1:1080``). Set by ``deploy/netmerge/install.sh``; empty = not
     # installed, the toggle in the UI stays unavailable. See app/bonding.py.

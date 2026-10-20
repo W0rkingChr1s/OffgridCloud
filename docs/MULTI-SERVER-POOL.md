@@ -193,9 +193,12 @@ teilen sich alle Boxen mit Rang die Leitung:
 - Der Anteil wirkt **zusätzlich** zum eigenen Limit der Box — das kleinere gilt.
   Die Box zeigt ihn unter **Bandbreite → Aktuelles Limit**, der Hub auf der
   Kachel („≤ 600 KB/s“).
-- **Wirkt ab der nächsten Datei:** rclone bekommt das Limit beim Start eines
-  Uploads. Ein schon laufender großer Upload behält sein bisheriges Tempo, bis
-  er fertig ist.
+- **Wirkt auch auf laufende Uploads:** Die Box stellt einen neuen Anteil
+  binnen weniger Sekunden auch bei Uploads um, die schon laufen — wichtig bei
+  großen Dateien wie Drohnenvideos. Technisch über rclones Fernsteuerung
+  (`rc`), die jeder Upload nur auf `127.0.0.1` mit einem Einmal-Passwort öffnet.
+  Lässt sich mit `OGC_RCLONE_LIVE_LIMITS=false` abschalten; dann gilt ein neuer
+  Anteil erst ab der nächsten Datei.
 - **Läuft ab:** Erneuert der Hub den Anteil nicht (ausgeschaltet, Hub weg,
   Netz weg), fällt er nach 3 Minuten von selbst weg — keine Box bleibt
   dauerhaft gedrosselt. Ausschalten hebt die Anteile sofort auf.

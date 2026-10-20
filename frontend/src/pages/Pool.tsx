@@ -410,8 +410,8 @@ function PriorityPanel({ overview, onSaved }: { overview: PoolOverview | null; o
           />
           <span className="flex-1">
             <strong>Bandbreite fair teilen</strong>: Die sendenden Boxen teilen sich die
-            Kapazität der Leitung zu gleichen Teilen (jede Minute neu verteilt, wirkt ab der
-            jeweils nächsten Datei).
+            Kapazität der Leitung zu gleichen Teilen (jede Minute neu verteilt, wirkt auch auf
+            laufende Uploads).
             {prio.share_enabled && (
               <span className="mt-1 flex items-center gap-2">
                 Kapazität
