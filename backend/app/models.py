@@ -265,7 +265,7 @@ class PoolPeer(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    base_url: Mapped[str] = mapped_column(String(500))  # e.g. https://box2.local:8000
+    base_url: Mapped[str] = mapped_column(String(500))  # e.g. http://box2.local:8000
     token_encrypted: Mapped[str] = mapped_column(Text, default="")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

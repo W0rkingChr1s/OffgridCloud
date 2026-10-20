@@ -130,7 +130,7 @@ def add_peer(
 ) -> PoolPeerOut:
     peer = PoolPeer(
         name=payload.name.strip(),
-        base_url=payload.base_url.strip().rstrip("/"),
+        base_url=pool_core.normalize_base_url(payload.base_url),
         token_encrypted=encrypt(payload.token) if payload.token else "",
     )
     db.add(peer)
@@ -153,7 +153,7 @@ def update_peer(
     if payload.name is not None:
         peer.name = payload.name.strip()
     if payload.base_url is not None:
-        peer.base_url = payload.base_url.strip().rstrip("/")
+        peer.base_url = pool_core.normalize_base_url(payload.base_url)
     if payload.enabled is not None:
         peer.enabled = payload.enabled
     if payload.token is not None:
