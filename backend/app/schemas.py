@@ -410,6 +410,8 @@ class SystemStatusOut(BaseModel):
     notify_on_bandwidth: bool
     telegram_chat_id: str
     telegram_configured: bool
+    # Another box polls with the same bot token (Telegram allows only one).
+    telegram_conflict: bool = False
     smtp_host: str
     smtp_port: int
     smtp_username: str

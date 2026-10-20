@@ -148,6 +148,64 @@ def test_poller_idles_without_token(client):
     assert telegram_bot.BotPoller().poll_once() == telegram_bot.IDLE_INTERVAL
 
 
+def _poll_with_error(client, admin_auth, monkeypatch, description):
+    """Configure a bot, make getUpdates fail with 409 ``description``, poll once."""
+    seen: list[str] = []
+
+    def fake(token, method, params=None, timeout=15, files=None):
+        seen.append(method)
+        if method == "getUpdates":
+            raise telegram_bot.TelegramError(description, 409)
+        return {} if method in ("getMe", "getChatMember") else True
+
+    monkeypatch.setattr(telegram_bot, "api_call", fake)
+    monkeypatch.setattr(telegram_bot, "announce_connected_async", lambda token, chat_id: None)
+    client.put(
+        "/api/system",
+        headers=admin_auth,
+        json={"telegram_bot_token": "123:ABC", "telegram_chat_id": "42"},
+    )
+    try:
+        wait = telegram_bot.BotPoller().poll_once()
+        status = client.get("/api/system", headers=admin_auth).json()
+    finally:
+        client.put(
+            "/api/system",
+            headers=admin_auth,
+            json={"telegram_bot_token": "", "telegram_chat_id": ""},
+        )
+    return wait, seen, status
+
+
+def test_second_box_on_same_bot_is_reported(client, admin_auth, monkeypatch):
+    wait, seen, status = _poll_with_error(
+        client,
+        admin_auth,
+        monkeypatch,
+        "Conflict: terminated by other getUpdates request; "
+        "make sure that only one bot instance is running",
+    )
+    assert wait == telegram_bot.CONFLICT_BACKOFF
+    assert "deleteWebhook" not in seen
+    assert status["telegram_conflict"] is True
+    # Clearing the token clears the warning on the next round.
+    telegram_bot.BotPoller().poll_once()
+    assert telegram_bot.poll_conflict() is False
+
+
+def test_webhook_conflict_removes_webhook(client, admin_auth, monkeypatch):
+    wait, seen, status = _poll_with_error(
+        client,
+        admin_auth,
+        monkeypatch,
+        "Conflict: can't use getUpdates method while webhook is active; "
+        "use deleteWebhook to delete the webhook first",
+    )
+    assert wait == telegram_bot.ERROR_BACKOFF
+    assert "deleteWebhook" in seen
+    assert status["telegram_conflict"] is False
+
+
 def test_saving_bot_greets_chat(client, admin_auth, monkeypatch):
     greeted = []
     monkeypatch.setattr(

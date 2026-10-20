@@ -98,6 +98,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
   - **Messen:** `/speedtest` (max. eine Messung alle 5 min, `OGC_TELEGRAM_SPEEDTEST_COOLDOWN`)
   - **Steuern:** `/restart` (nur Dienst), `/reboot`, `/shutdown` und `/update` (One-Click-Update inkl. Ergebnis-Meldung) — jeweils nur nach Bestätigung per Button, 60 s gültig, nur durch den Anfragenden
   - Long-Polling – kein offener Port, funktioniert hinter CGNAT/LTE; fremde Chats bekommen nur ihre Chat-ID via `/id`
+  - **Ein Bot pro Box:** Telegram lässt pro Bot-Token nur einen Empfänger Befehle abholen. Teilen sich zwei Boxen einen Bot, warnt das Portal unter System → Telegram
 
 <p align="right"><a href="#inhalt">↑ nach oben</a></p>
 

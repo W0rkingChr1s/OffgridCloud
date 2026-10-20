@@ -243,6 +243,7 @@ export interface SystemStatus {
   notify_on_bandwidth: boolean;
   telegram_chat_id: string;
   telegram_configured: boolean;
+  telegram_conflict: boolean;
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
