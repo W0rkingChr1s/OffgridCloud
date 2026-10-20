@@ -57,6 +57,53 @@ def test_parse_command():
     assert telegram_bot.parse_command("") is None
 
 
+def test_command_target():
+    assert telegram_bot.command_target("/Status@Box2_Bot extra") == "box2_bot"
+    assert telegram_bot.command_target("/status") == ""
+    assert telegram_bot.command_target("hallo @x") == ""
+
+
+def test_command_for_other_bot_is_ignored(client):
+    with SessionLocal() as db:
+        assert telegram_bot.handle_message(db, _msg("/status@Box2_bot"), "42", "Box1_bot") is None
+        mine = telegram_bot.handle_message(db, _msg("/status@box1_BOT"), "42", "Box1_bot")
+        plain = telegram_bot.handle_message(db, _msg("/status"), "42", "Box1_bot")
+        # Own name not known yet (offline at start): answer as before.
+        unknown = telegram_bot.handle_message(db, _msg("/status@Box2_bot"), "42")
+    assert mine and plain and unknown
+
+
+def test_poller_skips_commands_for_other_bot(client, admin_auth, calls, monkeypatch):
+    monkeypatch.setattr(telegram_bot, "announce_connected_async", lambda token, chat_id: None)
+    real = telegram_bot.api_call
+
+    def with_name(token, method, params=None, timeout=15, files=None):
+        if method == "getMe":
+            calls.append((token, method, params or {}))
+            return {"username": "Box1_bot"}
+        return real(token, method, params, timeout, files)
+
+    monkeypatch.setattr(telegram_bot, "api_call", with_name)
+    client.put(
+        "/api/system",
+        headers=admin_auth,
+        json={"telegram_bot_token": "123:ABC", "telegram_chat_id": "42"},
+    )
+    try:
+        calls.updates = [
+            {"update_id": 1, "message": _msg("/ping@Box2_bot")},
+            {"update_id": 2, "message": _msg("/ping@Box1_bot")},
+        ]
+        telegram_bot.BotPoller().poll_once()
+    finally:
+        client.put(
+            "/api/system",
+            headers=admin_auth,
+            json={"telegram_bot_token": "", "telegram_chat_id": ""},
+        )
+    assert len(_sent(calls)) == 1
+
+
 def test_announce_connected_sets_profile_and_greets(calls):
     telegram_bot.announce_connected("tok", "42")
     methods = [m for _, m, _ in calls]
