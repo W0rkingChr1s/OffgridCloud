@@ -1,0 +1,97 @@
+name: Branch cleanup
+
+# Deletes branches whose work is merged.
+#
+#   - Right after a merge: the PR's head branch (if it lives in this repo).
+#   - Weekly sweep (and by hand: Actions → "Branch cleanup" → "Run workflow"):
+#     every branch whose tip is the head of a merged PR. Catches leftovers
+#     from before this workflow and merges that fired no event (e.g. the
+#     Auto-merge workflow merging with GITHUB_TOKEN).
+#
+# Never deleted: the default branch, protected branches, branches with an open
+# PR (as head or as base of a stacked PR), branches with commits pushed after
+# the merge, and branches of closed-but-unmerged PRs.
+
+on:
+  # pull_request_target: also has a write token when the PR came from
+  # Dependabot. This workflow never checks out or executes PR code.
+  pull_request_target:
+    types: [closed]
+  schedule:
+    - cron: "17 3 * * 1"   # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Only list what would be deleted"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Branch cleanup
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      (github.event.pull_request.merged &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      DRY_RUN: ${{ inputs.dry-run || 'false' }}
+      EVENT_BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Delete merged branches
+        run: |
+          set -euo pipefail
+          DELETED=0
+          DEFAULT_BRANCH="$(gh api "repos/$REPO" --jq .default_branch)"
+
+          # $1 = branch. Deletes it if all safety checks pass.
+          try_delete() {
+            local b="$1" info sha merged
+            [ "$b" != "$DEFAULT_BRANCH" ] || return 0
+            info="$(gh api "repos/$REPO/branches/$b" 2>/dev/null)" \
+              || { echo "skip $b: gone already"; return 0; }
+            [ "$(jq -r .protected <<<"$info")" = false ] \
+              || { echo "skip $b: protected"; return 0; }
+            sha="$(jq -r .commit.sha <<<"$info")"
+
+            if [ -n "$(gh pr list --repo "$REPO" --state open --head "$b" --json number --jq '.[].number')" ] ||
+               [ -n "$(gh pr list --repo "$REPO" --state open --base "$b" --json number --jq '.[].number')" ]; then
+              echo "skip $b: open PR"; return 0
+            fi
+            # Only if the branch tip is exactly what a merged PR from this repo
+            # merged — new commits after the merge keep the branch.
+            merged="$(gh pr list --repo "$REPO" --state merged --head "$b" --limit 100 \
+                        --json number,headRefOid,isCrossRepository \
+                        --jq "map(select(.headRefOid == \"$sha\" and (.isCrossRepository | not))) | .[0].number // empty")"
+            [ -n "$merged" ] || { echo "skip $b: no merged PR at ${sha:0:7}"; return 0; }
+
+            if [ "$DRY_RUN" = true ]; then
+              echo "would delete $b (merged in #$merged)"
+            else
+              gh api -X DELETE "repos/$REPO/git/refs/heads/$b" >/dev/null \
+                || { echo "::warning::could not delete $b"; return 0; }
+              echo "deleted $b (merged in #$merged)"
+            fi
+            DELETED=$((DELETED + 1))
+          }
+
+          if [ -n "$EVENT_BRANCH" ]; then
+            try_delete "$EVENT_BRANCH"
+          else
+            while IFS= read -r b; do
+              try_delete "$b"
+            done < <(gh api --paginate "repos/$REPO/branches?per_page=100" --jq '.[].name')
+          fi
+
+          echo "### Branch cleanup: $DELETED branch(es) $([ "$DRY_RUN" = true ] && echo 'would be ')deleted" \
+            >> "$GITHUB_STEP_SUMMARY"
