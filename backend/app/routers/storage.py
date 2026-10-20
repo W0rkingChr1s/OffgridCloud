@@ -13,14 +13,15 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import drives, storage_import, thumbnails
+from .. import buffers, drives, storage_import, thumbnails
 from ..admin_ops import audit, disk_usage
 from ..db import SessionLocal, get_db
 from ..deps import require_admin, user_from_query_token
-from ..models import Role, StorageCache, UploadFolder, User
+from ..models import Role, StorageBuffer, StorageCache, UploadFolder, User
 from ..schemas import (
     DiskUsageOut,
     StorageBrowseOut,
+    StorageBufferOut,
     StorageCacheBackupRequest,
     StorageCacheOut,
     StorageCacheSnapshotOut,
@@ -82,6 +83,7 @@ def _disk_out(disk: drives.Disk) -> StorageDiskOut:
                 browsable=p.browsable,
                 busy=storage_import.is_busy(p.path),
                 cache=p.cache,
+                buffer_drive=p.buffer_drive,
             )
             for p in disk.partitions
         ],
@@ -89,20 +91,111 @@ def _disk_out(disk: drives.Disk) -> StorageDiskOut:
 
 
 @router.get("", response_model=StorageOverviewOut)
-def overview() -> StorageOverviewOut:
+def overview(db: Session = Depends(get_db)) -> StorageOverviewOut:
     error = ""
     try:
         disks = drives.list_disks()
     except (drives.StorageError, OSError, ValueError) as exc:
         disks, error = [], f"Laufwerke konnten nicht gelesen werden: {exc}"
+    if disks:
+        try:
+            buffers.sync(db, disks)
+        except (drives.StorageError, OSError):
+            pass  # the watch loop retries; the page must still load
     return StorageOverviewOut(
         manage_enabled=drives.manage_enabled(),
         filesystems=list(drives.FILESYSTEMS),
         label_max=drives.LABEL_MAX,
         disks=[_disk_out(d) for d in disks],
         buffer=DiskUsageOut(**disk_usage()),
+        buffers=_buffers_out(db, disks),
         error=error,
     )
+
+
+# --- Buffer drives ----------------------------------------------------------------
+
+
+def _buffers_out(db: Session, disks: list[drives.Disk]) -> list[StorageBufferOut]:
+    parts = {p.uuid: p for d in disks for p in d.partitions if p.uuid}
+    online = {t.uuid: t for t in buffers.drive_targets(db)}
+    out: list[StorageBufferOut] = []
+    for row in db.scalars(select(StorageBuffer).order_by(StorageBuffer.created_at)):
+        part = parts.get(row.uuid)
+        target = online.get(row.uuid)
+        entry = StorageBufferOut(
+            uuid=row.uuid, label=row.label, device=part.path if part else None,
+            mountpoint=row.mountpoint, online=target is not None,
+            total=target.total if target else 0, used=target.used if target else 0,
+            free=target.free if target else 0, pending=buffers.pending_on(db, row.mountpoint),
+        )
+        if part is None:
+            entry.error = "nicht angeschlossen"
+        elif not part.mountpoint:
+            entry.error = "nicht eingehängt"
+        elif target is None:
+            entry.error = "Puffer-Ordner fehlt oder ist nicht beschreibbar"
+        out.append(entry)
+    return out
+
+
+@router.post("/buffers", status_code=status.HTTP_201_CREATED,
+             response_class=Response)
+def mark_buffer(
+    payload: StorageDeviceRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Response:
+    try:
+        _disk, part = drives.find_partition(payload.device)
+        if part.protected:
+            raise drives.StorageError("System- oder Pufferlaufwerk ist schon Teil der Box.")
+        if not part.uuid:
+            raise drives.StorageError("Partition hat keine UUID — erst formatieren.")
+        if part.read_only:
+            raise drives.StorageError("Laufwerk ist schreibgeschützt.")
+        if part.fstype == "vfat":
+            raise drives.StorageError(
+                "FAT32 kann keine Dateien über 4 GB speichern — als Puffer erst mit "
+                "exFAT oder ext4 formatieren."
+            )
+        buffers.prepare(part)
+    except drives.StorageError as exc:
+        raise _bad(exc) from None
+    row = db.scalar(select(StorageBuffer).where(StorageBuffer.uuid == part.uuid))
+    if row is None:
+        db.add(StorageBuffer(uuid=part.uuid, label=part.label or part.name,
+                             mountpoint=part.mountpoint))
+    else:
+        row.mountpoint = part.mountpoint
+    db.commit()
+    drives.clear_cache()
+    audit(db, admin, "storage.buffer.mark", f"{part.path} ({part.uuid})")
+    return Response(status_code=status.HTTP_201_CREATED)
+
+
+@router.delete("/buffers/{buffer_uuid}", status_code=status.HTTP_204_NO_CONTENT,
+               response_class=Response)
+def unmark_buffer(
+    buffer_uuid: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> Response:
+    row = db.scalar(select(StorageBuffer).where(StorageBuffer.uuid == buffer_uuid))
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kein Puffer-Laufwerk")
+    # Attached: it must be empty of pending files first. Unplugged (lost stick):
+    # the admin may give up on it — its pending files then show up as failed.
+    if any(t.uuid == row.uuid for t in buffers.drive_targets(db)):
+        pending = buffers.pending_on(db, row.mountpoint)
+        if pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Auf dem Laufwerk warten noch {pending} Datei(en) auf den Upload.",
+            )
+    db.delete(row)
+    db.commit()
+    drives.clear_cache()
+    audit(db, admin, "storage.buffer.unmark", buffer_uuid)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/mount")
@@ -184,8 +277,8 @@ def browse(device: str, path: str = Query("", max_length=4096)) -> StorageBrowse
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Kein Zugriff") from None
     for entry in items:
-        if entry.is_symlink():
-            continue
+        if entry.is_symlink() or entry.name == buffers.BUFFER_DIRNAME:
+            continue  # the box's own buffer on a buffer drive is not for browsing
         if len(entries) >= MAX_ENTRIES:
             truncated = True
             break

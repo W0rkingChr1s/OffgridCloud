@@ -254,6 +254,7 @@ export interface StoragePartition {
   browsable: boolean;
   busy: boolean; // an import from it is running
   cache: boolean; // marked as cache for offloading cards
+  buffer_drive: boolean; // marked as additional media buffer
 }
 
 export interface StorageDisk {
@@ -276,7 +277,22 @@ export interface StorageOverview {
   filesystems: string[];
   label_max: Record<string, number>;
   disks: StorageDisk[];
-  buffer: DiskUsage;
+  buffer: DiskUsage; // combined: the box's own buffer + attached buffer drives
+  buffers: StorageBuffer[];
+  error: string;
+}
+
+/** A removable drive marked as additional media buffer. */
+export interface StorageBuffer {
+  uuid: string;
+  label: string;
+  device: string | null; // null while unplugged
+  mountpoint: string;
+  online: boolean; // new files may land on it
+  total: number;
+  free: number;
+  used: number;
+  pending: number; // files on it not yet uploaded everywhere
   error: string;
 }
 

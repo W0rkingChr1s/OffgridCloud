@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 💾 Neu: Wechselmedien als Puffer
+
+- Auf der Seite **Speicher** gibt es im ⋯-Menü eines Laufwerks **„Als Puffer nutzen“**. Solange es eingesteckt ist und Platz hat, landen neue Uploads, Importe und Beschreibungen zuerst dort (`OffgridCloud-Puffer/`), sonst wie bisher im Puffer auf der Box. Die Puffer-Anzeige zählt Box und Laufwerke zusammen.
+- Mit Dateien, die noch auf den Upload warten, lässt sich das Laufwerk nicht aushängen, auswerfen, formatieren oder entmarkieren. Wird es trotzdem gezogen, warten die Transfers, statt fehlzuschlagen, und die Integritätsprüfung beim Start lässt die Dateien in Ruhe.
+- Wieder eingesteckt, wird es automatisch eingehängt. Ein geänderter Einhängepunkt wird in den gespeicherten Pfaden nachgezogen.
+- Root-Helfer: neue Aktion `storage.sh prepare-buffer`. Ein Update (bzw. `install.sh`) spielt den Helfer neu ein. Ohne Helfer (Docker) wird der Ordner direkt angelegt.
+
 ### 🌗 Neu: Hell-Modus
 
 - Im Menü unter **Darstellung**: Dunkel (Standard), Hell oder System (folgt der Einstellung des Geräts und wechselt live mit). Die Wahl wird pro Browser gespeichert und vor dem ersten Rendern angewendet, deshalb blitzt nichts dunkel auf.

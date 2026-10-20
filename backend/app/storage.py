@@ -21,14 +21,19 @@ def safe_filename(name: str) -> str:
     return name[:500]
 
 
-def folder_dir(folder_id: int) -> Path:
-    path = get_settings().buffer_dir / str(folder_id)
+def folder_dir(folder_id: int, root: Path | None = None) -> Path:
+    """A folder's directory in buffer ``root`` (default: the box's own buffer).
+
+    Pick ``root`` with :func:`app.buffers.pick` for new files — a removable
+    buffer drive may take them instead of the box's own buffer.
+    """
+    path = (root or get_settings().buffer_dir) / str(folder_id)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def uploads_tmp_dir() -> Path:
-    path = get_settings().buffer_dir / ".uploads"
+def uploads_tmp_dir(root: Path | None = None) -> Path:
+    path = (root or get_settings().buffer_dir) / ".uploads"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

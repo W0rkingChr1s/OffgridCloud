@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, announce, setup_wizard, telegram_bot
+from . import __version__, announce, buffers, setup_wizard, telegram_bot
 from .admin_ops import disk_usage, ensure_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
@@ -63,6 +63,9 @@ async def lifespan(app: FastAPI):
     ensure_policy()
     ensure_system_settings()
     ensure_network_settings()
+    # Mount buffer drives first, so their files are checked rather than
+    # mistaken for lost ones.
+    buffers.sync_startup()
     # Battery-bank hardening: repair any upload/media state left inconsistent by
     # a power cut before serving traffic (see integrity.py).
     run_startup_checks()
@@ -77,6 +80,8 @@ async def lifespan(app: FastAPI):
     if settings.worker_enabled:
         tasks.append(asyncio.create_task(worker_loop(stop)))
         tasks.append(asyncio.create_task(reconcile_loop(stop)))
+        # Re-mount buffer drives when they are plugged back in.
+        tasks.append(asyncio.create_task(buffers.watch_loop(stop)))
         # Watch the uplink so a dropped-then-restored connection pings the field.
         tasks.append(asyncio.create_task(announce.connectivity_loop(stop)))
         # Comprehensive "server up" summary. Off the event loop (it probes the

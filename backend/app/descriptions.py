@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import buffers
 from .models import (
     MediaDescription,
     MediaDescriptionItem,
@@ -173,7 +174,9 @@ def create_description(
     )
 
     stored_name = _sidecar_filename(title, now)
-    final_path = folder_dir(folder_id) / f"{uuid.uuid4()}__{stored_name}"
+    final_path = folder_dir(folder_id, buffers.pick(len(text.encode()), db)) / (
+        f"{uuid.uuid4()}__{stored_name}"
+    )
     size, digest = _write_sidecar(str(final_path), text)
 
     sidecar = MediaItem(
