@@ -476,6 +476,15 @@ export interface KnownNetwork {
   created_at: string;
 }
 
+export interface SystemNetwork {
+  name: string;
+  ssid: string;
+  priority: number;
+  autoconnect: boolean;
+  has_password: boolean;
+  active: boolean;
+}
+
 export interface NetworkSettings {
   fallback_enabled: boolean;
   ap_ssid: string;
@@ -491,6 +500,7 @@ export interface NetworkOverview {
   status: NetworkStatus;
   settings: NetworkSettings;
   known_networks: KnownNetwork[];
+  system_networks: SystemNetwork[];
 }
 
 export interface NetworkApplyResult {
