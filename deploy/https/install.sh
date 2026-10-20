@@ -2,7 +2,9 @@
 # Set up HTTPS for OffgridCloud (Caddy reverse proxy + mDNS hostname).
 #
 # Opt-in, root-only. It:
-#   1. installs Caddy (official apt repo) and avahi-daemon (mDNS),
+#   1. installs Caddy (official apt repo) and avahi-daemon (mDNS), plus the
+#      offgridcloud-mdns-alias service that publishes offgridcloud.local next
+#      to the unique <hostname>.local,
 #   2. renders the Caddyfile + sets the hostname via apply.sh,
 #   3. grants the service user a NOPASSWD sudoers rule for apply.sh only, and
 #   4. wires OGC_HTTPS_APPLY_COMMAND into .env so "System → HTTPS" in the UI works.
@@ -42,7 +44,7 @@ chmod +x "$APPLY" 2>/dev/null || true
 # --- 1. Caddy + avahi -------------------------------------------------------
 step "Installing Caddy + avahi (mDNS)..."
 if command -v apt-get >/dev/null 2>&1; then
-  apt-get install -y --no-install-recommends avahi-daemon avahi-utils || \
+  apt-get install -y --no-install-recommends avahi-daemon avahi-utils python3-dbus || \
     echo "   Could not install avahi — <hostname>.local may not resolve." >&2
   if ! command -v caddy >/dev/null 2>&1; then
     # Official Caddy apt repo (stable). Best-effort: on failure, point the
@@ -66,6 +68,14 @@ else
   exit 1
 fi
 systemctl enable --now caddy 2>/dev/null || true
+
+# mDNS alias offgridcloud.local (the hostname itself is unique per box).
+step "Installing the offgridcloud.local mDNS alias..."
+sed "s|/opt/offgridcloud/deploy/https|$HERE|g" "$HERE/offgridcloud-mdns-alias.service" \
+  > /etc/systemd/system/offgridcloud-mdns-alias.service
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable offgridcloud-mdns-alias 2>/dev/null || true
+systemctl restart offgridcloud-mdns-alias 2>/dev/null || true
 
 # --- 2. Render config + set hostname ---------------------------------------
 # --skip-apply: image build — the hostname is chosen later in the setup wizard

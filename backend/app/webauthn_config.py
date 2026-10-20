@@ -14,6 +14,9 @@ import time
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
+# Published next to <hostname>.local by deploy/https/mdns-alias.py.
+MDNS_ALIAS = "offgridcloud.local"
+
 
 class OriginNotAllowed(ValueError):
     """Raised when a request Origin is not in the configured allowlist."""
@@ -33,13 +36,15 @@ def parse_origin(origin: str) -> tuple[str, str]:
 
 
 def build_allowlist(*, state: dict[str, str], extra_origins: str) -> set[str]:
-    """Allowed RP-IDs: <hostname>.local + domain from https_state.json, always
+    """Allowed RP-IDs: <hostname>.local + domain from https_state.json, the
+    fixed mDNS alias offgridcloud.local (once HTTPS is set up), always
     localhost (dev), plus any comma-separated OGC_WEBAUTHN_EXTRA_ORIGINS."""
     allow: set[str] = {"localhost"}
     hostname = (state.get("hostname") or "").strip()
     domain = (state.get("domain") or "").strip()
     if hostname:
         allow.add(f"{hostname}.local")
+        allow.add(MDNS_ALIAS)
     if domain:
         allow.add(domain)
     for extra in extra_origins.split(","):

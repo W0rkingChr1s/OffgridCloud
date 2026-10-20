@@ -142,6 +142,13 @@ mDNS-Namen und erzeugt:
   und Ziffern), damit mehrere Boxen im selben Netz nicht auf denselben Namen
   hören. Im Installer lässt sich der Name frei überschreiben, z. B. auf
   `offgridcloud`;
+- den festen **Alias** `https://offgridcloud.local` (gleiches Zertifikat, per
+  mDNS vom Dienst `offgridcloud-mdns-alias` veröffentlicht) — damit man sich
+  den Zufallsnamen nicht merken muss. Laufen mehrere Boxen im selben Netz,
+  bekommt nur die erste den Alias; die anderen sind weiter unter ihrem
+  eindeutigen Namen erreichbar;
+- **Zugriff per IP**: `http://<IP der Box>` (ohne `s` — für eine nackte IP gibt
+  es kein Zertifikat). Die `.local`-Namen leiten weiterhin auf HTTPS um;
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
@@ -163,7 +170,7 @@ dann automatisch entfernt) oder direkt:
 sudo ./deploy/https/uninstall.sh
 ```
 
-Beides entfernt die verwaltete Caddy-Konfiguration, deaktiviert caddy, löscht
+Beides entfernt die verwaltete Caddy-Konfiguration und den Alias-Dienst, deaktiviert caddy, löscht
 die sudoers-Regel samt `.env`-Verdrahtung und stellt den ursprünglichen
 Hostnamen wieder her (sofern er beim Einrichten aufgezeichnet wurde). Die
 Pakete caddy/avahi bleiben installiert.
@@ -180,8 +187,9 @@ eine nackte LAN-IP ohne HTTPS funktionieren Passkeys nicht.
 - **Anmelden:** auf der Login-Seite „Mit Passkey anmelden" (mit ausgefüllter
   E-Mail gezielt, ohne E-Mail als Ein-Klick).
 - **Zwei Zugänge:** Ein Passkey gilt nur für die Adresse, unter der er angelegt
-  wurde. Wer sowohl lokal (`https://<hostname>.local`) als auch über eine Domain
-  zugreift, legt pro Adresse einen eigenen Passkey an.
+  wurde. Wer sowohl lokal (`https://<hostname>.local`), über den Alias
+  `https://offgridcloud.local` als auch über eine Domain zugreift, legt pro
+  Adresse einen eigenen Passkey an.
 - **Fallback:** Das Passwort bleibt immer gültig. Geht ein Gerät verloren, per
   Passwort anmelden und den Passkey unter **Passkeys** löschen; ein Admin kann
   zudem das Passwort zurücksetzen.

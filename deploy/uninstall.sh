@@ -432,6 +432,8 @@ else
     run systemctl disable --now caddy 2>/dev/null || true
     echo "   Removed the managed Caddyfile and disabled caddy."
   fi
+  run systemctl disable --now offgridcloud-mdns-alias 2>/dev/null || true
+  run rm -f /etc/systemd/system/offgridcloud-mdns-alias.service
   run rm -f /etc/sudoers.d/offgridcloud-https
   if [[ -f "$PREFIX/.env" && $DRY_RUN -eq 0 ]]; then
     sed -i '/^OGC_HTTPS_APPLY_COMMAND=/d' "$PREFIX/.env" 2>/dev/null || true

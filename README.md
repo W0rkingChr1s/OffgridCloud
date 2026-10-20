@@ -102,7 +102,8 @@ Am Ende zeigt der Installer **einmalig** ein zufälliges Admin-Passwort — noti
 Der Installer richtet standardmäßig auch **HTTPS** ein (Caddy + avahi/mDNS): die
 Box ist danach unter `https://offgridcloud-XXXXX.local` erreichbar (`XXXXX` =
 zufälliger Suffix je Box, im Installer frei überschreibbar) — mit selbstsigniertem
-Zertifikat, auch offline im Feld nutzbar. Alternativ direkt per `http://<host-ip>:8000`.
+Zertifikat, auch offline im Feld nutzbar. Zusätzlich hört sie auf den festen Alias
+`https://offgridcloud.local` und per IP auf `http://<host-ip>` (bzw. `:8000` direkt).
 Login mit `admin@offgrid.local`. Details zu HTTPS/Domain im
 [Betriebshandbuch](docs/BETRIEB.md) (Kapitel 3).
 

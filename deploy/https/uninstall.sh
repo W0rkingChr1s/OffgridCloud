@@ -2,10 +2,10 @@
 # Tear down the OffgridCloud HTTPS layer (Caddy reverse proxy + mDNS hostname).
 #
 # Counterpart to deploy/https/install.sh — removes only what that script set
-# up: the managed Caddyfile (identified by its header), the sudoers rule, the
-# OGC_HTTPS_APPLY_COMMAND wiring in .env, and the state files. Restores the
-# original hostname if apply.sh recorded it. The caddy/avahi packages stay
-# installed (generic tools).
+# up: the managed Caddyfile (identified by its header), the mDNS alias service,
+# the sudoers rule, the OGC_HTTPS_APPLY_COMMAND wiring in .env, and the state
+# files. Restores the original hostname if apply.sh recorded it. The
+# caddy/avahi packages stay installed (generic tools).
 #
 # Called by deploy/install.sh when HTTPS is deselected on a re-run, and by
 # deploy/uninstall.sh during a full uninstall. Safe to run when HTTPS was
@@ -33,6 +33,14 @@ if [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /
   rm -f /etc/caddy/Caddyfile
   systemctl disable --now caddy 2>/dev/null || true
   echo "   Removed the managed Caddyfile and disabled caddy."
+fi
+
+# mDNS alias service (offgridcloud.local).
+if [[ -f /etc/systemd/system/offgridcloud-mdns-alias.service ]]; then
+  systemctl disable --now offgridcloud-mdns-alias 2>/dev/null || true
+  rm -f /etc/systemd/system/offgridcloud-mdns-alias.service
+  systemctl daemon-reload 2>/dev/null || true
+  echo "   Removed the offgridcloud.local mDNS alias."
 fi
 
 # --- 2. sudoers rule + .env wiring -------------------------------------------
