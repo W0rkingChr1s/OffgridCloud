@@ -295,7 +295,7 @@ function FallbackSettings({
             type="number"
             min={30}
             max={3600}
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.ap_probe_interval}
             onChange={(e) => setForm({ ...form, ap_probe_interval: Number(e.target.value) })}
             onBlur={() =>
@@ -313,7 +313,7 @@ function FallbackSettings({
             type="number"
             min={60}
             max={86400}
-            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-none focus:border-ogc-teal"
+            className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal"
             value={form.ap_blind_probe_interval}
             onChange={(e) =>
               setForm({ ...form, ap_blind_probe_interval: Number(e.target.value) })
