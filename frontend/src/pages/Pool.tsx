@@ -250,7 +250,7 @@ export default function Pool() {
           />
           <input
             className={field}
-            placeholder="https://box2.local:8000"
+            placeholder="http://192.168.1.20:8000"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             required
