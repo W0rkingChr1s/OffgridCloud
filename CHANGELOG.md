@@ -15,6 +15,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - Der Assistent setzt Admin, Box-Namen, Ziel-WLAN und das Passwort fürs Rückfall-WLAN und übergibt dann an `deploy/setup/finish.sh`. Anleitung: [docs/IMAGE.md](docs/IMAGE.md).
 - `install.sh` hat dafür einen Image-Build-Modus (`OGC_IMAGE_BUILD=1`), `deploy/https/install.sh` die Option `--skip-apply`.
 
+### 🤖 Auto-Merge für Pull Requests
+
+- PRs mit dem Label `automerge` werden automatisch per Squash gemerged, sobald CI (und ggf. der Image-Build) auf dem Head-Commit grün ist. Dependabot-Patch- und -Minor-Updates erhalten das Label automatisch (`.github/workflows/automerge.yml`, Details in [CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ## [0.4.11] – 2026-10-19
 
 Die Box lässt sich jetzt **komplett per Telegram steuern** (Status, Neustart, Speedtest, Update). Außerdem bleibt eine Installation zuverlässig auf ihrem **Update-Kanal**, und **viele Sicherheitslücken in Abhängigkeiten** sind geschlossen.
