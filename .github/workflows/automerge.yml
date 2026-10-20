@@ -1,0 +1,133 @@
+name: Auto-merge
+
+# Merges a PR by itself once everything on its head commit is green.
+#
+# Which PRs:
+#   - any PR carrying the label "automerge" (only maintainers can set labels,
+#     so this also covers PRs from forks), and
+#   - Dependabot PRs for patch/minor updates: they get the label on their own.
+#     Major updates stay manual.
+#
+# When: after "CI" (and, if it ran, "Raspberry Pi image") finished green on the
+# PR's head commit, or right away when the label is added to a PR that is
+# already green. Squash merge, branch is deleted afterwards. A push that lands
+# in between is never merged unchecked (--match-head-commit).
+#
+# Note: merges with the default GITHUB_TOKEN do not trigger further workflows
+# (no CI run on the push to main). If that matters, store a fine-grained PAT
+# (contents + pull requests: write) as the secret AUTOMERGE_TOKEN.
+#
+# workflow_run only fires once this file is on the default branch.
+
+on:
+  workflow_run:
+    workflows: ["CI", "Raspberry Pi image"]
+    types: [completed]
+  # pull_request_target: runs in the base repo's context. This workflow never
+  # checks out or executes PR code.
+  pull_request_target:
+    types: [opened, reopened, labeled, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+
+concurrency:
+  group: automerge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+env:
+  LABEL: automerge
+  # This check must exist and be green; it needs backend + frontend.
+  REQUIRED_CHECK: Docker image (build only)
+
+jobs:
+  automerge:
+    name: Auto-merge
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request')
+    env:
+      GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Dependabot metadata
+        id: dependabot
+        if: >-
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Label Dependabot patch/minor updates
+        if: >-
+          steps.dependabot.outcome == 'success' &&
+          (steps.dependabot.outputs.update-type == 'version-update:semver-patch' ||
+           steps.dependabot.outputs.update-type == 'version-update:semver-minor')
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh label create "$LABEL" --repo "$REPO" --color 0E8A16 \
+            --description "Merge automatically once CI is green" 2>/dev/null || true
+          gh pr edit "$PR" --repo "$REPO" --add-label "$LABEL"
+
+      - name: Find the PR
+        id: pr
+        env:
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ -n "$EVENT_PR" ]; then
+            PR="$EVENT_PR"
+          else
+            # workflow_run.pull_requests is empty for forks — search by SHA.
+            PR="$(gh pr list --repo "$REPO" --state open --search "$RUN_SHA" \
+                    --json number,headRefOid \
+                    --jq "map(select(.headRefOid == \"$RUN_SHA\")) | .[0].number // empty")"
+          fi
+          if [ -z "$PR" ]; then
+            echo "No open PR for this run — nothing to do."
+          fi
+          echo "number=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Merge if eligible and green
+        if: steps.pr.outputs.number != ''
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          skip() { echo "Not merging #$PR: $*"; exit 0; }
+
+          INFO="$(gh pr view "$PR" --repo "$REPO" \
+                    --json state,isDraft,mergeable,headRefOid,labels)"
+          [ "$(jq -r .state <<<"$INFO")" = OPEN ] || skip "not open"
+          [ "$(jq -r .isDraft <<<"$INFO")" = false ] || skip "draft"
+          jq -e --arg l "$LABEL" '[.labels[].name] | index($l)' <<<"$INFO" >/dev/null \
+            || skip "no '$LABEL' label"
+          [ "$(jq -r .mergeable <<<"$INFO")" != CONFLICTING ] || skip "merge conflict"
+          SHA="$(jq -r .headRefOid <<<"$INFO")"
+
+          # All check runs on the head commit (except this job) must be done
+          # and green, and the required one must be among them.
+          CHECKS="$(gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" \
+                      --jq '.check_runs[] | select(.name != "Auto-merge")
+                            | {name, status, conclusion}' | jq -s .)"
+          echo "$CHECKS" | jq -r '.[] | "  \(.name): \(.status)/\(.conclusion // "-")"'
+
+          jq -e --arg r "$REQUIRED_CHECK" \
+            'any(.[]; .name == $r and .conclusion == "success")' <<<"$CHECKS" >/dev/null \
+            || skip "'$REQUIRED_CHECK' not green (yet)"
+          PENDING="$(jq '[.[] | select(.status != "completed")] | length' <<<"$CHECKS")"
+          [ "$PENDING" -eq 0 ] || skip "$PENDING check(s) still running"
+          FAILED="$(jq -r '[.[] | select(.conclusion | IN("success","skipped","neutral") | not)
+                            | .name] | join(", ")' <<<"$CHECKS")"
+          [ -z "$FAILED" ] || skip "failed checks: $FAILED"
+
+          gh pr merge "$PR" --repo "$REPO" --squash --delete-branch \
+            --match-head-commit "$SHA"
+          echo "Merged #$PR at $SHA."

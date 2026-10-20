@@ -48,6 +48,20 @@ einziger Prozess aus.
   keine Dauer-Dienste (Redis o. Ä.) ohne triftigen Grund. Nie ganze Mediendateien
   im RAM puffern — auf Platte streamen.
 
+## Auto-Merge
+
+PRs mit dem Label **`automerge`** merged `.github/workflows/automerge.yml`
+selbstständig (Squash, Branch wird gelöscht), sobald alle Checks auf dem
+Head-Commit grün sind. Pflicht ist dabei „Docker image (build only)“, also
+Backend, Frontend und Image-Build. Dependabot-PRs für Patch- und
+Minor-Updates bekommen das Label automatisch, Major-Updates bleiben Handarbeit.
+Abbrechen geht über das Entfernen des Labels oder den Draft-Status.
+
+Ein Merge mit dem Standard-`GITHUB_TOKEN` löst keine weiteren Workflows aus.
+Wer CI auch auf `main` nach dem Merge will, hinterlegt einen fine-grained PAT
+(Contents + Pull requests: write) als Secret `AUTOMERGE_TOKEN`, für
+Dependabot-PRs zusätzlich als Dependabot-Secret.
+
 ## Roadmap
 
 Siehe [docs/ENTWICKLUNGSPLAN.md](docs/ENTWICKLUNGSPLAN.md).
