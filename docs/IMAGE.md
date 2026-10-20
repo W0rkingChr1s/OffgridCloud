@@ -48,7 +48,9 @@ hat. Der Assistent fragt ab:
 
 - **Admin-Zugang** (E-Mail und Passwort),
 - **Name der Box**: danach `https://<name>.local`; vorgeschlagen wird ein
-  zufälliger, damit mehrere Boxen im selben Netz nicht kollidieren,
+  zufälliger, damit mehrere Boxen im selben Netz nicht kollidieren. Einfacher
+  geht's über den festen Alias `https://offgridcloud.local` oder per IP
+  (`http://<IP>`),
 - **Netzwerk**: ein WLAN, in das sich die Box einbucht, oder „Kabel / so lassen“,
 - **Passwort fürs Rückfall-WLAN**: findet die Box später kein bekanntes Netz,
   öffnet sie ihr eigenes WLAN (Name wie die Box). Dieses Rückfall-WLAN lässt

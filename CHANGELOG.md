@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🌐 Box unter `offgridcloud.local` und per IP erreichbar
+
+- Neben dem eindeutigen `https://offgridcloud-XXXXX.local` hört die Box jetzt auch auf den festen Alias **`https://offgridcloud.local`**. Den veröffentlicht der neue Dienst `offgridcloud-mdns-alias` per avahi, je Netzwerk-Schnittstelle mit der passenden IP (LAN und Rückfall-WLAN). Bei mehreren Boxen im selben Netz bekommt nur die erste den Alias.
+- **Zugriff per IP:** Caddy beantwortet `http://<IP der Box>` jetzt direkt (ohne Zertifikat, weil es für nackte IPs keins gibt). Die `.local`-Namen leiten weiter auf HTTPS um.
+- Passkeys sind auch unter `offgridcloud.local` erlaubt (eigener Passkey pro Adresse).
+
 ### ✨ Neu: Fertiges Raspberry-Pi-Image mit Setup-Assistent
 
 - **Flashbares Image** für Raspberry Pi 3/4/5 und Zero 2 W (Raspberry Pi OS Lite, arm64). Gebaut mit pi-gen auf einem nativen arm64-Runner und an jedes Release als `offgridcloud-<version>-rpi-arm64.img.xz` angehängt (`.github/workflows/image.yml`).

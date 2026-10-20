@@ -24,7 +24,7 @@ OGC_WITH_KIOSK=0 \
   bash /opt/offgridcloud/src/deploy/install.sh
 
 # `enable --now` inside a chroot only half-works; make sure the units are on.
-systemctl enable NetworkManager avahi-daemon caddy offgridcloud-netwatch offgridcloud
+systemctl enable NetworkManager avahi-daemon caddy offgridcloud-mdns-alias offgridcloud-netwatch offgridcloud
 
 apt-get clean
 rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache

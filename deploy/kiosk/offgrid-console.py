@@ -51,6 +51,7 @@ PIN_FILE = Path(os.environ.get("OGC_KIOSK_PIN_FILE", str(PREFIX / "data" / "kios
 
 SERVICE_NAME = "offgridcloud"
 NETWATCH_SERVICE = "offgridcloud-netwatch"
+MDNS_ALIAS_SERVICE = "offgridcloud-mdns-alias"  # publishes offgridcloud.local
 CHROMIUM_LAUNCHER = Path(__file__).resolve().parent / "chromium-kiosk.sh"
 
 # PIN hashing — PBKDF2-HMAC-SHA256, all stdlib. Stored as one line:
@@ -181,6 +182,8 @@ def gather_status() -> dict[str, str]:
         "host": socket.gethostname(),
         "ips": ", ".join(ips),
         "url": f"http://{ips[0]}:{port}" if ips and ips[0] != "—" else f"Port {port}",
+        "alias": ("https://offgridcloud.local"
+                  if service_state(MDNS_ALIAS_SERVICE) == "active" else "—"),
         "admin_email": env.get("OGC_INITIAL_ADMIN_EMAIL", "admin@offgrid.local"),
         "service": svc,
         "version": (hz or {}).get("version", "?"),
@@ -531,6 +534,7 @@ class Console:
             ("Gerät", s["host"], 0),
             ("IP-Adresse", s["ips"], 0),
             ("Web-Oberfläche", s["url"], self.color(1)),
+            ("Kurzadresse", s["alias"], self.color(1) if s["alias"] != "—" else 0),
             ("Dienst", s["service"], self.color(2 if svc_ok else 3)),
             ("Erreichbar", s["reachable"], self.color(2 if s["reachable"] == "ja" else 3)),
             ("Version", s["version"], 0),
