@@ -180,9 +180,11 @@ sudo /opt/offgridcloud/deploy/netmerge/install.sh
 # oder den Installer mit OGC_WITH_NETMERGE=1 erneut laufen lassen.
 ```
 
-Das Skript installiert net-merge (auf Raspberry Pi OS/Debian aus dessen signiertem
-apt-Repository, der Schlüssel-Fingerabdruck wird geprüft, sonst aus dem
-Release-Tarball), startet den Dienst und trägt `OGC_NETMERGE_PROXY` in die `.env`
+Das Skript installiert eine fest gepinnte net-merge-Version (`NM_VERSION` im
+Skript, derzeit 0.3.3): auf Raspberry Pi OS/Debian aus dessen signiertem
+apt-Repository (Schlüssel-Fingerabdruck geprüft, Paket per `apt-mark hold`
+festgehalten), sonst aus dem Release-Tarball (SHA-256 geprüft). Neuere
+net-merge-Versionen kommen also nur mit einem OffgridCloud-Update. Es startet den Dienst und trägt `OGC_NETMERGE_PROXY` in die `.env`
 ein. Beim Installer `deploy/install.sh` ist es der Punkt „Leitungsbündelung“
 (bzw. `OGC_WITH_NETMERGE=1`). Danach unter **Bandbreite → Leitungsbündelung**
 den Schalter „Uploads über alle Leitungen bündeln“ setzen. Dort steht auch, welche
