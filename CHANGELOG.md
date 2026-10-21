@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.7.7] – 2026-10-21
+
+Boxen an einer gemeinsamen Leitung teilen sich die Bandbreite fair, und Limits greifen sofort auch bei laufenden Uploads. Wer per `https://<name>.local` arbeitet, installiert einmal das Root-Zertifikat der Box und hat danach Ruhe vor Zertifikatswarnungen.
+
 ### ⚖️ Pool: Bandbreite fair teilen
 
 - **Eine Leitung, gerechte Anteile:** Unter **Pool → Gemeinsame Leitung** die Kapazität der Leitung (KB/s) eintragen und „Bandbreite fair teilen“ einschalten. Jede Minute bekommt jede sendende Box mit Rang den gleichen Anteil. Wer gerade nicht sendet, hat seinen Anteil schon bereit, damit ein Neuling nicht kurz alles belegt.
