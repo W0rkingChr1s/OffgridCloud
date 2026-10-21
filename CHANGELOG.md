@@ -16,6 +16,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - Installer-Option „Bluetooth für die Companion-App“ (vorausgewählt, wenn ein Adapter da ist), im fertigen Image aktiv. Neue Endpunkte `/api/ble/*`; Abschalten über `PUT /api/ble/settings` (Admin).
 - **Neue Seite *Bluetooth* im Web-Portal** (für alle Benutzer): „Gerät koppeln“ zeigt QR-Code und Code mit Countdown und erkennt selbst, wenn das Handy fertig ist. Darunter die gekoppelten Geräte zum Umbenennen und Entfernen; Admins sehen alle und schalten Bluetooth hier ab. Meldet sich der Dienst nicht, sagt die Seite das.
 
+### 🔄 Automatische Updates
+
+- **Neu unter System → Version: „Automatisch aktualisieren“** (standardmäßig aus). Die Box installiert neue Versionen selbst, mit derselben `update.sh` wie der One-Click-Knopf und auf ihrem Kanal.
+- **Nur wenn es nicht stört:** im wählbaren Zeitfenster (Standard 03–05 Uhr, Uhrzeit der Box), höchstens einmal am Tag und nur, wenn weder Übertragungen noch Uploads auf die Box noch Karten-Importe laufen. Über eine getaktete Verbindung (Handy per USB) erst nach ausdrücklicher Freigabe.
+- **Meldet sich:** Erfolg oder Fehler kommt über Telegram, E-Mail und Webhook (Event `server.update`). Eine fehlgeschlagene Version wird übersprungen, bis eine neuere erscheint, statt jede Nacht neu zu scheitern.
+- Neue Endpunkte `GET/PUT /api/updates/auto` (Admin), Änderungen stehen im Audit-Log. Details: [BETRIEB.md §9](docs/BETRIEB.md#9-updates).
+
 ## [0.7.7] – 2026-10-21
 
 Boxen an einer gemeinsamen Leitung teilen sich die Bandbreite fair, und Limits greifen sofort auch bei laufenden Uploads. Wer per `https://<name>.local` arbeitet, installiert einmal das Root-Zertifikat der Box und hat danach Ruhe vor Zertifikatswarnungen.

@@ -87,7 +87,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 🔑 **Passkeys (WebAuthn)** — Anmeldung ohne Passwort, zusätzlich zum klassischen Login
 - 🧭 **Setup-Assistent** — das fertige Pi-Image richtet sich im Browser ein (per Kabel oder über ein Setup-WLAN mit Captive Portal); keine Geheimnisse im Image
 - 🖥️ **OffgridCloud OS** — hängt ein Bildschirm an der Box, startet sie in ein **getabbtes Dashboard** (Live-Status, Provider, Netz/Bandbreite/VPN, Speicher, Pool, Benutzer & Gruppen, System mit Version/Updates und Live-Update-Fortschritt) — die **komplette Verwaltung ohne Web-UI**, direkt an der Box oder per SSH. Ins darunterliegende Raspberry Pi OS geht es erst per **Admin-PIN**; optionaler Vollbild-Browser-Kiosk für Pi 4/5
-- 🔄 **One-Click-Update** — aus Web-UI, Konsole oder Telegram; die Installation bleibt auf ihrem Update-Kanal (Release oder `main`)
+- 🔄 **One-Click- und Auto-Update** — aus Web-UI, Konsole oder Telegram, oder auf Wunsch automatisch in einem ruhigen Zeitfenster (nur wenn nichts überträgt, nicht übers Handy-Netz); die Installation bleibt auf ihrem Update-Kanal (Release oder `main`)
 - 🧾 **Härtung** — Audit-Log, verschlüsselte Credentials, Disk-Monitoring, Backup
 
 ### Benachrichtigungen & Telegram

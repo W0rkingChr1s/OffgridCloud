@@ -6,6 +6,7 @@ import {
   rootCaUrls,
   updateHttps,
   type AuditEvent,
+  type AutoUpdate,
   type HttpsStatus,
   type SystemStatus,
   type UpdateInfo,
@@ -969,6 +970,79 @@ function UpdateCard() {
       )}
 
       {msg && <div className="mt-3 text-sm text-slate-300">{msg}</div>}
+
+      {info?.self_update_enabled && <AutoUpdateSettings />}
+    </div>
+  );
+}
+
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+
+function AutoUpdateSettings() {
+  const [auto, setAuto] = useState<AutoUpdate | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<AutoUpdate>("/api/updates/auto")
+      .then(setAuto)
+      .catch(() => {});
+  }, []);
+
+  async function save(patch: Partial<AutoUpdate>) {
+    setErr(null);
+    try {
+      setAuto(
+        await api<AutoUpdate>("/api/updates/auto", {
+          method: "PUT",
+          body: JSON.stringify(patch),
+        }),
+      );
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Fehler");
+    }
+  }
+
+  if (!auto?.available) return null;
+  const hourSelect = (value: number, key: "start_hour" | "end_hour") => (
+    <select
+      value={value}
+      disabled={!auto.enabled}
+      onChange={(e) => save({ [key]: Number(e.target.value) })}
+      className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-sm disabled:opacity-50"
+    >
+      {HOURS.map((h) => (
+        <option key={h} value={h}>
+          {String(h).padStart(2, "0")}:00
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <div className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={auto.enabled}
+          onChange={(e) => save({ enabled: e.target.checked })}
+        />
+        <span className="font-medium">Automatisch aktualisieren</span>
+        <InfoTip text="Die Box installiert neue Versionen selbst – nur im Zeitfenster (Uhrzeit der Box), höchstens einmal am Tag und nur, wenn gerade nichts übertragen, hochgeladen oder importiert wird. Das Ergebnis kommt über die eingerichteten Benachrichtigungen. Schlägt eine Version fehl, wird sie übersprungen, bis eine neuere erscheint; Aus- und wieder Einschalten versucht sie erneut. Gleiche Von- und Bis-Zeit heißt: rund um die Uhr." />
+      </label>
+      <div className="flex flex-wrap items-center gap-2 pl-6 text-slate-300">
+        Zeitfenster {hourSelect(auto.start_hour, "start_hour")} bis{" "}
+        {hourSelect(auto.end_hour, "end_hour")}
+      </div>
+      <label className="flex items-center gap-2 pl-6 text-slate-300">
+        <input
+          type="checkbox"
+          checked={auto.allow_metered}
+          disabled={!auto.enabled}
+          onChange={(e) => save({ allow_metered: e.target.checked })}
+        />
+        Auch über getaktete Verbindung (Handy per USB)
+      </label>
+      {auto.enabled && <div className="pl-6 text-xs text-slate-500">{auto.status}</div>}
+      {err && <div className="pl-6 text-xs text-red-300">{err}</div>}
     </div>
   );
 }

@@ -645,6 +645,17 @@ export interface UpdateInfo {
   in_docker: boolean;
 }
 
+export interface AutoUpdate {
+  enabled: boolean;
+  start_hour: number;
+  end_hour: number;
+  allow_metered: boolean;
+  available: boolean;
+  status: string;
+  last_day: string;
+  failed_target: string;
+}
+
 export interface UpdateProgress {
   phase: "idle" | "running" | "success" | "failed" | "unknown";
   running: boolean;

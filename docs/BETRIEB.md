@@ -531,6 +531,23 @@ Versions-Tag: `git tag v0.2.0 && git push origin v0.2.0`.
   ein kompromittierter Dienst keinen Code ablegen, den sudo später als root
   ausführt. Ältere Installationen werden beim nächsten Update automatisch
   umgestellt.
+- **Automatisch:** unter **System → Version → „Automatisch aktualisieren"**
+  (standardmäßig aus). Die Box schaut alle 5 Minuten nach und startet dieselbe
+  `update.sh` wie der One-Click-Knopf, aber nur wenn
+  - die Uhrzeit der Box im **Zeitfenster** liegt (Standard 03–05 Uhr; über
+    Mitternacht wie 22–04 geht, gleiche Von-/Bis-Zeit heißt rund um die Uhr),
+  - **nichts läuft**: keine Übertragung in die Cloud, kein Upload auf die Box
+    mit Daten in den letzten 10 Minuten, kein Karten-Import,
+  - die Leitung **nicht getaktet** ist (Handy per USB), außer das ist erlaubt,
+  - heute noch **kein Versuch** war (höchstens einer pro Tag).
+
+  Das Ergebnis geht an alle eingerichteten Benachrichtigungen (Telegram,
+  E-Mail, Webhook-Event `server.update`) und in die Hinweise im Portal. Schlägt
+  eine Version fehl, überspringt die Box sie, bis eine neuere erscheint;
+  Aus- und wieder Einschalten versucht sie erneut. Unter dem Schalter steht,
+  worauf die Box gerade wartet. Nicht verfügbar in Docker oder mit
+  `OGC_SELF_UPDATE=false`. Auf dem `main`-Kanal heißt das: jeder neue Commit
+  wird installiert — für Feldboxen besser beim Kanal `release` bleiben.
 - **Installer erneut ausführen** (One-Liner/`install.sh`): ebenfalls ein
   vollwertiges Update. Der Installer erkennt die bestehende Installation, wählt
   jede aktive Funktion als Vorgabe vor und aktualisiert sie beim Durchbestätigen

@@ -107,6 +107,7 @@ TELEGRAM_ICONS: dict[str, str] = {
     "transfer.paused": "⏸",
     "transfer.resumed": "▶️",
     "pool.alert": "🛰️",
+    "server.update": "🔄",
 }
 
 

@@ -17,7 +17,15 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, announce, buffers, pool_watch, setup_wizard, telegram_bot
+from . import (
+    __version__,
+    announce,
+    autoupdate,
+    buffers,
+    pool_watch,
+    setup_wizard,
+    telegram_bot,
+)
 from .admin_ops import disk_usage, ensure_system_settings, get_system_settings
 from .bandwidth import ensure_policy
 from .bootstrap import autostart_vpn, ensure_initial_admin
@@ -94,6 +102,8 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(announce.connectivity_loop(stop)))
         # Pool hub: one bundled message when peers change (offline, full, …).
         tasks.append(asyncio.create_task(pool_watch.pool_watch_loop(stop)))
+        # Unattended updates in the configured window (opt-in, app.autoupdate).
+        tasks.append(asyncio.create_task(autoupdate.auto_update_loop(stop)))
         # Comprehensive "server up" summary. Off the event loop (it probes the
         # external IP and pools peers), so serving traffic is never delayed.
         threading.Thread(target=announce.announce_startup, daemon=True).start()

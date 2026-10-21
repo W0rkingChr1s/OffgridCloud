@@ -479,6 +479,18 @@ class SystemSettings(Base):
     # docs/BLE-PROTOKOLL.md). On by default: pairing still needs a code from
     # the web portal, and switching it off removes the rescue path.
     ble_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Unattended updates (app.autoupdate). Off by default: an update restarts
+    # the service, so the operator opts in and picks a quiet time window
+    # (box-local hours, start == end means around the clock).
+    auto_update_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_update_start_hour: Mapped[int] = mapped_column(default=3)
+    auto_update_end_hour: Mapped[int] = mapped_column(default=5)
+    # Also update over a metered uplink (USB-tethered phone).
+    auto_update_metered: Mapped[bool] = mapped_column(Boolean, default=False)
+    # At most one unattended attempt per day (box-local ISO date).
+    auto_update_last_day: Mapped[str] = mapped_column(String(10), default="")
+    # A target that failed unattended is skipped until a newer one appears.
+    auto_update_failed_target: Mapped[str] = mapped_column(String(100), default="")
 
 
 class NetworkSettings(Base):

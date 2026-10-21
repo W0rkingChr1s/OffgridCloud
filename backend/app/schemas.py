@@ -660,6 +660,27 @@ class UpdateInfoOut(BaseModel):
     in_docker: bool = False
 
 
+class AutoUpdateOut(BaseModel):
+    """Unattended-update settings plus what the scheduler is waiting for."""
+
+    enabled: bool
+    start_hour: int
+    end_hour: int
+    allow_metered: bool
+    # False on Docker or with one-click update switched off: nothing to run.
+    available: bool
+    status: str = ""
+    last_day: str = ""
+    failed_target: str = ""
+
+
+class AutoUpdateIn(BaseModel):
+    enabled: bool | None = None
+    start_hour: int | None = Field(default=None, ge=0, le=23)
+    end_hour: int | None = Field(default=None, ge=0, le=23)
+    allow_metered: bool | None = None
+
+
 class UpdateApplyResult(BaseModel):
     started: bool
     message: str
