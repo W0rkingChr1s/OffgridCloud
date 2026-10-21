@@ -1,0 +1,88 @@
+name: net-merge update
+
+# net-merge is pinned in deploy/netmerge/install.sh (NM_VERSION + tarball
+# SHA-256s), so Dependabot doesn't see it. This checks weekly for a newer
+# release and opens a PR that moves the pin (scripts/netmerge-bump.sh): only
+# once the signed apt repository carries it for every Pi architecture, with
+# the hashes computed from the release tarballs.
+#
+# The PR never merges by itself: a new third-party binary on every box wants a
+# look at the release notes first. It touches deploy/netmerge/, so the
+# "Raspberry Pi image" build runs on it and installs the new version for real.
+#
+# Note: PRs opened with the default GITHUB_TOKEN trigger no workflows (no CI,
+# no image build). Store a fine-grained PAT (contents + pull requests: write)
+# as AUTOMERGE_TOKEN — the same secret Auto-merge uses — to get them. Also
+# needs "Allow GitHub Actions to create and approve pull requests" under
+# Settings → Actions → General.
+#
+# By hand: Actions → "net-merge update" → "Run workflow".
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"   # Mondays 04:41 UTC
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to pin (default: latest release)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: netmerge-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Check for a new net-merge release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.AUTOMERGE_TOKEN || github.token }}
+
+      - name: Move the pin
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+        run: scripts/netmerge-bump.sh "$VERSION"
+
+      - name: Open a PR
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          OLD: ${{ steps.bump.outputs.old }}
+          NEW: ${{ steps.bump.outputs.new }}
+        run: |
+          set -euo pipefail
+          BRANCH="netmerge/bump-$NEW"
+          BASE="$(gh api "repos/$REPO" --jq .default_branch)"
+          if [ -n "$(gh pr list --repo "$REPO" --state open --head "$BRANCH" --json number --jq '.[].number')" ]; then
+            echo "PR for net-merge $NEW is already open."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit -qam "net-merge $OLD → $NEW"
+          git push -f origin "$BRANCH"
+          gh pr create --repo "$REPO" --base "$BASE" --head "$BRANCH" \
+            --title "net-merge $OLD → $NEW" \
+            --body "$(cat <<EOF
+          Neue net-merge-Version: [v$NEW](https://github.com/rohit267/net-merge/releases/tag/v$NEW) ([Änderungen seit v$OLD](https://github.com/rohit267/net-merge/compare/v$OLD...v$NEW)).
+
+          - \`NM_VERSION\` in \`deploy/netmerge/install.sh\` → \`$NEW\`
+          - SHA-256 der Release-Tarballs (x86_64, aarch64, armv7l) neu berechnet; das x86_64-Binary meldet \`net-merge $NEW\`
+          - Im apt-Repository für amd64, arm64 und armhf vorhanden
+
+          Vor dem Merge: Release-Notes lesen. Boxen ziehen die neue Version mit dem nächsten OffgridCloud-Update.
+
+          _Erstellt vom Workflow „net-merge update“._
+          EOF
+          )"

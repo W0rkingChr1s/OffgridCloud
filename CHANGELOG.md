@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🔀 net-merge-Updates per PR
+
+- **Workflow „net-merge update“:** Prüft montags, ob es ein neues net-merge-Release gibt, und öffnet dann einen PR, der den Pin in `deploy/netmerge/install.sh` anhebt (Version und SHA-256, berechnet von `scripts/netmerge-bump.sh`). Erst wenn das apt-Repository die Version für alle Pi-Architekturen hat. Gemergt wird von Hand; der Image-Build läuft auf dem PR mit.
+
 ### 🐛 Fehlerbehebungen
 
 - **Bluetooth-Dienst startet wieder:** `offgridcloud-ble` wollte schon werben, bevor er mit BlueZ verbunden war, stürzte dabei ab und startete alle 10 Sekunden neu. Das Web-Portal meldete deshalb „Der Bluetooth-Dienst der Box meldet sich nicht“, obwohl ein Adapter da war.
