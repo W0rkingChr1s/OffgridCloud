@@ -153,6 +153,10 @@ fi
 
 step "Restarting the service..."
 systemctl restart offgridcloud
+# The reinstall refreshed the Bluetooth service's code too (same venv/source).
+if [[ -f /etc/systemd/system/offgridcloud-ble.service ]]; then
+  systemctl restart offgridcloud-ble 2>/dev/null || true
+fi
 printf "   Waiting for http://127.0.0.1:%s/api/health " "$PORT"
 for _ in $(seq 1 20); do
   if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then

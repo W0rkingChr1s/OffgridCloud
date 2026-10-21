@@ -23,6 +23,7 @@
 #   OGC_WITH_FFMPEG=0                OGC_WITH_SPEEDTEST=1
 #   OGC_WITH_AP_FALLBACK=0           OGC_WITH_VPN=0
 #   OGC_WITH_NETMERGE=0              # Leitungsbündelung (net-merge, alle Uplinks)
+#   OGC_WITH_BLE=<auto>              # Bluetooth für die Companion-App (an, wenn ein Adapter da ist)
 #   OGC_WITH_KIOSK=0                 OGC_WITH_CHROMIUM_KIOSK=0   OGC_KIOSK_PIN=
 #   OGC_INSTALL_SERVICE=1            OGC_START=1
 #   OGC_WITH_HTTPS=1                 OGC_HTTPS_HOSTNAME=offgridcloud-XXXXX   OGC_HTTPS_DOMAIN=
@@ -60,6 +61,9 @@ _has_kiosk=0;    [[ -f /etc/systemd/system/offgrid-kiosk.service ]] && _has_kios
 _has_ap=0;       [[ -f /etc/systemd/system/offgridcloud-netwatch.service ]] && _has_ap=1
 _has_vpn=0;      [[ -f /etc/systemd/system/offgridcloud.service.d/10-vpn-caps.conf ]] && _has_vpn=1
 _has_netmerge=0; [[ -f /etc/systemd/system/offgridcloud-netmerge.service ]] && _has_netmerge=1
+# Bluetooth: keep it if installed, otherwise suggest it when the box has a radio.
+_has_ble=0;      [[ -f /etc/systemd/system/offgridcloud-ble.service ]] && _has_ble=1
+[[ $_has_ble -eq 0 ]] && compgen -G "/sys/class/bluetooth/hci*" >/dev/null 2>&1 && _has_ble=1
 _has_ffmpeg=0;   command -v ffmpeg >/dev/null 2>&1 && _has_ffmpeg=1
 _has_speed=1;    # installed by default; keep on unless the operator opts out
 _has_chrome=0;   { command -v chromium-browser || command -v chromium; } >/dev/null 2>&1 \
@@ -106,6 +110,7 @@ WITH_FFMPEG="${OGC_WITH_FFMPEG:-$_has_ffmpeg}"
 WITH_AP_FALLBACK="${OGC_WITH_AP_FALLBACK:-$_has_ap}"
 WITH_VPN="${OGC_WITH_VPN:-$_has_vpn}"
 WITH_NETMERGE="${OGC_WITH_NETMERGE:-$_has_netmerge}"
+WITH_BLE="${OGC_WITH_BLE:-$_has_ble}"
 WITH_KIOSK="${OGC_WITH_KIOSK:-$_has_kiosk}"
 WITH_CHROMIUM_KIOSK="${OGC_WITH_CHROMIUM_KIOSK:-$_has_chrome}"
 KIOSK_PIN="${OGC_KIOSK_PIN:-}"
@@ -264,13 +269,14 @@ if [[ $USE_WHIPTAIL -eq 1 ]]; then
   # Vorauswahl spiegelt den erkannten Zustand, damit ein Re-Run = Update ist.
   _sel=$(whiptail --backtitle "$WT_BACKTITLE" --title "Funktionen wählen" \
     --separate-output --checklist \
-    "Leertaste schaltet eine Option um, Enter bestätigt:" 21 78 10 \
+    "Leertaste schaltet eine Option um, Enter bestätigt:" 22 78 11 \
     FFMPEG     "Video-Thumbnails (installiert ffmpeg)"                  "$(wt_onoff "$WITH_FFMPEG")" \
     SPEEDTEST  "Ookla-Speedtest-CLI (genauere Bandbreite)"             "$(wt_onoff "$WITH_SPEEDTEST")" \
     HTTPS      "HTTPS (Zugriff per https://<name>.local)"              "$(wt_onoff "$WITH_HTTPS")" \
     APFALLBACK "Netzwerk-Redundanz: eigenes WLAN bei Uplink-Ausfall"   "$(wt_onoff "$WITH_AP_FALLBACK")" \
     VPN        "VPN-Client (WireGuard/OpenVPN)"                        "$(wt_onoff "$WITH_VPN")" \
     NETMERGE   "Leitungsbündelung: alle Uplinks gleichzeitig (net-merge)" "$(wt_onoff "$WITH_NETMERGE")" \
+    BLE        "Bluetooth für die Companion-App"                       "$(wt_onoff "$WITH_BLE")" \
     KIOSK      "Kiosk-Menü am Bildschirm der Box"                      "$(wt_onoff "$WITH_KIOSK")" \
     CHROMIUM   "  + Vollbild-Browser (Chromium, eher Pi 4/5)"          "$(wt_onoff "$WITH_CHROMIUM_KIOSK")" \
     SERVICE    "systemd-Dienst installieren"                           "$(wt_onoff "$INSTALL_SERVICE")" \
@@ -279,7 +285,7 @@ if [[ $USE_WHIPTAIL -eq 1 ]]; then
     || { echo "Abgebrochen — nichts wurde verändert." > /dev/tty; exit 0; }
 
   WITH_FFMPEG=0; WITH_SPEEDTEST=0; WITH_HTTPS=0; WITH_AP_FALLBACK=0
-  WITH_VPN=0; WITH_NETMERGE=0; WITH_KIOSK=0; WITH_CHROMIUM_KIOSK=0; INSTALL_SERVICE=0; DO_START=0
+  WITH_VPN=0; WITH_NETMERGE=0; WITH_BLE=0; WITH_KIOSK=0; WITH_CHROMIUM_KIOSK=0; INSTALL_SERVICE=0; DO_START=0
   while IFS= read -r _tag; do
     case "$_tag" in
       FFMPEG)     WITH_FFMPEG=1 ;;
@@ -288,6 +294,7 @@ if [[ $USE_WHIPTAIL -eq 1 ]]; then
       APFALLBACK) WITH_AP_FALLBACK=1 ;;
       VPN)        WITH_VPN=1 ;;
       NETMERGE)   WITH_NETMERGE=1 ;;
+      BLE)        WITH_BLE=1 ;;
       KIOSK)      WITH_KIOSK=1 ;;
       CHROMIUM)   WITH_CHROMIUM_KIOSK=1 ;;
       SERVICE)    INSTALL_SERVICE=1 ;;
@@ -318,6 +325,7 @@ HTTPS ................ $(yesno "$WITH_HTTPS")$([[ "$WITH_HTTPS" -eq 1 ]] && echo
 Netzwerk-Redundanz ... $(yesno "$WITH_AP_FALLBACK")
 VPN-Client ........... $(yesno "$WITH_VPN")
 Bündelung (net-merge)  $(yesno "$WITH_NETMERGE")
+Bluetooth (App) ...... $(yesno "$WITH_BLE")
 Kiosk-Menü ........... $(yesno "$WITH_KIOSK")$([[ "$WITH_KIOSK" -eq 1 && "$WITH_CHROMIUM_KIOSK" -eq 1 ]] && echo " (+ Chromium)")
 Dienst installieren .. $(yesno "$INSTALL_SERVICE")
 Jetzt starten ........ $(yesno "$DO_START")
@@ -359,6 +367,7 @@ fi
 ask_yn     WITH_AP_FALLBACK    "Netzwerk-Redundanz: eigenes WLAN, wenn der Uplink ausfällt?" "$WITH_AP_FALLBACK"
 ask_yn     WITH_VPN            "VPN-Client (WireGuard/OpenVPN) einrichten?"                 "$WITH_VPN"
 ask_yn     WITH_NETMERGE       "Leitungsbündelung: Uploads über alle Uplinks (net-merge)?"  "$WITH_NETMERGE"
+ask_yn     WITH_BLE            "Bluetooth: Verwaltung per Companion-App (iOS/Android)?"     "$WITH_BLE"
 ask_yn     WITH_KIOSK          "OffgridCloud-OS-Menü am Bildschirm der Box (Kiosk)?"        "$WITH_KIOSK"
 if [[ "$WITH_KIOSK" -eq 1 ]]; then
   ask_yn   WITH_CHROMIUM_KIOSK "  … zusätzlich Vollbild-Browser (Chromium, eher Pi 4/5)?"   "$WITH_CHROMIUM_KIOSK"
@@ -389,6 +398,7 @@ if [[ $NONINTERACTIVE -eq 0 ]]; then
     Netzwerk-Redundanz ... $(yesno "$WITH_AP_FALLBACK")
     VPN-Client ........... $(yesno "$WITH_VPN")
     Bündelung (net-merge)  $(yesno "$WITH_NETMERGE")
+    Bluetooth (App) ...... $(yesno "$WITH_BLE")
     Kiosk-Menü ........... $(yesno "$WITH_KIOSK")$([[ "$WITH_KIOSK" -eq 1 && "$WITH_CHROMIUM_KIOSK" -eq 1 ]] && echo " (+ Chromium)")
     Dienst installieren .. $(yesno "$INSTALL_SERVICE")
     Jetzt starten ........ $(yesno "$DO_START")
@@ -777,6 +787,23 @@ if [[ $WITH_NETMERGE -eq 1 ]]; then
   else
     bash "$PREFIX/deploy/netmerge/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
       || echo "   Link bundling setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
+  fi
+fi
+
+# --- Optional: Bluetooth for the companion app (offgridcloud-ble) ----------
+if [[ $WITH_BLE -eq 1 ]]; then
+  step "Installing Bluetooth management for the companion app..."
+  mkdir -p "$PREFIX/deploy"
+  rm -rf "$PREFIX/deploy/ble"   # replace, don't nest, on a re-run/update
+  cp -r "$REPO_ROOT/deploy/ble" "$PREFIX/deploy/ble"
+  chmod +x "$PREFIX/deploy/ble/"*.sh 2>/dev/null || true
+  if [[ $INSTALL_SERVICE -eq 1 ]]; then
+    BLE_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER")
+    [[ $DO_START -eq 1 ]] || BLE_ARGS+=(--no-start)
+    bash "$PREFIX/deploy/ble/install.sh" "${BLE_ARGS[@]}" \
+      || echo "   Bluetooth setup reported an issue — see docs/BLE-PROTOKOLL.md." >&2
+  else
+    echo "   No systemd service chosen: run $PREFIX/deploy/ble/install.sh later."
   fi
 fi
 

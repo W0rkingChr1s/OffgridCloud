@@ -122,3 +122,16 @@ def test_disabled_bluetooth_blocks_new_codes(client, admin_auth):
     assert client.post("/api/ble/pairings", headers=admin_auth).status_code == 409
     client.put("/api/ble/settings", headers=admin_auth, json={"enabled": True})
     assert client.post("/api/ble/pairings", headers=admin_auth).status_code == 201
+
+
+def test_box_host_reads_settings_and_open_codes(client, admin_auth):
+    import asyncio
+
+    from app.ble.bridge import BoxHost
+    from app.ble.keys import load_or_create_box_key
+
+    host = BoxHost(load_or_create_box_key(), "http://127.0.0.1:9")
+    client.put("/api/ble/settings", headers=admin_auth, json={"enabled": True})
+    client.post("/api/ble/pairings", headers=admin_auth)
+    assert asyncio.run(host.read_enabled()) is True
+    assert asyncio.run(host.pairing_open()) is True

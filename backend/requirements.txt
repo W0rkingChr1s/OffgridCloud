@@ -28,3 +28,6 @@ webauthn==3.0.1
 zeroconf==0.151.5
 # Used directly to list this box's addresses (zeroconf's helper is deprecated).
 ifaddr==0.2.0
+# BLE protocol (docs/BLE-PROTOKOLL.md): CBOR messages. Already pulled in by
+# webauthn; pinned here because app.ble uses it directly.
+cbor2==6.1.5

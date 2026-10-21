@@ -1,7 +1,7 @@
 # OffgridCloud — BLE-Protokoll (Version 1)
 
-> **Status:** Spezifikation, Entwurf zur Umsetzung. Noch keine Implementierung im
-> Box-Dienst. Gegenstück in der App:
+> **Status:** Spezifikation Version 1. Box-Seite: `backend/app/ble/` (Dienst
+> `offgridcloud-ble`, Betrieb: [BETRIEB.md §9d](BETRIEB.md)). Gegenstück in der App:
 > [OffgridCloud-Companion](https://github.com/W0rkingChr1s/OffgridCloud-Companion)
 > (`src/protocol/`). Testvektoren: [`docs/ble/testvectors.json`](https://github.com/W0rkingChr1s/OffgridCloud/blob/main/docs/ble/testvectors.json),
 > erzeugt mit `scripts/ble_testvectors.py`.
@@ -114,6 +114,11 @@ kommt vollständig aus §5 und §6.
   Beide Seiten MÜSSEN mit der Mindest-MTU 23 funktionieren.
 - Die Box KANN mehrere Verbindungen gleichzeitig halten. Jede Verbindung hat ihre
   eigene Noise-Sitzung; der Zustand geht mit der Verbindung verloren.
+- **Box-Implementierung v1: genau eine Verbindung.** BlueZ schickt
+  Notifications an alle verbundenen Geräte; ein zweites Handy bekäme Frames,
+  die es nicht entschlüsseln kann. Solange eine Verbindung besteht, wirbt die
+  Box nicht und ignoriert Schreibzugriffe anderer Geräte vollständig.
+  Mehrere Verbindungen bräuchten je Gerät eigene Kanäle (`AcquireNotify`).
 
 ## 4. Framing
 
@@ -436,7 +441,9 @@ Content-Type als JSON beantwortet die Brücke mit `bad_request`.
 ### 7.6 Schreibberechtigung
 
 Je Box hat höchstens **eine** Verbindung Schreibrecht (alle Methoden außer
-`GET`). Sie geht an die erste Verbindung, die schreibt. Verbindet sich ein
+`GET`). Bei der Box-Implementierung v1 (eine Verbindung, §3.3) hat die
+einzige Verbindung stets das Schreibrecht; die folgenden Regeln greifen erst
+mit mehreren Verbindungen. Sie geht an die erste Verbindung, die schreibt. Verbindet sich ein
 **Admin**, während ein normaler Benutzer das Schreibrecht hält, übernimmt der
 Admin; die bisherige Verbindung erhält das Event `session` mit
 `{"write": false}` und danach `read_only` auf Schreibanfragen. Das Schreibrecht
@@ -507,17 +514,20 @@ erscheint in `/api/system/audit` mit Kanal `ble` und Gerätename.
 
 ## 10. Interne Schnittstelle (Box)
 
-Der BLE-Dienst ist eine Brücke ohne eigene Rechte. Für Geräte und Codes fragt
-er das Backend über localhost-only Endpunkte, abgesichert durch ein Secret in
-`/var/lib/offgridcloud/` (wie der Setup-Status). Benötigt werden mindestens:
+Der BLE-Dienst ist eine Brücke ohne eigene Rechte. In der Box-Implementierung
+v1 ist er ein eigener Prozess aus demselben Code wie das Backend
+(`python -m app.ble`): Geräte und Codes liest und schreibt er direkt in der
+gemeinsamen Datenbank (`app/ble/registry.py`), das Access-Token stellt er mit
+dem gemeinsamen Schlüssel aus `OGC_SECRET_KEY` aus (5 min gültig), Anfragen
+gehen per HTTP an das Backend auf `127.0.0.1`. Das ist bewusst so gewählt: Der
+Dienst bleibt handlungsfähig, auch wenn das Backend hängt. Benötigt werden:
 
 - offenen Kopplungscode zu `pid` abfragen und als verbraucht markieren,
 - Gerät (statischer Schlüssel, Name, Benutzer) anlegen, nachschlagen, widerrufen,
 - kurzlebiges Access-Token für den Benutzer eines Geräts ausstellen,
 - Audit-Einträge mit Kanal `ble` schreiben.
 
-Die genaue Form dieser Endpunkte gehört zur Implementierung, nicht zum
-Funkprotokoll.
+Das gehört zur Implementierung, nicht zum Funkprotokoll.
 
 ## 11. Testvektoren
 

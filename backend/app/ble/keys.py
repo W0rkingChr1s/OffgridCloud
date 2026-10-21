@@ -55,9 +55,3 @@ def load_or_create_box_key() -> X25519PrivateKey:
 def box_public_key() -> bytes:
     return public_bytes(load_or_create_box_key())
 
-
-def rotate_box_key() -> bytes:
-    """Replace the key. Invalidates every paired device (callers delete them)."""
-    path = ble_dir() / KEY_FILE
-    path.unlink(missing_ok=True)
-    return box_public_key()

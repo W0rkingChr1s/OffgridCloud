@@ -605,6 +605,37 @@ Medien **ordnerübergreifend** nach Dateiname, Tag, Status und Ordner. Die Suche
 ist zugriffsgeschützt: Benutzer sehen nur Ordner, für die sie freigegeben sind;
 Admins sehen alles.
 
+## 9d. Bluetooth (Companion-App)
+
+Mit der [Companion-App](https://github.com/W0rkingChr1s/OffgridCloud-Companion)
+lässt sich die Box per Bluetooth Low Energy verwalten — auch ohne gemeinsames
+Netz (falsches WLAN korrigieren, Status, Neustart). Das erledigt der eigene
+Dienst `offgridcloud-ble`; Protokoll und Sicherheitsmodell:
+**[docs/BLE-PROTOKOLL.md](BLE-PROTOKOLL.md)**.
+
+- **Installation:** im Installer die Option *Bluetooth für die Companion-App*
+  (vorausgewählt, wenn die Box einen Bluetooth-Adapter hat), nachträglich
+  `sudo /opt/offgridcloud/deploy/ble/install.sh`. Raspberry Pi 3B/3B+, 4, 5
+  und Zero 2 W haben Bluetooth eingebaut; sonst ein USB-Dongle. Docker wird
+  nicht unterstützt.
+- **Koppeln:** nur über das Web-Portal, unter *Bluetooth → Gerät koppeln*. Der
+  Code gilt 5 Minuten und einmal. *(Die Portal-Seite folgt; bis dahin liefert
+  `POST /api/ble/pairings` mit dem eigenen Login Code und Kopplungslink.)* Jeder Benutzer koppelt seine eigenen Handys
+  und sieht in der App nur, was er auch im Web-UI darf.
+- **Widerrufen:** in derselben Liste; offene Verbindungen des Geräts trennt der
+  Dienst binnen Sekunden. Admins sehen und widerrufen alle Geräte.
+- **Abschalten:** *Bluetooth* im Web-Portal (Admin). Standard ist an — sonst
+  fehlt die Rettungsleine genau dann, wenn das Netz weg ist.
+- **Eine Verbindung gleichzeitig:** Während ein Handy verbunden ist, wirbt die
+  Box nicht und weitere Handys finden sie nicht.
+- **Audit:** Kopplungen, Widerrufe und jede schreibende Aktion per Bluetooth
+  stehen im Audit-Log mit `[ble]`.
+
+Fehlersuche: `journalctl -u offgridcloud-ble -f` · `bluetoothctl show`
+(Adapter an?) · `rfkill list` (Bluetooth nicht blockiert?). Der Box-Schlüssel
+liegt unter `data/ble/box_static.key`; wer ihn löscht, macht alle Kopplungen
+ungültig.
+
 ## 10. Deinstallation
 
 ### Nativ (Linux / Raspberry Pi OS)
