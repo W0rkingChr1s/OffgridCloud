@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.8.2] – 2026-10-21
+
+Auto-Import von Wechselmedien mit Status-LED, Warteschlange für Benachrichtigungen, die offline nicht zugestellt werden können, und robustere Updates: Bluetooth fehlt auf dem Pi 3 nicht mehr stillschweigend, und gescheiterte Zusatzfunktionen meldet das Update jetzt.
+
 ### ✨ Neu
 
 - **Auto-Import von Wechselmedien:** Unter *Speicher → Auto-Import* lässt sich ein festes Ziel wählen (Ordner mit Cloud-Upload oder Cache-Laufwerk). Jedes neu angesteckte Medium wird dann automatisch eingehängt, kopiert (Duplikate übersprungen) und auf Wunsch ausgeworfen.
