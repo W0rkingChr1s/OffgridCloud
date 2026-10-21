@@ -238,6 +238,11 @@ _SENTINEL_FAIL = "did not answer"
 # even when the version string is unchanged and the health line never made it
 # to the log because the restart killed the process first.
 _SENTINEL_RESTARTING = "restarting the service"
+# install.sh/update.sh print this when an optional feature (Bluetooth, kiosk,
+# VPN, …) failed to set up. The core update still counts as a success, but the
+# result must say so — otherwise the failure only lives in a log nobody reads.
+_SENTINEL_WARN = "reported an issue"
+_WARN_SUFFIX = " Mit Warnungen, siehe Protokoll."
 
 _run_lock = threading.Lock()
 
@@ -248,6 +253,22 @@ def _state_path(data_dir: Path) -> Path:
 
 def _log_path(data_dir: Path) -> Path:
     return Path(data_dir) / "update.log"
+
+
+def _prev_log_path(data_dir: Path) -> Path:
+    return Path(data_dir) / "update.log.1"
+
+
+def _rotate_log(data_dir: Path) -> None:
+    """Keep the last transcript as ``update.log.1`` instead of losing it."""
+    try:
+        os.replace(_log_path(data_dir), _prev_log_path(data_dir))
+    except OSError:
+        pass
+
+
+def _success_message(base: str, tail: str) -> str:
+    return base + _WARN_SUFFIX if _SENTINEL_WARN in tail else base
 
 
 @dataclass
@@ -326,12 +347,9 @@ def is_running(data_dir: Path) -> bool:
 
 
 def clear_state(data_dir: Path) -> None:
-    """Reset to idle and drop the log — dismisses a finished result in the UI."""
+    """Reset to idle and set the log aside — dismisses a finished result in the UI."""
     write_state(data_dir, UpdateState())
-    try:
-        _log_path(Path(data_dir)).unlink()
-    except OSError:
-        pass
+    _rotate_log(Path(data_dir))
 
 
 def _monitor(proc: subprocess.Popen, data_dir: Path, current_version: str, now) -> None:
@@ -356,7 +374,7 @@ def _monitor(proc: subprocess.Popen, data_dir: Path, current_version: str, now) 
     state.to_version = to_version
     if code == 0:
         state.phase = PHASE_SUCCESS
-        state.message = "Update abgeschlossen."
+        state.message = _success_message("Update abgeschlossen.", tail)
     elif _SENTINEL_FAIL in tail:
         state.phase = PHASE_FAILED
         state.message = "Dienst nach dem Update nicht erreichbar."
@@ -395,7 +413,8 @@ def start_update(
         write_state(data_dir, state)
         log = _log_path(data_dir)
         log.parent.mkdir(parents=True, exist_ok=True)
-        # Truncate so each run starts with a clean transcript the UI can stream.
+        # Fresh transcript the UI can stream; the previous run's stays as .1.
+        _rotate_log(data_dir)
         logf = log.open("wb")
         try:
             proc = popen(
@@ -442,19 +461,19 @@ def resolve_pending(data_dir: Path, current_version: str, *, now=None) -> Update
 
     if current_version and state.from_version and current_version != state.from_version:
         state.phase = PHASE_SUCCESS
-        state.message = f"Aktualisiert auf {current_version}."
+        state.message = _success_message(f"Aktualisiert auf {current_version}.", tail)
     elif _SENTINEL_FAIL in tail:
         # Health check ran and the service didn't answer — a genuine failure.
         state.phase = PHASE_FAILED
         state.message = "Dienst nach dem Update nicht erreichbar."
     elif _SENTINEL_OK in tail:
         state.phase = PHASE_SUCCESS
-        state.message = "Update abgeschlossen."
+        state.message = _success_message("Update abgeschlossen.", tail)
     elif _SENTINEL_RESTARTING in tail:
         # The build finished and update.sh reached the restart step; since we're
         # now back up, the restart succeeded — a same-version rebuild counts.
         state.phase = PHASE_SUCCESS
-        state.message = "Update abgeschlossen."
+        state.message = _success_message("Update abgeschlossen.", tail)
     elif stale:
         state.phase = PHASE_UNKNOWN
         state.message = "Update-Status unklar (unterbrochen?). Protokoll unten prüfen."

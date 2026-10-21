@@ -15,6 +15,8 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Gescheiterte Zusatzfunktionen beim Update sichtbar:** Schlug die Einrichtung einer optionalen Funktion (Bluetooth, Kiosk, VPN, HTTPS, …) fehl, meldete das Update trotzdem schlicht „abgeschlossen“. Jetzt heißt es „Mit Warnungen, siehe Protokoll“, und der Installer listet die Probleme am Ende auf. Das Protokoll des vorherigen Updates bleibt als `data/update.log.1` erhalten, auch nach „Verstanden“.
+- **Bluetooth-Einrichtung wird wiederholt:** Scheitert sie mittendrin (z. B. `pip install dbus-fast`), versucht das nächste Update es erneut, statt den Dienst stillschweigend wegzulassen.
 - **Bluetooth nach Update auf dem Pi 3:** Das Update richtete `offgridcloud-ble` nur ein, wenn schon ein Adapter (`hci0`) sichtbar war. Ohne BlueZ bzw. laufendes `hciuart` gibt es den aber noch nicht — der Pi 3 bekam den Dienst nie, das Portal meldete „meldet sich nicht“. Installer und Update erkennen jetzt Pis mit eingebautem Bluetooth am Modell (3B/3B+/3A+, 4, 5, 400, 500, Zero W, Zero 2 W).
 - **Klarerer Bluetooth-Hinweis:** Die Seite *Bluetooth* unterscheidet jetzt „Dienst nicht installiert“, „kein Adapter“ und „Dienst meldet sich nicht“ und zeigt Admins die Fehlermeldung, mit der der Dienst zuletzt beim Start gescheitert ist.
 - **Update-Log ohne Steuerzeichen:** Das Live-Log unter *System → Update* zeigte die Terminal-Farbcodes der Deploy-Skripte roh an (`␛[1;36m>> …␛[0m`). Das Backend filtert ANSI-Escape-Sequenzen jetzt heraus, bevor es das Log ausliefert.
