@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 📶 Bluetooth für die Companion-App
+
+- **Neuer Dienst `offgridcloud-ble`:** Die [Companion-App](https://github.com/W0rkingChr1s/OffgridCloud-Companion) verwaltet die Box per Bluetooth Low Energy, auch ohne gemeinsames Netz. Protokoll: [docs/BLE-PROTOKOLL.md](docs/BLE-PROTOKOLL.md), Betrieb: [BETRIEB.md §9d](docs/BETRIEB.md).
+- **Ende-zu-Ende verschlüsselt** mit dem Noise Protocol (`IK`, beim Koppeln `IKpsk2`). Gekoppelt wird nur mit einem Code aus dem Web-Portal (5 Minuten, einmal gültig); jeder Benutzer koppelt seine eigenen Handys und widerruft sie wieder.
+- **Keine eigenen Rechte:** Der Dienst reicht Anfragen mit einem 5-Minuten-Token des gekoppelten Benutzers an die REST-API weiter. Eine Whitelist hält Downloads, Formatieren und Zugangsdaten vom Funk fern. Schreibende Aktionen stehen mit `[ble]` im Audit-Log.
+- **Bleibt erreichbar, wenn das Backend hängt:** Minimal-Status und „Dienst neu starten“ beantwortet der Dienst selbst.
+- **Eine Verbindung gleichzeitig.** Während ein Handy verbunden ist, wirbt die Box nicht.
+- Installer-Option „Bluetooth für die Companion-App“ (vorausgewählt, wenn ein Adapter da ist), im fertigen Image aktiv. Neue Endpunkte `/api/ble/*`; Abschalten über `PUT /api/ble/settings` (Admin). Die Portal-Seite zum Koppeln folgt.
+
 ## [0.7.7] – 2026-10-21
 
 Boxen an einer gemeinsamen Leitung teilen sich die Bandbreite fair, und Limits greifen sofort auch bei laufenden Uploads. Wer per `https://<name>.local` arbeitet, installiert einmal das Root-Zertifikat der Box und hat danach Ruhe vor Zertifikatswarnungen.
