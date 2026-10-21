@@ -12,6 +12,7 @@ READ = frozenset({"GET"})
 WRITE = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 POST = frozenset({"POST"})
 HANDOVER = frozenset({"GET", "POST", "DELETE"})
+READ_PUT = frozenset({"GET", "PUT"})
 
 _DENY = (
     # Formatting over the air is ruled out.
@@ -32,6 +33,16 @@ _ALLOW: tuple[tuple[frozenset[str], re.Pattern[str]], ...] = (
     (READ, re.compile(r"^/api/folders(/.*)?$")),
     (READ, re.compile(r"^/api/media/search$")),
     (HANDOVER, re.compile(r"^/api/uplink/handover$")),
+    # Pool: only what is needed in the field next to the hub. Access management
+    # (tokens, peers by URL + token) stays in the web UI.
+    (READ, re.compile(r"^/api/pool/overview$")),
+    (POST, re.compile(r"^/api/pool/peers/\d+/control$")),
+    (READ, re.compile(r"^/api/pool/peers/\d+/jobs$")),
+    (POST, re.compile(r"^/api/pool/peers/\d+/jobs/\d+/retry$")),
+    (HANDOVER, re.compile(r"^/api/pool/pairing$")),
+    (READ, re.compile(r"^/api/pool/discovery$")),
+    (POST, re.compile(r"^/api/pool/peers/pair$")),
+    (READ_PUT, re.compile(r"^/api/pool/priority$")),
 )
 
 METHODS = WRITE

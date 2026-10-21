@@ -1,12 +1,13 @@
 """BLE wire format and Noise against docs/ble/testvectors.json."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from app.ble import noise, protocol
+from app.ble import noise, protocol, whitelist
 
 VECTORS = json.loads(
     (Path(__file__).resolve().parents[2] / "docs" / "ble" / "testvectors.json").read_text(
@@ -137,3 +138,42 @@ def test_session_handshake_rejects_wrong_box_key():
     box = noise.Handshake(initiator=False, static_key=X25519PrivateKey.generate())
     with pytest.raises(noise.NoiseError):
         box.read_message1(app.write_message1(b""))
+
+
+def _spec_whitelist() -> list[tuple[str, list[str]]]:
+    """Rows of the §7.5 table in docs/BLE-PROTOKOLL.md as (path, methods)."""
+    spec = (Path(__file__).parents[2] / "docs" / "BLE-PROTOKOLL.md").read_text("utf-8")
+    section = spec.split("### 7.5", 1)[1].split("Nicht erreichbar", 1)[0]
+    rows = []
+    for line in section.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2 or not cells[0].startswith("`/"):
+            continue
+        path = re.sub(r"\{[^}]+\}", "7", cells[0].strip("`"))
+        methods = (
+            sorted(whitelist.WRITE)
+            if cells[1].startswith("alle")
+            else [m.strip() for m in cells[1].split(",")]
+        )
+        rows.append((path, methods))
+    return rows
+
+
+def test_whitelist_matches_the_spec():
+    rows = _spec_whitelist()
+    assert len(rows) >= 19 and any(p.startswith("/api/pool/") for p, _ in rows)
+    for path, methods in rows:
+        for method in methods:
+            assert whitelist.api_allowed(method, path), (method, path)
+        for method in sorted(whitelist.WRITE - set(methods)):
+            assert not whitelist.api_allowed(method, path), (method, path)
+
+
+def test_whitelist_keeps_pool_access_management_out():
+    assert whitelist.api_allowed("GET", "/api/pool/overview")
+    assert whitelist.api_allowed("PUT", "/api/pool/priority")
+    assert not whitelist.api_allowed("GET", "/api/pool/tokens")
+    assert not whitelist.api_allowed("POST", "/api/pool/peers")
+    assert not whitelist.api_allowed("DELETE", "/api/pool/peers/3")
+    assert not whitelist.api_allowed("POST", "/api/pool/peers/x/control")
+    assert not whitelist.api_allowed("POST", "/api/storage/format")
