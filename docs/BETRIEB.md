@@ -649,6 +649,9 @@ Dienst `offgridcloud-ble`; Protokoll und Sicherheitsmodell:
 - **Audit:** Kopplungen, Widerrufe und jede schreibende Aktion per Bluetooth
   stehen im Audit-Log mit `[ble]`.
 
+Erster Test auf echter Hardware: Checkliste
+**[docs/BLE-HARDWARETEST.md](BLE-HARDWARETEST.md)**.
+
 Fehlersuche: `journalctl -u offgridcloud-ble -f` · `bluetoothctl show`
 (Adapter an?) · `rfkill list` (Bluetooth nicht blockiert?). Der Box-Schlüssel
 liegt unter `data/ble/box_static.key`; wer ihn löscht, macht alle Kopplungen
