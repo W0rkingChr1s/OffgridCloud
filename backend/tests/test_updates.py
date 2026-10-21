@@ -446,6 +446,8 @@ def test_dismiss_clears_finished_result(client, admin_auth):
     body = client.get("/api/updates/progress", headers=admin_auth).json()
     assert body["phase"] == "idle"
     assert body["log"] == ""
+    # …but the transcript is kept for later diagnosis.
+    assert (Path(data_dir) / "update.log.1").read_text() == "old transcript\n"
 
 
 def test_dismiss_refuses_while_running(client, admin_auth):
@@ -470,3 +472,25 @@ def test_progress_endpoint_requires_admin(client, admin_auth):
     ).json()["access_token"]
     r = client.get("/api/updates/progress", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 403
+
+
+def test_resolve_pending_flags_optional_feature_warnings(tmp_path):
+    write_state(tmp_path, UpdateState(phase=PHASE_RUNNING, from_version="1.0.0", started_at=100.0))
+    (tmp_path / "update.log").write_text(
+        "   Bluetooth setup reported an issue — retried on the next update\n"
+        ">> Restarting the service...\n"
+    )
+    s = resolve_pending(tmp_path, "1.1.0", now=lambda: 110.0)
+    assert s.phase == PHASE_SUCCESS
+    assert s.message == "Aktualisiert auf 1.1.0. Mit Warnungen, siehe Protokoll."
+
+
+def test_start_update_keeps_previous_log(tmp_path):
+    (tmp_path / "update.log").write_text("previous run\n")
+    start_update(tmp_path, "sh -c 'echo again; exit 0'", "1.0.0", current_version=lambda: "1.0.0")
+    for _ in range(50):
+        if read_state(tmp_path).phase != PHASE_RUNNING:
+            break
+        time.sleep(0.05)
+    assert (tmp_path / "update.log.1").read_text() == "previous run\n"
+    assert "again" in read_log_tail(tmp_path)

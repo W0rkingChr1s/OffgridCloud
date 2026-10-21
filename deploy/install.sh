@@ -66,6 +66,9 @@ _has_netmerge=1
 # Bluetooth: keep it if installed, otherwise suggest it when the box has a radio.
 _has_ble=0;      [[ -f /etc/systemd/system/offgridcloud-ble.service ]] && _has_ble=1
 [[ $_has_ble -eq 0 ]] && compgen -G "/sys/class/bluetooth/hci*" >/dev/null 2>&1 && _has_ble=1
+# A Bluetooth setup that failed half-way (e.g. pip) leaves this marker, so the
+# next run — usually a self-update — tries again instead of forgetting it.
+[[ -f "$PREFIX/data/.ble-setup-pending" ]] && _has_ble=1
 # Pis with a built-in radio count too: without BlueZ (or with hciuart not yet up)
 # there's no hci* yet, so a self-update on a Pi 3 would otherwise never set it up.
 if [[ $_has_ble -eq 0 && -r /proc/device-tree/model ]] \
@@ -420,6 +423,10 @@ fi
 fi   # Ende: whiptail- vs. Text-Fragebogen
 
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
+# Optional features may fail without failing the install; collect them for the
+# summary. Keep "reported an issue": the portal's updater looks for it.
+WARNINGS=()
+warn() { echo "   $1" >&2; WARNINGS+=("$1"); }
 
 # --- System dependencies ----------------------------------------------------
 step "Installing system dependencies..."
@@ -760,7 +767,7 @@ if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
   cp -r "$REPO_ROOT/deploy/netfallback" "$PREFIX/deploy/netfallback"
   chmod +x "$PREFIX/deploy/netfallback/"*.sh "$PREFIX/deploy/netfallback/_apply.py" 2>/dev/null || true
   bash "$PREFIX/deploy/netfallback/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
-    || echo "   AP-fallback setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
+    || warn "AP-fallback setup reported an issue — see docs/NETZWERK-REDUNDANZ.md."
 fi
 
 # --- Optional: VPN client prerequisites (native) ---------------------------
@@ -773,7 +780,7 @@ if [[ $WITH_VPN -eq 1 ]]; then
   chmod +x "$PREFIX/deploy/vpn/install.sh" 2>/dev/null || true
   if [[ $INSTALL_SERVICE -eq 1 ]]; then
     bash "$PREFIX/deploy/vpn/install.sh" --prefix "$PREFIX" \
-      || echo "   VPN setup reported an issue — see docs/VPN.md." >&2
+      || warn "VPN setup reported an issue — see docs/VPN.md."
   else
     echo "   --no-service given: VPN needs the systemd unit for the CAP_NET_ADMIN"
     echo "   drop-in. Skipped; run $PREFIX/deploy/vpn/install.sh after installing the service."
@@ -793,7 +800,7 @@ if [[ $WITH_NETMERGE -eq 1 ]]; then
   NETMERGE_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER")
   [[ $DO_START -eq 1 ]] || NETMERGE_ARGS+=(--no-start)
   bash "$PREFIX/deploy/netmerge/install.sh" "${NETMERGE_ARGS[@]}" \
-    || echo "   Link bundling setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
+    || warn "Link bundling setup reported an issue — see docs/NETZWERK-REDUNDANZ.md."
 fi
 
 # --- Optional: Bluetooth for the companion app (offgridcloud-ble) ----------
@@ -806,11 +813,18 @@ if [[ $WITH_BLE -eq 1 ]]; then
   if [[ $INSTALL_SERVICE -eq 1 ]]; then
     BLE_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER")
     [[ $DO_START -eq 1 ]] || BLE_ARGS+=(--no-start)
-    bash "$PREFIX/deploy/ble/install.sh" "${BLE_ARGS[@]}" \
-      || echo "   Bluetooth setup reported an issue — see docs/BLE-PROTOKOLL.md." >&2
+    BLE_PENDING="$PREFIX/data/.ble-setup-pending"
+    if bash "$PREFIX/deploy/ble/install.sh" "${BLE_ARGS[@]}"; then
+      rm -f "$BLE_PENDING"
+    else
+      touch "$BLE_PENDING"
+      warn "Bluetooth setup reported an issue — retried on the next update; see docs/BETRIEB.md §9d."
+    fi
   else
     echo "   No systemd service chosen: run $PREFIX/deploy/ble/install.sh later."
   fi
+else
+  rm -f "$PREFIX/data/.ble-setup-pending"   # deselected: stop retrying
 fi
 
 # --- Optional: on-box "OffgridCloud OS" console (kiosk) --------------------
@@ -826,7 +840,7 @@ if [[ $WITH_KIOSK -eq 1 ]]; then
   [[ $WITH_CHROMIUM_KIOSK -eq 1 ]] && KIOSK_ARGS+=(--with-chromium)
   [[ -n "$KIOSK_PIN" ]] && KIOSK_ARGS+=(--pin "$KIOSK_PIN")
   bash "$PREFIX/deploy/kiosk/install.sh" "${KIOSK_ARGS[@]}" \
-    || echo "   Kiosk setup reported an issue — see docs/KIOSK.md." >&2
+    || warn "Kiosk setup reported an issue — see docs/KIOSK.md."
 fi
 
 # --- Optional: HTTPS reverse proxy (Caddy + mDNS hostname) -----------------
@@ -841,13 +855,13 @@ if [[ $WITH_HTTPS -eq 1 ]]; then
   # The real hostname is only known after the setup wizard (finish.sh applies it).
   [[ $IMAGE_BUILD -eq 1 ]] && HTTPS_ARGS+=(--skip-apply)
   bash "$PREFIX/deploy/https/install.sh" "${HTTPS_ARGS[@]}" \
-    || echo "   HTTPS setup reported an issue — see docs/BETRIEB.md §3." >&2
+    || warn "HTTPS setup reported an issue — see docs/BETRIEB.md §3."
 elif [[ -f /etc/caddy/Caddyfile ]] && grep -q 'Managed by deploy/https/apply.sh' /etc/caddy/Caddyfile 2>/dev/null; then
   # HTTPS deselected but still set up from an earlier run — tear it down,
   # otherwise "HTTPS: nein" on an update would silently leave Caddy serving.
   step "Removing HTTPS (deselected; was installed by an earlier run)..."
   bash "$REPO_ROOT/deploy/https/uninstall.sh" --prefix "$PREFIX" \
-    || echo "   HTTPS teardown reported an issue — see docs/BETRIEB.md §3." >&2
+    || warn "HTTPS teardown reported an issue — see docs/BETRIEB.md §3."
   rm -rf "$PREFIX/deploy/https"
 fi
 
@@ -886,6 +900,12 @@ cat <<EOF
 $(printf '\033[1;32mDone.\033[0m') OffgridCloud is installed in $PREFIX.
 
 EOF
+
+if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+  printf '\033[1;33m  Not everything worked (the core install did):\033[0m\n'
+  printf '    - %s\n' "${WARNINGS[@]}"
+  echo
+fi
 
 if [[ -n "$GENERATED_PASSWORD" ]]; then
   cat <<EOF

@@ -656,6 +656,11 @@ Dienst `offgridcloud-ble`; Protokoll und Sicherheitsmodell:
 Erster Test auf echter Hardware: Checkliste
 **[docs/BLE-HARDWARETEST.md](BLE-HARDWARETEST.md)**.
 
+Scheitert die Einrichtung während eines Updates (z. B. `pip`), meldet das
+Update „Mit Warnungen“ und versucht es beim nächsten Update erneut (Marker
+`data/.ble-setup-pending`). Das Protokoll des letzten Updates liegt in
+`data/update.log`, das vorherige in `data/update.log.1`.
+
 Fehlersuche: `journalctl -u offgridcloud-ble -f` · `bluetoothctl show`
 (Adapter an?) · `rfkill list` (Bluetooth nicht blockiert?). Der Box-Schlüssel
 liegt unter `data/ble/box_static.key`; wer ihn löscht, macht alle Kopplungen
