@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Update-Log ohne Steuerzeichen:** Das Live-Log unter *System → Update* zeigte die Terminal-Farbcodes der Deploy-Skripte roh an (`␛[1;36m>> …␛[0m`). Das Backend filtert ANSI-Escape-Sequenzen jetzt heraus, bevor es das Log ausliefert.
+
 ## [0.8.1] – 2026-10-21
 
 Fehlerbehebungen für 0.8.0: Der Bluetooth-Dienst startet wieder, und die Companion-App erreicht per Bluetooth auch den Pool.

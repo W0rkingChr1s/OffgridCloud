@@ -298,8 +298,14 @@ def write_state(data_dir: Path, state: UpdateState) -> None:
     os.replace(tmp, path)
 
 
+# The deploy scripts colour their step headers for a terminal (``\033[1;36m``).
+# The portal shows the log as plain text, so strip ANSI escape sequences (CSI
+# and OSC) rather than rendering ``␛[1;36m`` noise.
+_ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])")
+
+
 def read_log_tail(data_dir: Path, max_bytes: int = _LOG_TAIL_BYTES) -> str:
-    """Last ``max_bytes`` of the update log (decoded loosely), or ``""``."""
+    """Last ``max_bytes`` of the update log (decoded loosely, ANSI-stripped), or ``""``."""
     try:
         with _log_path(data_dir).open("rb") as fh:
             fh.seek(0, os.SEEK_END)
@@ -312,7 +318,7 @@ def read_log_tail(data_dir: Path, max_bytes: int = _LOG_TAIL_BYTES) -> str:
     if len(data) == max_bytes and "\n" in text:
         # Drop a partial first line so the UI doesn't show a truncated fragment.
         text = text.split("\n", 1)[1]
-    return text
+    return _ANSI_RE.sub("", text)
 
 
 def is_running(data_dir: Path) -> bool:
