@@ -33,6 +33,7 @@ from .rclone import check_rclone
 from .routers import (
     auth,
     bandwidth,
+    ble,
     descriptions,
     events,
     folders,
@@ -146,6 +147,7 @@ app.include_router(vpn.router)
 app.include_router(storage.router)
 app.include_router(storage.public_router)
 app.include_router(setup.router)
+app.include_router(ble.router)
 
 # API paths that stay open while the image's setup wizard has not run yet.
 _SETUP_OPEN_API = ("/api/setup/", "/api/health")

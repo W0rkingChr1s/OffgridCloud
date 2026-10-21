@@ -1,0 +1,26 @@
+# Bluetooth management for the OffgridCloud companion app (docs/BLE-PROTOKOLL.md).
+# Installed by deploy/ble/install.sh. Separate from the web service on purpose:
+# it keeps answering (minimal status, restart the web service) when that hangs.
+[Unit]
+Description=OffgridCloud Bluetooth (Companion-App)
+After=bluetooth.service offgridcloud.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=offgrid
+Group=offgrid
+# BlueZ only lets the bluetooth group register GATT services and adverts.
+SupplementaryGroups=bluetooth
+WorkingDirectory=/opt/offgridcloud/backend
+EnvironmentFile=/opt/offgridcloud/.env
+ExecStart=/opt/offgridcloud/backend/.venv/bin/python -m app.ble
+Restart=always
+RestartSec=10
+
+# Shares the backend code (SQLAlchemy, models), hence more than a bare helper.
+MemoryMax=150M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

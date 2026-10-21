@@ -110,6 +110,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("bandwidth_policy", "pool_limit_kbps", "INTEGER NOT NULL DEFAULT 0"),
     ("bandwidth_policy", "pool_limit_until", "DATETIME"),
     ("bandwidth_policy", "pool_limit_by", "VARCHAR(100) NOT NULL DEFAULT ''"),
+    # Bluetooth management for the companion app.
+    ("system_settings", "ble_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
 ]
 
 

@@ -475,6 +475,10 @@ class SystemSettings(Base):
     # Transient dedup: a low-space alert is sent once per episode and re-armed
     # when free space recovers above the threshold.
     low_space_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Bluetooth management for the companion app (offgridcloud-ble, see
+    # docs/BLE-PROTOKOLL.md). On by default: pairing still needs a code from
+    # the web portal, and switching it off removes the rescue path.
+    ble_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class NetworkSettings(Base):
@@ -559,6 +563,44 @@ class AuditEvent(Base):
     user_email: Mapped[str] = mapped_column(String(255), default="")
     action: Mapped[str] = mapped_column(String(100))
     detail: Mapped[str] = mapped_column(Text, default="")
+
+
+class BleDevice(Base):
+    """A phone paired over Bluetooth (BLE-PROTOKOLL.md §6).
+
+    Identified by its static X25519 key; bound to the user who created the
+    pairing code. Deleting the row revokes the device.
+    """
+
+    __tablename__ = "ble_devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    public_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # hex
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
+class BlePairing(Base):
+    """An open pairing code from the web portal (BLE-PROTOKOLL.md §6.1).
+
+    Short-lived (5 min), single use, at most 3 handshakes. The secret is
+    stored encrypted because the BLE service needs it to derive the psk.
+    """
+
+    __tablename__ = "ble_pairings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pid: Mapped[int] = mapped_column(unique=True, index=True)  # 20 bit
+    secret_encrypted: Mapped[str] = mapped_column(Text)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    attempts: Mapped[int] = mapped_column(default=0)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class UploadSession(Base):

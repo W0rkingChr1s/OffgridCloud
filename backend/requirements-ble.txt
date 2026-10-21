@@ -1,0 +1,4 @@
+# Only for the offgridcloud-ble service (Bluetooth for the companion app),
+# installed by deploy/ble/install.sh. Pure-Python fallback, so it also works
+# where no wheel exists (Pi 3, armv7).
+dbus-fast==5.2.0

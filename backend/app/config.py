@@ -157,6 +157,12 @@ class Settings(BaseSettings):
     # Port other boxes use to reach this backend (the plain-HTTP uvicorn port).
     mdns_port: int = 8000
 
+    # --- Bluetooth (offgridcloud-ble, docs/BLE-PROTOKOLL.md) ------------------
+    # Where the BLE service forwards app requests (the plain-HTTP uvicorn port).
+    ble_backend_url: str = "http://127.0.0.1:8000"
+    # BlueZ adapter, e.g. ``hci0``; empty = the first one that offers GATT.
+    ble_adapter: str = ""
+
     # Background reconciler: how often (seconds) to re-queue failed/stuck
     # transfers and backfill any missing jobs, so a temporary outage self-heals
     # once connectivity returns. 0 disables the loop. Gated per-instance by the
