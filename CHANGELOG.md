@@ -6,6 +6,11 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🔀 Leitungsbündelung ab Werk installiert
+
+- **net-merge kommt jetzt standardmäßig mit:** Installer, Update und das fertige Image richten den Dienst `offgridcloud-netmerge` ohne Zutun ein; kein `sudo …/netmerge/install.sh` mehr nötig. Abwählen per Installer-Frage oder `OGC_WITH_NETMERGE=0`.
+- **Eingeschaltet wird weiterhin in der UI** (Bandbreite → Leitungsbündelung). Bis dahin läuft nur ein Proxy auf `127.0.0.1:1080`, über den nichts geht.
+
 ### 📶 Bluetooth für die Companion-App
 
 - **Neuer Dienst `offgridcloud-ble`:** Die [Companion-App](https://github.com/W0rkingChr1s/OffgridCloud-Companion) verwaltet die Box per Bluetooth Low Energy, auch ohne gemeinsames Netz. Protokoll: [docs/BLE-PROTOKOLL.md](docs/BLE-PROTOKOLL.md), Betrieb: [BETRIEB.md §9d](docs/BETRIEB.md).

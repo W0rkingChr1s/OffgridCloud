@@ -13,12 +13,15 @@
 #      Bandbreite → Leitungsbündelung becomes available.
 #
 # Bundling stays OFF until an admin switches it on in the web UI.
+# deploy/install.sh runs this by default; --no-start (image build) only
+# enables the service instead of starting it.
 #
-# Usage: sudo ./deploy/netmerge/install.sh [--prefix DIR] [--service-user USER]
+# Usage: sudo ./deploy/netmerge/install.sh [--prefix DIR] [--service-user USER] [--no-start]
 set -euo pipefail
 
 PREFIX="/opt/offgridcloud"
 SERVICE_USER="offgrid"
+DO_START=1
 LISTEN="127.0.0.1:1080"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Signing key of net-merge's package repositories (see its README).
@@ -29,7 +32,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
     --service-user) SERVICE_USER="${2:?}"; shift 2 ;;
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-start) DO_START=0; shift ;;
+    -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -88,10 +92,14 @@ sed -e "s#/usr/bin/net-merge#$NM_BIN#" \
     -e "s#^User=.*#User=$SERVICE_USER#" -e "s#^Group=.*#Group=$SERVICE_USER#" \
     -e "s#127.0.0.1:1080#$LISTEN#g" \
     "$HERE/offgridcloud-netmerge.service" > /etc/systemd/system/offgridcloud-netmerge.service
-systemctl daemon-reload
-systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
-systemctl restart offgridcloud-netmerge.service || \
-  echo "   Service did not start — check: journalctl -u offgridcloud-netmerge -e" >&2
+if [[ $DO_START -eq 1 ]]; then
+  systemctl daemon-reload
+  systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
+  systemctl restart offgridcloud-netmerge.service || \
+    echo "   Service did not start — check: journalctl -u offgridcloud-netmerge -e" >&2
+else
+  systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
+fi
 
 # --- 3. Wire the app -------------------------------------------------------------
 step "Wiring the app to net-merge..."
@@ -108,7 +116,7 @@ if [[ -f "$ENV_FILE" ]]; then
   set_env OGC_NETMERGE_BINARY "$NM_BIN"
   chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
   echo "   Set OGC_NETMERGE_PROXY in $ENV_FILE"
-  systemctl try-restart offgridcloud 2>/dev/null || true
+  [[ $DO_START -eq 1 ]] && { systemctl try-restart offgridcloud 2>/dev/null || true; }
 else
   echo "   $ENV_FILE not found — add manually:"
   echo "     OGC_NETMERGE_PROXY=$LISTEN"

@@ -167,7 +167,10 @@ nichts: Kein virtueller Netzwerkadapter, keine neuen Routen. Web-UI,
 Rückfall-WLAN, VPN und die Geräte im Feld laufen wie bisher. Fällt net-merge
 aus, gehen die Uploads automatisch direkt raus, statt fehlzuschlagen.
 
-**Einrichten:**
+**Einrichten:** Der Installer richtet net-merge standardmäßig mit ein (auch im
+fertigen Image und beim nächsten Update bestehender Boxen); abwählen mit
+`OGC_WITH_NETMERGE=0`. Eingeschaltet wird die Bündelung trotzdem erst in der UI.
+Fehlt es (Seite zeigt „nicht installiert“), von Hand nachholen:
 
 ```bash
 sudo /opt/offgridcloud/deploy/netmerge/install.sh
