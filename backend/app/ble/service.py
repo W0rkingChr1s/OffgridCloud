@@ -147,10 +147,16 @@ def _public(key) -> bytes:
 
 def _write_status(enabled: bool, connected: bool) -> None:
     """Heartbeat for the web UI (``routers/ble.service_running``)."""
+    _write_status_file({"updated": time.time(), "enabled": enabled, "connected": connected})
+
+
+def write_startup_error(message: str) -> None:
+    """Leave the reason a start failed for the web UI (no ``updated``: not alive)."""
+    _write_status_file({"error": message[:300], "error_at": time.time()})
+
+
+def _write_status_file(data: dict) -> None:
     path = ble_dir() / STATUS_FILE
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(
-        json.dumps({"updated": time.time(), "enabled": enabled, "connected": connected}),
-        "utf-8",
-    )
+    tmp.write_text(json.dumps(data), "utf-8")
     tmp.replace(path)

@@ -8,6 +8,8 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Bluetooth nach Update auf dem Pi 3:** Das Update richtete `offgridcloud-ble` nur ein, wenn schon ein Adapter (`hci0`) sichtbar war. Ohne BlueZ bzw. laufendes `hciuart` gibt es den aber noch nicht — der Pi 3 bekam den Dienst nie, das Portal meldete „meldet sich nicht“. Installer und Update erkennen jetzt Pis mit eingebautem Bluetooth am Modell (3B/3B+/3A+, 4, 5, 400, 500, Zero W, Zero 2 W).
+- **Klarerer Bluetooth-Hinweis:** Die Seite *Bluetooth* unterscheidet jetzt „Dienst nicht installiert“, „kein Adapter“ und „Dienst meldet sich nicht“ und zeigt Admins die Fehlermeldung, mit der der Dienst zuletzt beim Start gescheitert ist.
 - **Update-Log ohne Steuerzeichen:** Das Live-Log unter *System → Update* zeigte die Terminal-Farbcodes der Deploy-Skripte roh an (`␛[1;36m>> …␛[0m`). Das Backend filtert ANSI-Escape-Sequenzen jetzt heraus, bevor es das Log ausliefert.
 
 ## [0.8.1] – 2026-10-21
