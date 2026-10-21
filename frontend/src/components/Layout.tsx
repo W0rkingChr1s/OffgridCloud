@@ -99,6 +99,11 @@ const icons = {
       <path d="M2 21a7 7 0 0 1 11-5.7M17 13l4 4-2 2-1-1M18 16l-2 2" />
     </svg>
   ),
+  bluetooth: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M7 7l10 10-5 4V3l5 4L7 17" />
+    </svg>
+  ),
 };
 
 type NavItem = { to: string; label: string; icon: (p: IconProps) => JSX.Element; admin?: boolean };
@@ -108,6 +113,7 @@ const NAV: NavItem[] = [
   { to: "/folders", label: "Ordner", icon: icons.folders },
   { to: "/search", label: "Suche", icon: icons.search },
   { to: "/passkeys", label: "Passkeys", icon: icons.passkey },
+  { to: "/bluetooth", label: "Bluetooth", icon: icons.bluetooth },
   { to: "/admin/folders", label: "Verwalten", icon: icons.manage, admin: true },
   { to: "/admin/providers", label: "Provider", icon: icons.provider, admin: true },
   { to: "/admin/storage", label: "Speicher", icon: icons.storage, admin: true },

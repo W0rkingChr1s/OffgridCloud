@@ -46,6 +46,7 @@ def test_pairing_code_and_link(client, admin_auth):
     assert resp.status_code == 201
     body = resp.json()
     pid, secret = _decode_code(body["code"])
+    assert body["expires_in"] == 300
     assert body["link"].startswith(f"offgridcloud://pair?v=1&c={body['code'].replace('-', '')}&pk=")
     with SessionLocal() as db:
         claim = registry.claim_pairing(db, pid)

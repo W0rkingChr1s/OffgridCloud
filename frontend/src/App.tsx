@@ -8,6 +8,7 @@ import { RetroEasterEgg } from "./retro";
 import { ToastProvider } from "./toast";
 import TransferToaster from "./TransferToaster";
 import Bandwidth from "./pages/Bandwidth";
+import Bluetooth from "./pages/Bluetooth";
 import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
@@ -87,6 +88,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute>
                   <Passkeys />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/bluetooth"
+              element={
+                <ProtectedRoute>
+                  <Bluetooth />
                 </ProtectedRoute>
               }
             />

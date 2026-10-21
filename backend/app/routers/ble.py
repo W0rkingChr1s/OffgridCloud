@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ..admin_ops import audit, get_system_settings
 from ..ble.keys import ble_dir, box_public_key
-from ..ble.registry import create_pairing, pairing_link
+from ..ble.registry import PAIRING_TTL, create_pairing, pairing_link
 from ..db import get_db
 from ..deps import get_current_user, require_admin
 from ..models import BleDevice, Role, User
@@ -102,6 +102,7 @@ def new_pairing(
         code=pairing.code,
         link=pairing_link(pairing.code, box_public_key(), node_name()),
         expires_at=pairing.expires_at,
+        expires_in=int(PAIRING_TTL.total_seconds()),
     )
 
 
