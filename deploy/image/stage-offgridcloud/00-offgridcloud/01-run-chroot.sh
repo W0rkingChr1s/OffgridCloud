@@ -22,11 +22,12 @@ OGC_WITH_SPEEDTEST=1 \
 OGC_WITH_VPN=0 \
 OGC_WITH_KIOSK=0 \
 OGC_WITH_BLE=1 \
+OGC_WITH_NETMERGE=1 \
   bash /opt/offgridcloud/src/deploy/install.sh
 
 # `enable --now` inside a chroot only half-works; make sure the units are on.
 systemctl enable NetworkManager avahi-daemon caddy offgridcloud-mdns-alias offgridcloud-netwatch offgridcloud \
-  bluetooth offgridcloud-ble
+  bluetooth offgridcloud-ble offgridcloud-netmerge
 
 apt-get clean
 rm -rf /var/lib/apt/lists/* /root/.npm /root/.cache

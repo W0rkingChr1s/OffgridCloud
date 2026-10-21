@@ -6,30 +6,43 @@
 # as a SOCKS5 proxy on 127.0.0.1:1080 and sends only its rclone uploads through
 # it; nothing else about the box's routing changes. Opt-in, root-only. It:
 #
-#   1. installs net-merge (Debian/Raspberry Pi OS: from its signed apt
-#      repository, key fingerprint checked; elsewhere: the release tarball),
+#   1. installs the pinned net-merge version NM_VERSION (Debian/Raspberry Pi
+#      OS: from its signed apt repository, key fingerprint checked, then held;
+#      elsewhere: the release tarball, SHA-256 checked),
 #   2. installs + starts the offgridcloud-netmerge service, and
 #   3. wires OGC_NETMERGE_PROXY into .env so the toggle under
 #      Bandbreite → Leitungsbündelung becomes available.
 #
 # Bundling stays OFF until an admin switches it on in the web UI.
+# deploy/install.sh runs this by default; --no-start (image build) only
+# enables the service instead of starting it.
 #
-# Usage: sudo ./deploy/netmerge/install.sh [--prefix DIR] [--service-user USER]
+# Usage: sudo ./deploy/netmerge/install.sh [--prefix DIR] [--service-user USER] [--no-start]
 set -euo pipefail
 
 PREFIX="/opt/offgridcloud"
 SERVICE_USER="offgrid"
+DO_START=1
 LISTEN="127.0.0.1:1080"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Signing key of net-merge's package repositories (see its README).
 KEY_FPR="0168C7AB77721656904811AE904F61E7F4F1C2A1"
 REPO="https://rohit267.github.io/net-merge"
+# Pinned release. Bumping it: update the version and the tarball hashes below
+# (sha256sum of each net-merge-linux-<arch>.tar.gz from the GitHub release).
+NM_VERSION="0.3.3"
+declare -A NM_SHA256=(
+  [x86_64]="f9092de729478c0e51f9972397ffbc80d3470017fb24315ed4fa045a84b8cff5"
+  [aarch64]="3a839cc538b23a6e4575c158d05d9fd1fb90724d3f69e86da6d5dd2c884f41ca"
+  [armv7l]="666a70ca54cabe14c5f1de2fb429d142edf88c13113cf46131dc2f65680dcd00"
+)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
     --service-user) SERVICE_USER="${2:?}"; shift 2 ;;
-    -h|--help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-start) DO_START=0; shift ;;
+    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -42,7 +55,7 @@ fi
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
 # --- 1. net-merge -------------------------------------------------------------
-step "Installing net-merge..."
+step "Installing net-merge $NM_VERSION..."
 install_apt() {
   command -v gpg >/dev/null 2>&1 || apt-get install -y --no-install-recommends gnupg >/dev/null
   local tmp; tmp="$(mktemp -d)"
@@ -58,12 +71,23 @@ install_apt() {
     > /etc/apt/sources.list.d/net-merge.list
   apt-get update -o Dir::Etc::sourcelist=sources.list.d/net-merge.list \
     -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 >/dev/null
-  apt-get install -y --no-install-recommends net-merge
+  # Exact version, held so a routine apt upgrade doesn't move it; the next
+  # run of this script with a new NM_VERSION moves it on purpose.
+  apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
+    "net-merge=$NM_VERSION" || return 1
+  apt-mark hold net-merge >/dev/null
 }
 install_tarball() {
-  local tmp; tmp="$(mktemp -d)"
-  if curl -fsSL "https://github.com/rohit267/net-merge/releases/latest/download/net-merge-linux-$(uname -m).tar.gz" \
-       -o "$tmp/nm.tgz" && tar -xzf "$tmp/nm.tgz" -C "$tmp" net-merge; then
+  local arch tmp; arch="$(uname -m)"
+  if [[ -z "${NM_SHA256[$arch]:-}" ]]; then
+    echo "   No pinned net-merge build for $arch." >&2; return 1
+  fi
+  tmp="$(mktemp -d)"
+  if curl -fsSL "https://github.com/rohit267/net-merge/releases/download/v$NM_VERSION/net-merge-linux-$arch.tar.gz" \
+       -o "$tmp/nm.tgz" \
+     && { echo "${NM_SHA256[$arch]}  $tmp/nm.tgz" | sha256sum -c --status \
+          || { echo "   Checksum mismatch for net-merge-linux-$arch.tar.gz — not installing." >&2; false; }; } \
+     && tar -xzf "$tmp/nm.tgz" -C "$tmp" net-merge; then
     install -m 755 "$tmp/net-merge" /usr/local/bin/net-merge
     rm -rf "$tmp"
   else
@@ -88,10 +112,14 @@ sed -e "s#/usr/bin/net-merge#$NM_BIN#" \
     -e "s#^User=.*#User=$SERVICE_USER#" -e "s#^Group=.*#Group=$SERVICE_USER#" \
     -e "s#127.0.0.1:1080#$LISTEN#g" \
     "$HERE/offgridcloud-netmerge.service" > /etc/systemd/system/offgridcloud-netmerge.service
-systemctl daemon-reload
-systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
-systemctl restart offgridcloud-netmerge.service || \
-  echo "   Service did not start — check: journalctl -u offgridcloud-netmerge -e" >&2
+if [[ $DO_START -eq 1 ]]; then
+  systemctl daemon-reload
+  systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
+  systemctl restart offgridcloud-netmerge.service || \
+    echo "   Service did not start — check: journalctl -u offgridcloud-netmerge -e" >&2
+else
+  systemctl enable offgridcloud-netmerge.service >/dev/null 2>&1 || true
+fi
 
 # --- 3. Wire the app -------------------------------------------------------------
 step "Wiring the app to net-merge..."
@@ -108,7 +136,7 @@ if [[ -f "$ENV_FILE" ]]; then
   set_env OGC_NETMERGE_BINARY "$NM_BIN"
   chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
   echo "   Set OGC_NETMERGE_PROXY in $ENV_FILE"
-  systemctl try-restart offgridcloud 2>/dev/null || true
+  [[ $DO_START -eq 1 ]] && { systemctl try-restart offgridcloud 2>/dev/null || true; }
 else
   echo "   $ENV_FILE not found — add manually:"
   echo "     OGC_NETMERGE_PROXY=$LISTEN"

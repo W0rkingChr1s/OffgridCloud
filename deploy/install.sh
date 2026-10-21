@@ -22,7 +22,7 @@
 #   OGC_ADMIN_EMAIL=admin@offgrid.local
 #   OGC_WITH_FFMPEG=0                OGC_WITH_SPEEDTEST=1
 #   OGC_WITH_AP_FALLBACK=0           OGC_WITH_VPN=0
-#   OGC_WITH_NETMERGE=0              # Leitungsbündelung (net-merge, alle Uplinks)
+#   OGC_WITH_NETMERGE=1              # Leitungsbündelung (net-merge, alle Uplinks; in der UI erst aus)
 #   OGC_WITH_BLE=<auto>              # Bluetooth für die Companion-App (an, wenn ein Adapter da ist)
 #   OGC_WITH_KIOSK=0                 OGC_WITH_CHROMIUM_KIOSK=0   OGC_KIOSK_PIN=
 #   OGC_INSTALL_SERVICE=1            OGC_START=1
@@ -60,7 +60,9 @@ _has_service=0;  [[ -f "$_svc_unit" ]] && _has_service=1
 _has_kiosk=0;    [[ -f /etc/systemd/system/offgrid-kiosk.service ]] && _has_kiosk=1
 _has_ap=0;       [[ -f /etc/systemd/system/offgridcloud-netwatch.service ]] && _has_ap=1
 _has_vpn=0;      [[ -f /etc/systemd/system/offgridcloud.service.d/10-vpn-caps.conf ]] && _has_vpn=1
-_has_netmerge=0; [[ -f /etc/systemd/system/offgridcloud-netmerge.service ]] && _has_netmerge=1
+# Link bundling is installed by default like the speedtest CLI: it only adds
+# a loopback proxy, and bundling itself stays off until an admin enables it.
+_has_netmerge=1
 # Bluetooth: keep it if installed, otherwise suggest it when the box has a radio.
 _has_ble=0;      [[ -f /etc/systemd/system/offgridcloud-ble.service ]] && _has_ble=1
 [[ $_has_ble -eq 0 ]] && compgen -G "/sys/class/bluetooth/hci*" >/dev/null 2>&1 && _has_ble=1
@@ -782,12 +784,10 @@ cp -r "$REPO_ROOT/deploy/netmerge" "$PREFIX/deploy/netmerge"
 chmod +x "$PREFIX/deploy/netmerge/install.sh" 2>/dev/null || true
 if [[ $WITH_NETMERGE -eq 1 ]]; then
   step "Installing link bundling (net-merge)..."
-  if [[ $IMAGE_BUILD -eq 1 ]]; then
-    echo "   Image build: run $PREFIX/deploy/netmerge/install.sh on the box itself."
-  else
-    bash "$PREFIX/deploy/netmerge/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
-      || echo "   Link bundling setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
-  fi
+  NETMERGE_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER")
+  [[ $DO_START -eq 1 ]] || NETMERGE_ARGS+=(--no-start)
+  bash "$PREFIX/deploy/netmerge/install.sh" "${NETMERGE_ARGS[@]}" \
+    || echo "   Link bundling setup reported an issue — see docs/NETZWERK-REDUNDANZ.md." >&2
 fi
 
 # --- Optional: Bluetooth for the companion app (offgridcloud-ble) ----------

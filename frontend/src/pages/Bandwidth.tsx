@@ -310,7 +310,7 @@ export default function Bandwidth() {
           </p>
           {status && !status.bonding_available ? (
             <p className="text-xs text-slate-400">
-              Einrichten an der Box mit{" "}
+              Wird beim nächsten Update automatisch eingerichtet – oder sofort an der Box mit{" "}
               <code className="rounded-sm bg-slate-900/60 px-1">sudo /opt/offgridcloud/deploy/netmerge/install.sh</code>
             </p>
           ) : (
