@@ -24,13 +24,13 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(*, user_id: int, role: str) -> str:
+def create_access_token(*, user_id: int, role: str, ttl: timedelta = ACCESS_TOKEN_TTL) -> str:
     now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "role": role,
         "iat": now,
-        "exp": now + ACCESS_TOKEN_TTL,
+        "exp": now + ttl,
     }
     return jwt.encode(payload, get_settings().secret_key, algorithm=ALGORITHM)
 

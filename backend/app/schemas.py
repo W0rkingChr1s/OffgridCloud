@@ -1169,3 +1169,38 @@ class SetupCompleteOut(BaseModel):
     url: str
     wifi_ssid: str
     finish_started: bool
+
+
+# --- Bluetooth (companion app, docs/BLE-PROTOKOLL.md) --------------------------
+
+
+class BleStatusOut(BaseModel):
+    enabled: bool
+    # offgridcloud-ble reported itself recently (installed and running).
+    service_running: bool
+    box_name: str
+    # Static X25519 key of the box, base64url without padding (§3.2).
+    box_public_key: str
+
+
+class BleSettingsUpdate(BaseModel):
+    enabled: bool
+
+
+class BlePairingOut(BaseModel):
+    code: str
+    link: str
+    expires_at: datetime
+
+
+class BleDeviceOut(BaseModel):
+    id: int
+    name: str
+    user_id: int
+    user_email: str
+    created_at: datetime
+    last_seen_at: datetime | None
+
+
+class BleDeviceUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
