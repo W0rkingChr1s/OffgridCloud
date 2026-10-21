@@ -28,7 +28,7 @@ from ..power import run_power_command
 from ..security import create_access_token
 from . import registry
 from .registry import DeviceInfo, PairingClaim
-from .session import BackendUnavailable, NotJson
+from .session import NOTICE_TEXT, BackendUnavailable, NotJson
 
 TOKEN_TTL = timedelta(minutes=5)
 TOKEN_RENEW = 240.0  # seconds; renew well before expiry
@@ -89,11 +89,9 @@ def compact_status(snapshot: dict[str, Any]) -> dict[str, Any]:
         out["gated"] = bool(bandwidth.get("gated"))
         out["gate_reason"] = bandwidth.get("gate_reason") or None
     if "notices" in snapshot:
+        # Plain texts (§7.7), like the companion app reads them.
         out["notices"] = [
-            {
-                "level": n.get("level", "info"),
-                "text": f"{n.get('title', '')} {n.get('message', '')}".strip()[:120],
-            }
+            f"{n.get('title', '')} {n.get('message', '')}".strip()[:NOTICE_TEXT]
             for n in snapshot["notices"][-3:]
         ]
     return out

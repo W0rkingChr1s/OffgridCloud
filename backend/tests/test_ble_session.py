@@ -309,7 +309,7 @@ def test_compact_status():
     assert out["folders"] == {"queued": 3, "uploading": 0, "failed": 1, "done": 5}
     assert out["transfers"] == {"running": 1, "queued": 0, "failed": 0}
     assert out["kbps"] == 12.0 and out["gated"] is True
-    assert len(out["notices"]) == 3 and len(out["notices"][0]["text"]) == 120
+    assert len(out["notices"]) == 3 and out["notices"][0] == "T" * 120
     assert compact_status({"folders": []}) == {
         "folders": {"queued": 0, "uploading": 0, "failed": 0, "done": 0}
     }
