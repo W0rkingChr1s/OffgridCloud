@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.8.1] – 2026-10-21
+
+Fehlerbehebungen für 0.8.0: Der Bluetooth-Dienst startet wieder, und die Companion-App erreicht per Bluetooth auch den Pool.
+
 ### 🔀 net-merge-Updates per PR
 
 - **Workflow „net-merge update“:** Prüft montags, ob es ein neues net-merge-Release gibt, und öffnet dann einen PR, der den Pin in `deploy/netmerge/install.sh` anhebt (Version und SHA-256, berechnet von `scripts/netmerge-bump.sh`). Erst wenn das apt-Repository die Version für alle Pi-Architekturen hat. Gemergt wird von Hand; der Image-Build läuft auf dem PR mit.
@@ -13,6 +17,9 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 ### 🐛 Fehlerbehebungen
 
 - **Bluetooth-Dienst startet wieder:** `offgridcloud-ble` wollte schon werben, bevor er mit BlueZ verbunden war, stürzte dabei ab und startete alle 10 Sekunden neu. Das Web-Portal meldete deshalb „Der Bluetooth-Dienst der Box meldet sich nicht“, obwohl ein Adapter da war.
+- **Pool per Bluetooth:** Die Pool-Endpunkte fehlten in der Whitelist des Bluetooth-Dienstes; der Pool-Bildschirm der Companion-App bekam nur `not_allowed`. Zugangsverwaltung (Tokens, Peers per URL + Token) bleibt per Funk gesperrt. Ein Test gleicht die Whitelist jetzt mit der Tabelle in [docs/BLE-PROTOKOLL.md](docs/BLE-PROTOKOLL.md) ab.
+- **Hinweise in der App:** Das `status`-Event schickte Hinweise als Objekt statt als Text, die App verwarf sie stillschweigend.
+- **Pool-Seite:** Nach dem Pausieren von Uploads tauchte das Auftrags-Panel doppelt auf.
 
 ## [0.8.0] – 2026-10-21
 
