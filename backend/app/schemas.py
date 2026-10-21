@@ -688,6 +688,8 @@ class HttpsStatusOut(BaseModel):
     domain: str  # public domain, or "" if none
     lan_url: str  # e.g. https://offgridcloud.local
     public_url: str  # e.g. https://cloud.example.com, or "" if no domain
+    ca_available: bool = False  # root CA exported by apply.sh → downloadable
+    ca_fingerprint: str = ""  # SHA-256 of the root CA, to compare on the device
 
 
 class HttpsConfigUpdate(BaseModel):

@@ -72,7 +72,7 @@ elif [[ -f "$PREFIX/data/https_state.json" ]]; then
 fi
 
 # --- 4. State file the backend reads -----------------------------------------
-rm -f "$PREFIX/data/https_state.json"
+rm -f "$PREFIX/data/https_state.json" "$PREFIX/data/caddy-root.crt"
 
 # Let a running app pick up the removed wiring (no-op when the service is gone).
 systemctl try-restart offgridcloud 2>/dev/null || true

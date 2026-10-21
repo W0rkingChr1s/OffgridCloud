@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ApiError, passkeysSupported } from "../api";
+import { ApiError, NetworkError, passkeysSupported } from "../api";
 import { useAuth } from "../auth";
+
+// The request never reached the box — not a wrong password. The banner above
+// (ConnectionBanner) explains the likely certificate cause and the fix.
+const UNREACHABLE_HINT =
+  "Box nicht erreichbar – die Anmeldedaten wurden gar nicht geprüft. Hinweis oben beachten.";
 
 export default function Login() {
   const { login, loginPasskey } = useAuth();
@@ -19,7 +24,13 @@ export default function Login() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Anmeldung fehlgeschlagen");
+      setError(
+        err instanceof NetworkError
+          ? UNREACHABLE_HINT
+          : err instanceof ApiError
+            ? err.message
+            : "Anmeldung fehlgeschlagen",
+      );
     } finally {
       setBusy(false);
     }
@@ -34,6 +45,8 @@ export default function Login() {
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         setError("Passkey-Anmeldung abgebrochen.");
+      } else if (err instanceof NetworkError) {
+        setError(UNREACHABLE_HINT);
       } else {
         setError(err instanceof ApiError ? err.message : "Passkey-Anmeldung fehlgeschlagen");
       }

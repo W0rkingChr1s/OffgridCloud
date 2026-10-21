@@ -463,7 +463,7 @@ else
     fi
     run rm -f "$HOST_STATE"
   fi
-  run rm -f "$PREFIX/data/https_state.json"
+  run rm -f "$PREFIX/data/https_state.json" "$PREFIX/data/caddy-root.crt"
 fi
 
 # --- 5. On-box console (kiosk) ----------------------------------------------

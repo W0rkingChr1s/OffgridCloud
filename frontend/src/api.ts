@@ -423,6 +423,8 @@ export interface HttpsStatus {
   domain: string;
   lan_url: string;
   public_url: string;
+  ca_available: boolean; // root CA exported → downloadable for devices
+  ca_fingerprint: string; // SHA-256, to compare in the device's profile view
 }
 
 export async function getHttpsStatus(): Promise<HttpsStatus> {
@@ -776,6 +778,28 @@ export class ApiError extends Error {
   }
 }
 
+/** fetch() itself failed: the box never answered (offline, wrong network, or —
+ *  over https://<name>.local — a certificate the device no longer trusts). */
+export class NetworkError extends Error {
+  constructor() {
+    super("Box nicht erreichbar");
+  }
+}
+
+/** Fired on window whenever an API call fails to reach the box at all. */
+export const UNREACHABLE_EVENT = "ogc:unreachable";
+
+/** Root-CA downloads. From https:// they point at the plain-HTTP twin of the
+ *  same name — the one way in while the device rejects the certificate. */
+export function rootCaUrls(): { profile: string; crt: string } {
+  const base =
+    window.location.protocol === "https:" ? `http://${window.location.hostname}` : "";
+  return {
+    profile: `${base}/api/system/https/ca.mobileconfig`,
+    crt: `${base}/api/system/https/ca.crt`,
+  };
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -791,7 +815,14 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(path, { ...opts, headers });
+  let res: Response;
+  try {
+    res = await fetch(path, { ...opts, headers });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    window.dispatchEvent(new Event(UNREACHABLE_EVENT));
+    throw new NetworkError();
+  }
 
   if (!res.ok) {
     if (res.status === 401) setToken(null);

@@ -114,14 +114,21 @@ def test_set_live_limit_talks_core_bwlimit(rc_server):
 # --- the worker keeps running uploads on the current limit ------------------------
 
 
-@pytest.fixture
-def policy_reset(client):
-    yield
+def _reset_policy():
     with SessionLocal() as db:
         policy = bandwidth.get_policy(db)
         policy.bwlimit_kbps, policy.parallel_uploads, policy.schedule_json = 0, 1, "[]"
         policy.pool_limit_kbps, policy.pool_limit_until = 0, None
         db.commit()
+
+
+@pytest.fixture
+def policy_reset(client):
+    # Reset before, too: earlier tests (test_bandwidth) leave a 22:00–06:00
+    # schedule in the shared DB, which made these fail only at night.
+    _reset_policy()
+    yield
+    _reset_policy()
     rclone._live.clear()
 
 

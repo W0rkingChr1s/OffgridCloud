@@ -198,6 +198,34 @@ mDNS-Namen und erzeugt:
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
+**Zertifikat auf Geräten vertrauen (empfohlen):** Das Zertifikat für
+`https://<hostname>.local` stellt Caddy selbst aus (`tls internal`) und erneuert
+es etwa alle 12 Stunden. Eine im Browser bestätigte Warnung gilt nur für das
+alte Zertifikat. Danach schlagen Anmeldung und Datenabrufe still fehl („Box
+nicht erreichbar“), Safari zeigt oft keine neue Warnung, weil der Service Worker
+die zwischengespeicherte Seite ausliefert. Abhilfe ist, das **Root-Zertifikat**
+der Box einmal pro Gerät zu installieren (10 Jahre gültig):
+
+- Im Portal unter **System → Erweitert → Zertifikat auf Geräten vertrauen**:
+  „Profil für iPhone/iPad/Mac“ (`.mobileconfig`) oder „Zertifikat (.crt)“.
+  Ohne Anmeldung: `http://<hostname>.local/api/system/https/ca.mobileconfig`
+  bzw. `…/ca.crt` (auch per `http://<IP>`). Diese beiden Pfade bleiben bewusst
+  per HTTP erreichbar, alles andere leitet auf HTTPS um.
+- **iOS/iPadOS:** Profil laden → Einstellungen → „Profil geladen“ →
+  Installieren, danach Einstellungen → Allgemein → Info →
+  Zertifikatsvertrauenseinstellungen → „Volles Vertrauen“ einschalten.
+- **Android/Windows/Linux:** die `.crt` als vertrauenswürdige
+  Stammzertifizierungsstelle importieren.
+- Der Download läuft über unverschlüsseltes HTTP. Vor dem Vertrauen den
+  SHA-256-Fingerabdruck aus dem Portal mit dem auf dem Gerät vergleichen.
+- `deploy/https/apply.sh` kopiert die Root-CA nach `data/caddy-root.crt`. Bei
+  bestehenden Boxen passiert das beim nächsten Update.
+
+**Schnelle Hilfe ohne Zertifikat:** Erscheint oben der gelbe Hinweis „Box nicht
+erreichbar“, setzt „Neu verbinden“ Service Worker und Cache zurück und lädt neu.
+Dann zeigt der Browser die Zertifikatswarnung wieder und man kann sie erneut
+bestätigen, bis zur nächsten Erneuerung.
+
 **Domain später ändern:** im Portal unter **System → Erweitert → Öffentliche HTTPS-Domain** die Domain
 eintragen oder entfernen — kein Neu-Installieren nötig. Der lokale
 `.local`-Zugang bleibt immer erhalten. Damit ein echtes Zertifikat ausgestellt

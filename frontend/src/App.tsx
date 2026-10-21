@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { api, type SetupStatus } from "./api";
 import { AuthProvider } from "./auth";
+import ConnectionBanner from "./components/ConnectionBanner";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { RetroEasterEgg } from "./retro";
 import { ToastProvider } from "./toast";
@@ -39,7 +40,7 @@ function SetupGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export default function App() {
+function AppRoutes() {
   return (
     <SetupGate>
       <BrowserRouter>
@@ -183,5 +184,14 @@ export default function App() {
         </AuthProvider>
       </BrowserRouter>
     </SetupGate>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <ConnectionBanner />
+      <AppRoutes />
+    </>
   );
 }
