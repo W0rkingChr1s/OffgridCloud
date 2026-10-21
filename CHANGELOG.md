@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.8.0] – 2026-10-21
+
+Die Companion-App verwaltet die Box jetzt per Bluetooth, auch ohne gemeinsames Netz. Leitungsbündelung ist ab Werk installiert, und auf Wunsch hält sich die Box nachts in einem ruhigen Zeitfenster selbst aktuell.
+
 ### 🔀 Leitungsbündelung ab Werk installiert
 
 - **net-merge kommt jetzt standardmäßig mit:** Installer, Update und das fertige Image richten den Dienst `offgridcloud-netmerge` ohne Zutun ein; kein `sudo …/netmerge/install.sh` mehr nötig. Abwählen per Installer-Frage oder `OGC_WITH_NETMERGE=0`.
