@@ -156,3 +156,34 @@ def test_run_loop_stops_cleanly():
         assert gatt.adverts[-1] is None
 
     run(scenario())
+
+
+def test_main_starts_gatt_before_first_refresh(monkeypatch):
+    """Regression: advertising before the D-Bus connection crashed the service."""
+    from app.ble import __main__ as entry
+
+    class StrictGatt(FakeGatt):
+        def __init__(self, adapter=""):
+            super().__init__()
+            self.started = False
+
+        async def start(self, on_write, on_disconnect):
+            self.started = True
+
+        async def start_advertising(self, name, flags):
+            assert self.started, "advertising before gatt.start()"
+            await super().start_advertising(name, flags)
+
+    async def no_loop(self, stop):
+        return None
+
+    monkeypatch.setattr(entry, "BlueZGatt", StrictGatt)
+    monkeypatch.setattr(entry, "BoxHost", lambda key, url: ServiceHost())
+    monkeypatch.setattr(entry, "load_or_create_box_key", lambda: None)
+    monkeypatch.setattr(entry.BleService, "run", no_loop)
+    run(entry.main())
+    status = ble_dir() / service.STATUS_FILE
+    try:
+        assert json.loads(status.read_text("utf-8"))["enabled"]
+    finally:
+        status.unlink()  # the web UI tests expect no running service

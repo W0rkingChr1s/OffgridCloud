@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Bluetooth-Dienst startet wieder:** `offgridcloud-ble` wollte schon werben, bevor er mit BlueZ verbunden war, stürzte dabei ab und startete alle 10 Sekunden neu. Das Web-Portal meldete deshalb „Der Bluetooth-Dienst der Box meldet sich nicht“, obwohl ein Adapter da war.
+
 ## [0.8.0] – 2026-10-21
 
 Die Companion-App verwaltet die Box jetzt per Bluetooth, auch ohne gemeinsames Netz. Leitungsbündelung ist ab Werk installiert, und auf Wunsch hält sich die Box nachts in einem ruhigen Zeitfenster selbst aktuell.
