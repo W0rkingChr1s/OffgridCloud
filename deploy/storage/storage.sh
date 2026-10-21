@@ -14,6 +14,9 @@
 #   storage.sh format  /dev/sdX|/dev/sdX1 exfat|vfat|ext4 [LABEL]
 #   storage.sh prepare-cache /dev/sdX1           (create OffgridCloud-Cache/)
 #   storage.sh prepare-buffer /dev/sdX1          (create OffgridCloud-Puffer/)
+#   storage.sh led NAME on|off                   (status LED, /sys/class/leds/NAME)
+#   storage.sh led NAME blink ON_MS OFF_MS
+#   storage.sh led NAME trigger TRIGGER          (hand the LED back, e.g. mmc0)
 #
 # Formatting a whole disk (/dev/sdX) wipes it and writes one partition spanning
 # the disk; formatting a partition keeps the partition table.
@@ -204,6 +207,34 @@ do_prepare_dir() {
   echo "$dir"
 }
 
+# Status LED for the unattended auto-import (app/status_led.py). Only touches
+# /sys/class/leds/<NAME>; blinking is left to the kernel's timer trigger.
+do_led() {
+  local name="$1" mode="$2" dir
+  [[ "$name" =~ ^[A-Za-z0-9_.:-]{1,64}$ ]] || die "Ungültige LED: $name"
+  dir="/sys/class/leds/$name"
+  [[ -d "$dir" ]] || die "LED nicht gefunden: $name"
+  case "$mode" in
+    on)  echo none > "$dir/trigger"; cat "$dir/max_brightness" > "$dir/brightness" ;;
+    off) echo none > "$dir/trigger"; echo 0 > "$dir/brightness" ;;
+    blink)
+      [[ "${3:-}" =~ ^[0-9]{1,5}$ && "${4:-}" =~ ^[0-9]{1,5}$ ]] || die "Ungültige Blinkzeiten."
+      if ! echo timer > "$dir/trigger" 2>/dev/null; then
+        modprobe ledtrig-timer 2>/dev/null || true
+        echo timer > "$dir/trigger" || die "LED-Trigger 'timer' nicht verfügbar."
+      fi
+      echo "$3" > "$dir/delay_on"
+      echo "$4" > "$dir/delay_off"
+      ;;
+    trigger)
+      [[ "${3:-}" =~ ^[A-Za-z0-9_.:-]{1,64}$ ]] || die "Ungültiger Trigger."
+      tr ' ' '\n' < "$dir/trigger" | tr -d '[]' | grep -qxF "$3" || die "Trigger unbekannt: $3"
+      echo "$3" > "$dir/trigger"
+      ;;
+    *) die "Usage: storage.sh led NAME on|off|blink ON OFF|trigger TRIGGER" ;;
+  esac
+}
+
 action="${1:-}"
 shift || true
 case "$action" in
@@ -212,7 +243,9 @@ case "$action" in
   eject)   [[ $# -eq 1 ]] || die "Usage: storage.sh eject DISK";  do_eject "$1" ;;
   prepare-cache) [[ $# -eq 1 ]] || die "Usage: storage.sh prepare-cache DEV"; do_prepare_dir "$1" OffgridCloud-Cache ;;
   prepare-buffer) [[ $# -eq 1 ]] || die "Usage: storage.sh prepare-buffer DEV"; do_prepare_dir "$1" OffgridCloud-Puffer ;;
+  led)     [[ $# -ge 2 && $# -le 4 ]] || die "Usage: storage.sh led NAME MODE [ARGS]"
+           do_led "$@" ;;
   format)  [[ $# -ge 2 && $# -le 3 ]] || die "Usage: storage.sh format DEV FSTYPE [LABEL]"
            do_format "$1" "$2" "${3:-}" ;;
-  *) die "Usage: storage.sh mount|unmount|eject|format|prepare-cache|prepare-buffer …" ;;
+  *) die "Usage: storage.sh mount|unmount|eject|format|prepare-cache|prepare-buffer|led …" ;;
 esac

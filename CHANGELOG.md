@@ -6,6 +6,12 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Auto-Import von Wechselmedien:** Unter *Speicher → Auto-Import* lässt sich ein festes Ziel wählen (Ordner mit Cloud-Upload oder Cache-Laufwerk). Jedes neu angesteckte Medium wird dann automatisch eingehängt, kopiert (Duplikate übersprungen) und auf Wunsch ausgeworfen.
+- **Status-LED für den Offline-Betrieb:** Die LED der Box zeigt den Auto-Import ohne Portal an: langsames Blinken = kopiert, dauerhaft an = fertig/ziehen, schnelles Flackern = Fehler. Standard ist die `ACT`-LED des Pi; eine externe GPIO-LED (`dtoverlay=gpio-led`) ist wählbar, jedes Muster lässt sich testen.
+- **Benachrichtigung „Auto-Import fertig/fehlgeschlagen“** über Telegram, E-Mail und Webhook, sofern eingerichtet und erreichbar.
+
 ### 🐛 Fehlerbehebungen
 
 - **Update-Log ohne Steuerzeichen:** Das Live-Log unter *System → Update* zeigte die Terminal-Farbcodes der Deploy-Skripte roh an (`␛[1;36m>> …␛[0m`). Das Backend filtert ANSI-Escape-Sequenzen jetzt heraus, bevor es das Log ausliefert.

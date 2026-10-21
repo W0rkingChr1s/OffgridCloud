@@ -66,6 +66,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 💾 **Speicher-Verwaltung** — angeschlossene USB-Sticks, SD-Karten und Platten sehen, ein-/aushängen, auswerfen und formatieren (exFAT/FAT32/ext4; System- und Puffer-Laufwerk gesperrt)
 - 📷 **Kamerakarten als Bildergalerie** — Vorschaubilder (auch RAW), Fotos auswählen und **für den Upload übernehmen**, mit boxweiter **Duplikatprüfung**
 - 🗄️ **Cache-Laufwerk** — Karten in einem Rutsch sichern, damit sie sofort wieder in die Kamera können — auch ohne Netz
+- ⚡ **Auto-Import** — Karte oder Stick einstecken, die Box kopiert alles automatisch in einen festen Ordner (→ Cloud) oder auf ein Cache-Laufwerk und wirft es aus. Die **Status-LED** zeigt ohne Netz und ohne Portal an, wann gezogen werden kann; mit Netz kommt zusätzlich eine Telegram-/Mail-Nachricht
 - 🔌 **Wechselmedien als Puffer** — ein Laufwerk per „Als Puffer nutzen“ markieren: neue Uploads landen zuerst dort, solange es steckt und Platz hat. Laufwerke mit wartenden Dateien sind gegen Aushängen/Formatieren geschützt; gezogen, warten die Transfers statt fehlzuschlagen
 - 🗃️ **Komfortabler Datei-Browser** — Mehrfachauswahl, Löschen mehrerer Dateien auf einmal und Bulk-Download als ZIP
 - 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner)

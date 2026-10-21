@@ -51,6 +51,7 @@ def _status(db: Session) -> SystemStatusOut:
         notify_on_reconnect=settings_row.notify_on_reconnect,
         notify_on_bandwidth=settings_row.notify_on_bandwidth,
         notify_on_pool=settings_row.notify_on_pool,
+        notify_on_auto_import=settings_row.notify_on_auto_import,
         telegram_chat_id=settings_row.telegram_chat_id,
         telegram_configured=bool(settings_row.telegram_bot_token_encrypted),
         telegram_conflict=telegram_bot.poll_conflict(),
@@ -233,6 +234,7 @@ def _apply_notify_settings(
         "notify_on_reconnect",
         "notify_on_bandwidth",
         "notify_on_pool",
+        "notify_on_auto_import",
     ):
         value = getattr(payload, flag)
         if value is not None:

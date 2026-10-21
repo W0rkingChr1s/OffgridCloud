@@ -517,6 +517,11 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
     label: "Pool-Änderungen (nur am Hub)",
     help: "Ist diese Box Hub eines Pools, fasst sie Änderungen an den Peers zu einer Nachricht pro Minute zusammen: Box nicht erreichbar oder wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers. Gemeldet werden nur Wechsel, nicht der Dauerzustand.",
   },
+  {
+    key: "notify_on_auto_import",
+    label: "Auto-Import fertig/fehlgeschlagen",
+    help: "Meldet, wenn ein automatisch übernommenes Speichermedium fertig kopiert ist (und gezogen werden kann) oder der Import fehlgeschlagen ist. Ohne Netz zeigt die Status-LED an der Box dasselbe an.",
+  },
 ];
 
 function NotificationsCard({

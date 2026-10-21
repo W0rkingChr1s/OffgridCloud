@@ -41,6 +41,8 @@ EVENT_TOGGLE: dict[str, str] = {
     "transfer.resumed": "notify_on_bandwidth",
     # Bundled fleet changes reported by a pool hub (see app.pool_watch).
     "pool.alert": "notify_on_pool",
+    # Unattended import of a plugged-in medium (see app.auto_import).
+    "storage.auto_import": "notify_on_auto_import",
 }
 
 
@@ -107,6 +109,7 @@ TELEGRAM_ICONS: dict[str, str] = {
     "transfer.paused": "⏸",
     "transfer.resumed": "▶️",
     "pool.alert": "🛰️",
+    "storage.auto_import": "🔌",
     "server.update": "🔄",
 }
 

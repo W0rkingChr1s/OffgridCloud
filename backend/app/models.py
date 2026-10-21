@@ -460,6 +460,8 @@ class SystemSettings(Base):
     notify_on_bandwidth: Mapped[bool] = mapped_column(Boolean, default=True)
     # Pool hub: one bundled message when peers go offline/low/paused/failing.
     notify_on_pool: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Unattended import of a plugged-in medium finished or failed (app.auto_import).
+    notify_on_auto_import: Mapped[bool] = mapped_column(Boolean, default=True)
     # Telegram bot channel. Token encrypted at rest with the same key as
     # provider credentials; empty token = channel disabled.
     telegram_bot_token_encrypted: Mapped[str] = mapped_column(Text, default="")
@@ -661,3 +663,29 @@ class StorageBuffer(Base):
     label: Mapped[str] = mapped_column(String(120), default="")
     mountpoint: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class AutoImportSettings(Base):
+    """Singleton (id=1): copy every plugged-in medium to a fixed target.
+
+    See :mod:`app.auto_import`. ``mode`` is ``import`` (into ``folder_id``,
+    queued for its cloud targets) or ``cache`` (mirrored onto a cache drive).
+    The status LED tells the field team when the medium can be pulled.
+    """
+
+    __tablename__ = "storage_auto_import"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    mode: Mapped[str] = mapped_column(String(8), default="import")
+    folder_id: Mapped[int | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="SET NULL")
+    )
+    cache_uuid: Mapped[str] = mapped_column(String(64), default="")  # "" = first cache found
+    media_only: Mapped[bool] = mapped_column(Boolean, default=True)
+    skip_duplicates: Mapped[bool] = mapped_column(Boolean, default=True)
+    eject_after: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Imported files are attributed to the admin who set this up.
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    led_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    led_name: Mapped[str] = mapped_column(String(64), default="")  # "" = ACT / led0

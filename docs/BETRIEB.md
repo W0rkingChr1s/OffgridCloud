@@ -392,6 +392,53 @@ zusammen, auch für die Speicher-knapp-Meldung.
 - **FAT32** wird als Puffer abgelehnt (max. 4 GB je Datei): vorher als exFAT oder ext4
   formatieren.
 
+#### Auto-Import — einstecken, warten bis die LED leuchtet, ziehen
+
+Im Kasten **„Auto-Import“** auf der Speicher-Seite wird ein festes Ziel gewählt:
+ein **Ordner** (die Dateien gehen danach an dessen Cloud-Ziele) oder ein
+**Cache-Laufwerk** (Kartensicherung). Ist der Auto-Import aktiv, wird **jedes neu
+angesteckte Wechselmedium** innerhalb weniger Sekunden eingehängt und komplett auf das
+Ziel kopiert, ohne dass jemand das Portal öffnet. Duplikate werden wie beim manuellen
+Import übersprungen; eine Karte erneut einzustecken kopiert also nur Neues. Nach einem
+fehlerfreien Durchlauf wird das Medium (optional) ausgeworfen.
+
+Übergangen werden System- und Puffer-Laufwerke, als Cache/Puffer markierte Laufwerke,
+fest verbaute (nicht-Wechsel-)Laufwerke und Laufwerke mit einem `OffgridCloud-Cache/`-
+oder `OffgridCloud-Puffer/`-Ordner. **Achtung:** Ein *neues* Laufwerk, das gleich als
+Cache oder Puffer markiert werden soll, vorher **nicht** bei aktivem Auto-Import
+anstecken, sonst wird sein Inhalt erst einmal übernommen.
+
+**Status ohne Netz — die Status-LED:**
+
+| LED                         | Bedeutung                                             |
+|-----------------------------|-------------------------------------------------------|
+| normal (SD-Aktivität)       | nichts zu tun                                         |
+| langsames Blinken (0,5 s)   | kopiert — Medium **stecken lassen**                   |
+| dauerhaft an                | fertig (und ausgeworfen) — Medium **kann gezogen werden** |
+| schnelles Flackern (0,1 s)  | Fehler (zu wenig Platz, kein Cache, Lesefehler …) — Details im Portal |
+
+Stecken mehrere Medien, gewinnt „kopiert“ vor „Fehler“ vor „fertig“: solange irgendwo
+noch kopiert wird, darf nichts gezogen werden. „Fertig“ bleibt stehen, bis das Medium
+gezogen wird. USB-Kartenleser schalten sich beim Auswerfen ab und sind danach für die
+Box unsichtbar; dann hält die LED „fertig“ 30 Minuten oder bis zum nächsten Medium.
+
+Standard ist die grüne `ACT`-LED des Raspberry Pi (ältere Kernel: `led0`). Für eine
+gut sichtbare LED vorn am Gehäuse eine LED (mit Vorwiderstand, ~330 Ω) an einen
+GPIO-Pin hängen und in `/boot/firmware/config.txt` eintragen:
+
+```
+dtoverlay=gpio-led,gpio=17,label=ogc-status
+```
+
+Nach dem Neustart erscheint `ogc-status` in der LED-Auswahl. Mit **„Testen“** lässt
+sich jedes Muster ein paar Sekunden lang vorführen. Die LED wird über den Root-Helfer
+geschaltet (`storage.sh led …`), das Blinken übernimmt der Kernel-Trigger `timer`.
+
+**Status mit Netz:** Zusätzlich geht pro Medium eine Nachricht über die eingerichteten
+Kanäle (Telegram, E-Mail, Webhook) — Ereignis „Auto-Import fertig/fehlgeschlagen“
+unter *System → Benachrichtigungen*, standardmäßig an. Ist gerade kein Netz da, geht
+die Nachricht verloren; die LED zeigt den Status trotzdem.
+
 **Schutz:** Laufwerke mit einem Dateisystem außerhalb von `/media`, `/mnt` oder
 `/run/media` (also die System-SD/-SSD) und das Laufwerk mit dem OffgridCloud-Puffer
 werden als **System** bzw. **Puffer** markiert und lassen sich weder aushängen noch
