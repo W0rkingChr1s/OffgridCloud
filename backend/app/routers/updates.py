@@ -5,13 +5,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import __version__, _read_channel, _read_commit
-from ..admin_ops import audit
+from .. import __version__, _read_channel, _read_commit, autoupdate
+from ..admin_ops import audit, get_system_settings
 from ..config import get_settings
 from ..db import get_db
 from ..deps import require_admin
 from ..models import User
-from ..schemas import UpdateApplyResult, UpdateInfoOut, UpdateProgressOut
+from ..schemas import (
+    AutoUpdateIn,
+    AutoUpdateOut,
+    UpdateApplyResult,
+    UpdateInfoOut,
+    UpdateProgressOut,
+)
 from ..updater import (
     PHASE_RUNNING,
     check_for_update,
@@ -141,3 +147,63 @@ def dismiss_update(_: User = Depends(require_admin)) -> UpdateProgressOut:
         raise HTTPException(status_code=409, detail="Update läuft noch — bitte warten.")
     clear_state(settings.data_dir)
     return UpdateProgressOut(phase="idle", running=False)
+
+
+def _auto_out(db: Session) -> AutoUpdateOut:
+    row = get_system_settings(db)
+    status = autoupdate.status()
+    if not row.auto_update_enabled:
+        status = "Automatische Updates sind aus."
+    elif not status:
+        status = "Wird beim nächsten Durchlauf geprüft (alle 5 Minuten)."
+    return AutoUpdateOut(
+        enabled=row.auto_update_enabled,
+        start_hour=row.auto_update_start_hour,
+        end_hour=row.auto_update_end_hour,
+        allow_metered=row.auto_update_metered,
+        available=autoupdate.available(),
+        status=status,
+        last_day=row.auto_update_last_day,
+        failed_target=row.auto_update_failed_target,
+    )
+
+
+@router.get("/auto", response_model=AutoUpdateOut)
+def get_auto_update(db: Session = Depends(get_db)) -> AutoUpdateOut:
+    """Unattended-update settings and what the scheduler is waiting for."""
+    return _auto_out(db)
+
+
+@router.put("/auto", response_model=AutoUpdateOut)
+def set_auto_update(
+    payload: AutoUpdateIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> AutoUpdateOut:
+    """Change the unattended-update settings (opt-in, see ``app.autoupdate``)."""
+    if payload.enabled and not autoupdate.available():
+        raise HTTPException(
+            status_code=409,
+            detail="Automatische Updates gehen nur mit aktivem One-Click-Update (nicht in Docker).",
+        )
+    row = get_system_settings(db)
+    changed = []
+    if payload.enabled is not None:
+        if payload.enabled and not row.auto_update_enabled:
+            # Switching on again is the way to retry a release that failed.
+            row.auto_update_failed_target = ""
+            row.auto_update_last_day = ""
+        row.auto_update_enabled = payload.enabled
+        changed.append(f"enabled={payload.enabled}")
+    if payload.start_hour is not None:
+        row.auto_update_start_hour = payload.start_hour
+        changed.append(f"start={payload.start_hour}")
+    if payload.end_hour is not None:
+        row.auto_update_end_hour = payload.end_hour
+        changed.append(f"end={payload.end_hour}")
+    if payload.allow_metered is not None:
+        row.auto_update_metered = payload.allow_metered
+        changed.append(f"metered={payload.allow_metered}")
+    if changed:
+        db.commit()
+        autoupdate.reset_status()
+        audit(db, admin, "system.update.auto", ", ".join(changed))
+    return _auto_out(db)

@@ -112,6 +112,13 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("bandwidth_policy", "pool_limit_by", "VARCHAR(100) NOT NULL DEFAULT ''"),
     # Bluetooth management for the companion app.
     ("system_settings", "ble_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+    # Unattended updates (app.autoupdate).
+    ("system_settings", "auto_update_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "auto_update_start_hour", "INTEGER NOT NULL DEFAULT 3"),
+    ("system_settings", "auto_update_end_hour", "INTEGER NOT NULL DEFAULT 5"),
+    ("system_settings", "auto_update_metered", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("system_settings", "auto_update_last_day", "VARCHAR(10) NOT NULL DEFAULT ''"),
+    ("system_settings", "auto_update_failed_target", "VARCHAR(100) NOT NULL DEFAULT ''"),
 ]
 
 
