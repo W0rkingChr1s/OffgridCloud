@@ -22,8 +22,9 @@ async def main() -> None:
     host = BoxHost(load_or_create_box_key(), settings.ble_backend_url)
     gatt = BlueZGatt(settings.ble_adapter)
     service = BleService(host, gatt)
-    await service.refresh()
+    # Connect to BlueZ first: refresh() already advertises, which needs the bus.
     await gatt.start(service.on_write, service.on_disconnect)
+    await service.refresh()
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
