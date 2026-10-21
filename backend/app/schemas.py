@@ -1191,6 +1191,9 @@ class BlePairingOut(BaseModel):
     code: str
     link: str
     expires_at: datetime
+    # Seconds the code stays valid. The portal counts down from this rather
+    # than from expires_at: a Pi without RTC may disagree with the browser clock.
+    expires_in: int
 
 
 class BleDeviceOut(BaseModel):

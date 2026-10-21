@@ -13,7 +13,8 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 - **Keine eigenen Rechte:** Der Dienst reicht Anfragen mit einem 5-Minuten-Token des gekoppelten Benutzers an die REST-API weiter. Eine Whitelist hält Downloads, Formatieren und Zugangsdaten vom Funk fern. Schreibende Aktionen stehen mit `[ble]` im Audit-Log.
 - **Bleibt erreichbar, wenn das Backend hängt:** Minimal-Status und „Dienst neu starten“ beantwortet der Dienst selbst.
 - **Eine Verbindung gleichzeitig.** Während ein Handy verbunden ist, wirbt die Box nicht.
-- Installer-Option „Bluetooth für die Companion-App“ (vorausgewählt, wenn ein Adapter da ist), im fertigen Image aktiv. Neue Endpunkte `/api/ble/*`; Abschalten über `PUT /api/ble/settings` (Admin). Die Portal-Seite zum Koppeln folgt.
+- Installer-Option „Bluetooth für die Companion-App“ (vorausgewählt, wenn ein Adapter da ist), im fertigen Image aktiv. Neue Endpunkte `/api/ble/*`; Abschalten über `PUT /api/ble/settings` (Admin).
+- **Neue Seite *Bluetooth* im Web-Portal** (für alle Benutzer): „Gerät koppeln“ zeigt QR-Code und Code mit Countdown und erkennt selbst, wenn das Handy fertig ist. Darunter die gekoppelten Geräte zum Umbenennen und Entfernen; Admins sehen alle und schalten Bluetooth hier ab. Meldet sich der Dienst nicht, sagt die Seite das.
 
 ## [0.7.7] – 2026-10-21
 

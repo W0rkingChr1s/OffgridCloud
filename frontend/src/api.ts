@@ -474,6 +474,60 @@ export function passkeysSupported(): boolean {
   );
 }
 
+/** Bluetooth for the companion app (docs/BLE-PROTOKOLL.md §6). */
+export interface BleStatus {
+  enabled: boolean;
+  service_running: boolean;
+  box_name: string;
+  box_public_key: string;
+}
+
+export interface BlePairing {
+  code: string;
+  link: string;
+  expires_at: string;
+  expires_in: number;
+}
+
+export interface BleDevice {
+  id: number;
+  name: string;
+  user_id: number;
+  user_email: string;
+  created_at: string;
+  last_seen_at: string | null;
+}
+
+export async function getBleStatus(): Promise<BleStatus> {
+  return api<BleStatus>("/api/ble/status");
+}
+
+export async function setBleEnabled(enabled: boolean): Promise<BleStatus> {
+  return api<BleStatus>("/api/ble/settings", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function createBlePairing(): Promise<BlePairing> {
+  return api<BlePairing>("/api/ble/pairings", { method: "POST" });
+}
+
+export async function listBleDevices(): Promise<BleDevice[]> {
+  return api<BleDevice[]>("/api/ble/devices");
+}
+
+export async function renameBleDevice(id: number, name: string): Promise<BleDevice> {
+  return api<BleDevice>(`/api/ble/devices/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function revokeBleDevice(id: number): Promise<void> {
+  await api<void>(`/api/ble/devices/${id}`, { method: "DELETE" });
+}
+
 /** A server-side status blip carried in the live SSE snapshot (see
  * app/notices.py): startup summary, reconnect ping, bandwidth pause/resume. */
 export interface ServerNotice {

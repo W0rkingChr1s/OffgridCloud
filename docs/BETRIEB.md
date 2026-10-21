@@ -618,10 +618,11 @@ Dienst `offgridcloud-ble`; Protokoll und Sicherheitsmodell:
   `sudo /opt/offgridcloud/deploy/ble/install.sh`. Raspberry Pi 3B/3B+, 4, 5
   und Zero 2 W haben Bluetooth eingebaut; sonst ein USB-Dongle. Docker wird
   nicht unterstützt.
-- **Koppeln:** nur über das Web-Portal, unter *Bluetooth → Gerät koppeln*. Der
-  Code gilt 5 Minuten und einmal. *(Die Portal-Seite folgt; bis dahin liefert
-  `POST /api/ble/pairings` mit dem eigenen Login Code und Kopplungslink.)* Jeder Benutzer koppelt seine eigenen Handys
-  und sieht in der App nur, was er auch im Web-UI darf.
+- **Koppeln:** nur über das Web-Portal, unter *Bluetooth → Gerät koppeln*. Die
+  Seite zeigt einen QR-Code und den Code zum Abtippen; er gilt 5 Minuten und
+  einmal. Sobald das Handy fertig ist, verschwindet der Code und das Gerät steht
+  in der Liste. Jeder Benutzer koppelt seine eigenen Handys und sieht in der App
+  nur, was er auch im Web-UI darf.
 - **Widerrufen:** in derselben Liste; offene Verbindungen des Geräts trennt der
   Dienst binnen Sekunden. Admins sehen und widerrufen alle Geräte.
 - **Abschalten:** *Bluetooth* im Web-Portal (Admin). Standard ist an — sonst
