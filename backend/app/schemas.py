@@ -404,6 +404,8 @@ class DiskUsageOut(BaseModel):
 
 
 class SystemStatusOut(BaseModel):
+    # Notifications waiting for an unreachable channel, per channel.
+    notify_queued: dict[str, int] = {}
     delete_local_after_upload: bool
     delete_remote_on_local_delete: bool
     auto_resync: bool
@@ -422,6 +424,7 @@ class SystemStatusOut(BaseModel):
     notify_on_reconnect: bool
     notify_on_bandwidth: bool
     notify_on_pool: bool
+    notify_on_auto_import: bool
     telegram_chat_id: str
     telegram_configured: bool
     # Another box polls with the same bot token (Telegram allows only one).
@@ -497,6 +500,7 @@ class SystemSettingsUpdate(BaseModel):
     notify_on_reconnect: bool | None = None
     notify_on_bandwidth: bool | None = None
     notify_on_pool: bool | None = None
+    notify_on_auto_import: bool | None = None
     # Telegram channel (token is write-only; "" clears it).
     telegram_bot_token: str | None = None
     telegram_chat_id: str | None = None
@@ -1098,7 +1102,8 @@ class StorageImportJobOut(BaseModel):
     folder_name: str
     target: str
     eject_after: bool
-    user_id: int
+    auto: bool = False
+    user_id: int | None
     status: str
     total_files: int
     total_bytes: int
@@ -1112,6 +1117,50 @@ class StorageImportJobOut(BaseModel):
     errors: list[str]
     created_at: str
     finished_at: str | None
+
+
+
+class AutoImportMediumOut(BaseModel):
+    device: str
+    label: str
+    state: str  # busy | done | error | ignored
+    message: str
+    job_id: str
+    ejected: bool
+
+
+class AutoImportOut(BaseModel):
+    enabled: bool
+    mode: str  # import | cache
+    folder_id: int | None
+    cache_uuid: str
+    media_only: bool
+    skip_duplicates: bool
+    eject_after: bool
+    led_enabled: bool
+    led_name: str
+    # Read-only context for the page.
+    manage_enabled: bool
+    leds: list[str]
+    led_active: str  # the LED actually used ("" = none found)
+    led_state: str  # idle | busy | done | error
+    media: list[AutoImportMediumOut]
+
+
+class AutoImportUpdate(BaseModel):
+    enabled: bool | None = None
+    mode: Literal["import", "cache"] | None = None
+    folder_id: int | None = None
+    cache_uuid: str | None = Field(default=None, max_length=64)
+    media_only: bool | None = None
+    skip_duplicates: bool | None = None
+    eject_after: bool | None = None
+    led_enabled: bool | None = None
+    led_name: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.:-]{0,64}$")
+
+
+class LedTestRequest(BaseModel):
+    state: Literal["busy", "done", "error"]
 
 
 class StorageGalleryItem(BaseModel):

@@ -6,6 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Auto-Import von Wechselmedien:** Unter *Speicher → Auto-Import* lässt sich ein festes Ziel wählen (Ordner mit Cloud-Upload oder Cache-Laufwerk). Jedes neu angesteckte Medium wird dann automatisch eingehängt, kopiert (Duplikate übersprungen) und auf Wunsch ausgeworfen.
+- **Status-LED für den Offline-Betrieb:** Die LED der Box zeigt den Auto-Import ohne Portal an: langsames Blinken = kopiert, dauerhaft an = fertig/ziehen, schnelles Flackern = Fehler. Standard ist die `ACT`-LED des Pi; eine externe GPIO-LED (`dtoverlay=gpio-led`) ist wählbar, jedes Muster lässt sich testen.
+- **Benachrichtigung „Auto-Import fertig/fehlgeschlagen“** über Telegram, E-Mail und Webhook.
+- **Warteschlange für Offline-Benachrichtigungen:** Meldungen, die ein Kanal nicht zustellen kann (Box offline, Dienst weg), bleiben in der Datenbank und werden nachgeliefert, sobald er wieder erreichbar ist — bei Telegram/E-Mail gebündelt als Sammelnachricht mit Originalzeiten, beim Webhook einzeln mit `delayed`/`queued_at`. Reihenfolge bleibt erhalten; max. 500 je Kanal und 7 Tage. Anzeige mit „Jetzt senden“/„Verwerfen“ unter *System → Benachrichtigungen*.
+
 ### 🐛 Fehlerbehebungen
 
 - **Bluetooth nach Update auf dem Pi 3:** Das Update richtete `offgridcloud-ble` nur ein, wenn schon ein Adapter (`hci0`) sichtbar war. Ohne BlueZ bzw. laufendes `hciuart` gibt es den aber noch nicht — der Pi 3 bekam den Dienst nie, das Portal meldete „meldet sich nicht“. Installer und Update erkennen jetzt Pis mit eingebautem Bluetooth am Modell (3B/3B+/3A+, 4, 5, 400, 500, Zero W, Zero 2 W).

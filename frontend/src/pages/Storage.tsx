@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
+  type AutoImport,
+  type Folder,
   type StorageBuffer,
   type StorageCache,
   type StorageDisk,
@@ -468,6 +470,8 @@ export default function Storage() {
         })}
       </div>
 
+      <AutoImportPanel caches={caches} onError={report} toast={toast} />
+
       {caches.length > 0 && (
         <CachePanel
           caches={caches}
@@ -862,6 +866,184 @@ function CachePanel({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// What the status LED on the box shows — the same words the field team reads
+// in the docs, so nobody has to open the portal to know when to pull a card.
+const LED_PATTERNS: { state: "busy" | "done" | "error"; label: string; hint: string }[] = [
+  { state: "busy", label: "Langsames Blinken", hint: "kopiert — Medium stecken lassen" },
+  { state: "done", label: "Dauerhaft an", hint: "fertig — Medium kann gezogen werden" },
+  { state: "error", label: "Schnelles Flackern", hint: "Fehler — Details hier im Portal" },
+];
+
+const AUTO_STATE: Record<string, { tone: "red" | "amber" | "teal" | "slate"; label: string }> = {
+  busy: { tone: "amber", label: "kopiert …" },
+  done: { tone: "teal", label: "fertig" },
+  error: { tone: "red", label: "Fehler" },
+};
+
+function AutoImportPanel({
+  caches,
+  onError,
+  toast,
+}: {
+  caches: StorageCache[];
+  onError: (e: unknown) => void;
+  toast: ReturnType<typeof useToast>;
+}) {
+  const [cfg, setCfg] = useState<AutoImport | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+
+  const load = useCallback(() => {
+    api<AutoImport>("/api/storage/auto-import").then(setCfg).catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+    api<Folder[]>("/api/folders").then(setFolders).catch(() => {});
+  }, [load]);
+  const running = !!cfg && (cfg.enabled || cfg.media.length > 0);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(load, 3000);
+    return () => clearInterval(t);
+  }, [running, load]);
+
+  async function save(patch: Partial<AutoImport>) {
+    try {
+      setCfg(await api<AutoImport>("/api/storage/auto-import", { method: "PUT", body: JSON.stringify(patch) }));
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  async function testLed(state: string, label: string) {
+    try {
+      await api("/api/storage/auto-import/led-test", { method: "POST", body: JSON.stringify({ state }) });
+      toast.success("LED-Test", `${label} — ein paar Sekunden lang`);
+    } catch (e) {
+      onError(e);
+    }
+  }
+
+  if (!cfg) return null;
+  const field = "rounded-lg bg-slate-900/60 px-3 py-2 text-sm text-white ring-1 ring-white/10";
+  const check = (key: "media_only" | "skip_duplicates" | "eject_after" | "led_enabled", label: string) => (
+    <label className="flex items-center gap-2 text-sm text-slate-300">
+      <input type="checkbox" checked={cfg[key]} onChange={(e) => save({ [key]: e.target.checked })} />
+      {label}
+    </label>
+  );
+
+  return (
+    <div className="mb-6 rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium text-slate-400">Auto-Import</div>
+          <p className="mt-1 text-sm text-slate-500">
+            Jedes angesteckte Medium (Kamerakarte, USB-Stick) wird automatisch auf das gewählte Ziel kopiert —
+            ohne Portal. Die Status-LED an der Box zeigt, wann es gezogen werden kann.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-white">
+          <input type="checkbox" checked={cfg.enabled} onChange={(e) => save({ enabled: e.target.checked })} />
+          Aktiv
+        </label>
+      </div>
+
+      {!cfg.manage_enabled && (
+        <p className="mb-3 text-sm text-amber-200">
+          Speicherverwaltung ist nicht eingerichtet: nur bereits eingehängte Medien werden übernommen, Auswerfen und
+          LED stehen nicht zur Verfügung.
+        </p>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-sm text-slate-400">
+          Ziel
+          <select className={field} value={cfg.mode} onChange={(e) => save({ mode: e.target.value as AutoImport["mode"] })}>
+            <option value="import">Ordner → Cloud-Upload</option>
+            <option value="cache">Cache-Laufwerk (Kartensicherung)</option>
+          </select>
+        </label>
+        {cfg.mode === "import" ? (
+          <label className="grid gap-1 text-sm text-slate-400">
+            Ordner
+            <select
+              className={field}
+              value={cfg.folder_id ?? ""}
+              onChange={(e) => save({ folder_id: e.target.value ? Number(e.target.value) : null })}
+            >
+              <option value="">— wählen —</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="grid gap-1 text-sm text-slate-400">
+            Cache-Laufwerk
+            <select className={field} value={cfg.cache_uuid} onChange={(e) => save({ cache_uuid: e.target.value })}>
+              <option value="">Erstes angeschlossenes</option>
+              {caches.map((c) => (
+                <option key={c.uuid} value={c.uuid}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+        {check("media_only", "Nur Fotos/Videos/Audio")}
+        {check("skip_duplicates", "Bereits Übernommenes überspringen")}
+        {check("eject_after", "Danach auswerfen")}
+        {check("led_enabled", "Status-LED nutzen")}
+      </div>
+
+      {cfg.led_enabled && (
+        <div className="mt-4 rounded-xl bg-slate-900/40 p-4 ring-1 ring-white/5">
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-slate-400">LED</span>
+            <select className={field} value={cfg.led_name} onChange={(e) => save({ led_name: e.target.value })}>
+              <option value="">Automatisch{cfg.led_active && !cfg.led_name ? ` (${cfg.led_active})` : ""}</option>
+              {cfg.leds.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            {!cfg.led_active && <Badge tone="amber">keine LED gefunden</Badge>}
+          </div>
+          <div className="grid gap-1.5 text-sm">
+            {LED_PATTERNS.map((p) => (
+              <div key={p.state} className="flex flex-wrap items-center gap-3">
+                <span className="w-40 font-medium text-white">{p.label}</span>
+                <span className="flex-1 text-slate-400">{p.hint}</span>
+                <button className={btn} disabled={!cfg.led_active || !cfg.manage_enabled} onClick={() => testLed(p.state, p.label)}>
+                  Testen
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {cfg.media.length > 0 && (
+        <div className="mt-4 divide-y divide-white/5">
+          {cfg.media.map((m) => (
+            <div key={m.device + m.job_id} className="flex flex-wrap items-center gap-3 py-2">
+              <span className="font-medium text-white">{m.label}</span>
+              <Badge tone={AUTO_STATE[m.state]?.tone ?? "slate"}>{AUTO_STATE[m.state]?.label ?? m.state}</Badge>
+              <span className="flex-1 text-sm text-slate-400">{m.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

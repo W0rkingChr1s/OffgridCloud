@@ -285,6 +285,10 @@ def test_webhook_called_once_when_media_done(client, admin_auth):
         # process_job tried to POST to an unreachable URL -> notified stays False.
         m.notified = False
         db.commit()
+        # That failed send waits in the outbox; new sends would queue behind it.
+        from app import notify_queue
+
+        notify_queue.clear()
         maybe_notify(db, media["id"], send_fn=fake_send)
         maybe_notify(db, media["id"], send_fn=fake_send)  # second call deduped
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import telegram_bot
+from .. import notify_queue, telegram_bot
 from ..admin_ops import audit, disk_usage, get_system_settings
 from ..config import get_settings
 from ..crypto import decrypt, encrypt
@@ -51,6 +51,7 @@ def _status(db: Session) -> SystemStatusOut:
         notify_on_reconnect=settings_row.notify_on_reconnect,
         notify_on_bandwidth=settings_row.notify_on_bandwidth,
         notify_on_pool=settings_row.notify_on_pool,
+        notify_on_auto_import=settings_row.notify_on_auto_import,
         telegram_chat_id=settings_row.telegram_chat_id,
         telegram_configured=bool(settings_row.telegram_bot_token_encrypted),
         telegram_conflict=telegram_bot.poll_conflict(),
@@ -64,6 +65,7 @@ def _status(db: Session) -> SystemStatusOut:
         power_restart_service_enabled=bool(settings.restart_service_command.strip()),
         power_reboot_enabled=bool(settings.reboot_command.strip()),
         power_shutdown_enabled=bool(settings.shutdown_command.strip()),
+        notify_queued=notify_queue.counts(),
     )
 
 
@@ -233,6 +235,7 @@ def _apply_notify_settings(
         "notify_on_reconnect",
         "notify_on_bandwidth",
         "notify_on_pool",
+        "notify_on_auto_import",
     ):
         value = getattr(payload, flag)
         if value is not None:
@@ -268,3 +271,21 @@ def list_audit(
     return list(
         db.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(200))
     )
+
+
+@router.post("/notify-queue/flush", response_model=SystemStatusOut)
+def flush_notify_queue(
+    _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> SystemStatusOut:
+    """Try to deliver held-back notifications now (ignores the retry backoff)."""
+    notify_queue.flush(force=True)
+    return _status(db)
+
+
+@router.delete("/notify-queue", response_model=SystemStatusOut)
+def clear_notify_queue(
+    admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> SystemStatusOut:
+    n = notify_queue.clear()
+    audit(db, admin, "system.notify_queue.clear", f"{n} entr(ies)")
+    return _status(db)

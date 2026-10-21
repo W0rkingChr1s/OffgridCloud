@@ -517,6 +517,11 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
     label: "Pool-Änderungen (nur am Hub)",
     help: "Ist diese Box Hub eines Pools, fasst sie Änderungen an den Peers zu einer Nachricht pro Minute zusammen: Box nicht erreichbar oder wieder da, Speicher knapp, Uploads pausiert/fortgesetzt, neue fehlgeschlagene Transfers. Gemeldet werden nur Wechsel, nicht der Dauerzustand.",
   },
+  {
+    key: "notify_on_auto_import",
+    label: "Auto-Import fertig/fehlgeschlagen",
+    help: "Meldet, wenn ein automatisch übernommenes Speichermedium fertig kopiert ist (und gezogen werden kann) oder der Import fehlgeschlagen ist. Ohne Netz zeigt die Status-LED an der Box dasselbe an; die Nachricht kommt dann nach, sobald wieder Verbindung besteht.",
+  },
 ];
 
 function NotificationsCard({
@@ -575,6 +580,20 @@ function NotificationsCard({
       setTesting(false);
     }
   }
+  const queued = Object.values(status.notify_queued ?? {}).reduce((a, b) => a + b, 0);
+  async function queueAction(method: "POST" | "DELETE") {
+    try {
+      const path = method === "POST" ? "/api/system/notify-queue/flush" : "/api/system/notify-queue";
+      const next = await api<SystemStatus>(path, { method });
+      onStatus(next);
+      const left = Object.values(next.notify_queued ?? {}).reduce((a, b) => a + b, 0);
+      if (method === "DELETE") toast.success("Warteschlange", "Verworfen");
+      else if (left === 0) toast.success("Warteschlange", "Alles zugestellt");
+      else toast.error("Warteschlange", `${left} noch nicht zustellbar — die Box versucht es weiter`);
+    } catch (e) {
+      toast.error("Warteschlange", e instanceof ApiError ? e.message : "Fehlgeschlagen");
+    }
+  }
   async function saveEmail() {
     const patch: Record<string, unknown> = { ...smtp };
     if (smtpPassword) patch.smtp_password = smtpPassword;
@@ -593,6 +612,24 @@ function NotificationsCard({
         Benachrichtigungen
         <InfoTip text="Statusmeldungen per Telegram und/oder E-Mail (der Webhook unter „Erweitert“ läuft parallel weiter). Ohne eingerichteten Kanal passiert nichts. Zugangsdaten werden verschlüsselt gespeichert und nie wieder angezeigt." />
       </div>
+
+      {queued > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-amber-500/10 px-3 py-2 ring-1 ring-amber-500/30">
+          <span className="min-w-0 flex-1 text-sm text-amber-100">
+            📬 {queued} Meldung{queued === 1 ? "" : "en"} warten auf Verbindung (
+            {Object.entries(status.notify_queued)
+              .map(([ch, n]) => `${{ webhook: "Webhook", telegram: "Telegram", email: "E-Mail" }[ch] ?? ch}: ${n}`)
+              .join(", ")}
+            ) — werden automatisch nachgeliefert, sobald der Kanal erreichbar ist.
+          </span>
+          <button type="button" className="rounded-lg px-3 py-1.5 text-sm text-slate-200 ring-1 ring-white/15 hover:bg-white/5" onClick={() => queueAction("POST")}>
+            Jetzt senden
+          </button>
+          <button type="button" className="rounded-lg px-3 py-1.5 text-sm text-slate-400 ring-1 ring-white/10 hover:bg-white/5" onClick={() => confirm("Wartende Meldungen verwerfen?") && queueAction("DELETE")}>
+            Verwerfen
+          </button>
+        </div>
+      )}
 
       {/* Which events notify */}
       <div className="mb-4 grid gap-2 sm:grid-cols-2">

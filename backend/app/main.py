@@ -20,8 +20,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import (
     __version__,
     announce,
+    auto_import,
     autoupdate,
     buffers,
+    notify_queue,
     pool_watch,
     setup_wizard,
     telegram_bot,
@@ -98,6 +100,10 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(reconcile_loop(stop)))
         # Re-mount buffer drives when they are plugged back in.
         tasks.append(asyncio.create_task(buffers.watch_loop(stop)))
+        # Copy plugged-in media to a fixed target; status LED for the field.
+        tasks.append(asyncio.create_task(auto_import.watch_loop(stop)))
+        # Deliver notifications held back while a channel was unreachable.
+        tasks.append(asyncio.create_task(notify_queue.watch_loop(stop)))
         # Watch the uplink so a dropped-then-restored connection pings the field.
         tasks.append(asyncio.create_task(announce.connectivity_loop(stop)))
         # Pool hub: one bundled message when peers change (offline, full, …).

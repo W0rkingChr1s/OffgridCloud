@@ -66,6 +66,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 💾 **Speicher-Verwaltung** — angeschlossene USB-Sticks, SD-Karten und Platten sehen, ein-/aushängen, auswerfen und formatieren (exFAT/FAT32/ext4; System- und Puffer-Laufwerk gesperrt)
 - 📷 **Kamerakarten als Bildergalerie** — Vorschaubilder (auch RAW), Fotos auswählen und **für den Upload übernehmen**, mit boxweiter **Duplikatprüfung**
 - 🗄️ **Cache-Laufwerk** — Karten in einem Rutsch sichern, damit sie sofort wieder in die Kamera können — auch ohne Netz
+- ⚡ **Auto-Import** — Karte oder Stick einstecken, die Box kopiert alles automatisch in einen festen Ordner (→ Cloud) oder auf ein Cache-Laufwerk und wirft es aus. Die **Status-LED** zeigt ohne Netz und ohne Portal an, wann gezogen werden kann; zusätzlich kommt eine Telegram-/Mail-Nachricht, notfalls nachgeliefert
 - 🔌 **Wechselmedien als Puffer** — ein Laufwerk per „Als Puffer nutzen“ markieren: neue Uploads landen zuerst dort, solange es steckt und Platz hat. Laufwerke mit wartenden Dateien sind gegen Aushängen/Formatieren geschützt; gezogen, warten die Transfers statt fehlzuschlagen
 - 🗃️ **Komfortabler Datei-Browser** — Mehrfachauswahl, Löschen mehrerer Dateien auf einmal und Bulk-Download als ZIP
 - 🏷️ **Tags & Suche** — freie Tags je Medium, ordnerübergreifende Suche/Filter (Dateiname, Tag, Status, Ordner)
@@ -93,6 +94,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 ### Benachrichtigungen & Telegram
 
 - 🔔 **Info-Service** — Status-Toasts im UI (Upload fertig, Transfer fertig/fehlgeschlagen), optionale OS-Push-Benachrichtigungen sowie Alerts per Webhook, **Telegram** oder **E-Mail**: Speicher-knapp-Warnung, ausführliche **Start-Meldung** (Zeit, Speicher, verbundene Cloud-Ziele, VPN, externe/interne IP, Warteschlange, Bandbreite, Pool-Geräte), **Wieder-online-Ping** nach Verbindungsabbruch und **Senden pausiert/fortgesetzt** bei Bandbreiten-Drosselung
+- 📬 **Offline-Warteschlange** — kann ein Kanal nicht zustellen (Box offline), wartet die Meldung und wird nachgeliefert, sobald wieder Verbindung besteht; bei Telegram/E-Mail gebündelt als Sammelnachricht mit Originalzeiten
 - 🧭 **Telegram-Einrichtungsassistent** — schlägt Bot-Namen für @BotFather vor, prüft den Token und findet den Chat von selbst (Privatchat oder Gruppe per Klick übernehmen, keine Chat-ID abtippen)
 - 🤖 **Telegram-Bot mit Befehlen** — nach dem Hinterlegen meldet sich der Bot mit „OffgridCloud verbunden“, richtet Befehlsmenü & Beschreibung ein und brandet Gruppen/Kanäle (Name „OffgridCloud · &lt;Box&gt;“, Beschreibung, Logo, angepinnte Begrüßung – sofern der Bot Admin ist). Im freigeschalteten Chat:
   - **Abfragen:** `/status`, `/queue`, `/speicher`, `/fehler`, `/retry`, `/netz`, `/ping`, `/hilfe`

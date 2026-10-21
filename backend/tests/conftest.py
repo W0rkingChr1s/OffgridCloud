@@ -52,3 +52,17 @@ def _no_telegram_network(monkeypatch):
         raise telegram_bot.TelegramError("offline in tests")
 
     monkeypatch.setattr(telegram_bot, "api_call", offline)
+
+
+@pytest.fixture(autouse=True)
+def _empty_notify_outbox():
+    """A failed send in one test must not hold back another test's messages."""
+    yield
+    from sqlalchemy.exc import OperationalError
+
+    from app import notify_queue
+
+    try:
+        notify_queue.clear()
+    except OperationalError:
+        pass  # no tables yet: this test never started the app

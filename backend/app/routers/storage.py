@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,13 +12,16 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import buffers, drives, storage_import, thumbnails
+from .. import auto_import, buffers, drives, status_led, storage_import, thumbnails
 from ..admin_ops import audit, disk_usage
 from ..db import SessionLocal, get_db
 from ..deps import require_admin, user_from_query_token
 from ..models import Role, StorageBuffer, StorageCache, UploadFolder, User
 from ..schemas import (
+    AutoImportOut,
+    AutoImportUpdate,
     DiskUsageOut,
+    LedTestRequest,
     StorageBrowseOut,
     StorageBufferOut,
     StorageCacheBackupRequest,
@@ -598,9 +600,6 @@ def _cache_root_for(uuid: str | None, db: Session) -> tuple[drives.Partition, Pa
     return part, drives.cache_root(part)
 
 
-_SNAPSHOT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
-
-
 @router.post("/caches/backup", response_model=StorageImportJobOut,
              status_code=status.HTTP_202_ACCEPTED)
 def backup_to_cache(
@@ -634,8 +633,7 @@ def backup_to_cache(
             detail=(f"Zu wenig Platz im Cache: {needed // 2**20} MiB benötigt, "
                     f"{max(cache_part.free - storage_import.SPACE_RESERVE, 0) // 2**20} MiB frei."),
         )
-    name = _SNAPSHOT_RE.sub("_", src_part.label or src_part.name).strip("_") or "medium"
-    snapshot = cache_root / f"{name}_{datetime.now().strftime('%Y-%m-%d')}"
+    snapshot = storage_import.snapshot_dir(cache_root, src_part.label or src_part.name)
     job = storage_import.start_cache(
         device=payload.device, root=str(base), files=files, cache_device=cache_part.path,
         snapshot_dir=snapshot, user_id=admin.id, only_new=payload.only_new,
@@ -664,4 +662,80 @@ def delete_snapshot(
                             detail="Auf dem Cache läuft gerade ein Vorgang.")
     shutil.rmtree(target, ignore_errors=True)
     audit(db, admin, "storage.cache.delete", f"{part.path}:{name}")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Auto-import + status LED ------------------------------------------------------
+
+
+def _auto_import_out(db: Session) -> AutoImportOut:
+    row = auto_import.get_row(db)
+    return AutoImportOut(
+        enabled=row.enabled,
+        mode=row.mode,
+        folder_id=row.folder_id,
+        cache_uuid=row.cache_uuid,
+        media_only=row.media_only,
+        skip_duplicates=row.skip_duplicates,
+        eject_after=row.eject_after,
+        led_enabled=row.led_enabled,
+        led_name=row.led_name,
+        manage_enabled=drives.manage_enabled(),
+        leds=status_led.available(),
+        led_active=status_led.resolve(row.led_name),
+        led_state=status_led.current(),
+        media=[e.to_dict() for e in auto_import.entries() if e.state != "ignored"],
+    )
+
+
+@router.get("/auto-import", response_model=AutoImportOut)
+def get_auto_import(db: Session = Depends(get_db)) -> AutoImportOut:
+    return _auto_import_out(db)
+
+
+@router.put("/auto-import", response_model=AutoImportOut)
+def update_auto_import(
+    payload: AutoImportUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AutoImportOut:
+    row = auto_import.get_row(db)
+    changes = payload.model_dump(exclude_unset=True)
+    if "folder_id" in changes and changes["folder_id"] is not None:
+        if db.get(UploadFolder, changes["folder_id"]) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Folder not found")
+    for key, value in changes.items():
+        if value is None and key != "folder_id":
+            continue
+        setattr(row, key, value)
+    enabling = changes.get("enabled") is True
+    if enabling and row.mode == "import" and row.folder_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Erst einen Zielordner wählen.")
+    if enabling and row.mode == "cache" and db.scalar(select(StorageCache)) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Erst ein Laufwerk als Cache markieren.")
+    if changes:
+        # Imported files are attributed to whoever set this up last.
+        row.user_id = admin.id
+    db.commit()
+    audit(db, admin, "storage.auto_import",
+          ", ".join(f"{k}={v}" for k, v in sorted(changes.items())) or "-")
+    return _auto_import_out(db)
+
+
+@router.post("/auto-import/led-test", status_code=status.HTTP_204_NO_CONTENT,
+             response_class=Response)
+def led_test(payload: LedTestRequest, db: Session = Depends(get_db)) -> Response:
+    row = auto_import.get_row(db)
+    if not status_led.resolve(row.led_name):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Keine Status-LED gefunden.")
+    if not drives.manage_enabled():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Speicher-Helfer nicht eingerichtet (OGC_STORAGE_COMMAND).")
+    status_led.preview(payload.state)
+    # Show it right away instead of on the next watch round.
+    auto_import._update_led(auto_import.load_config())
     return Response(status_code=status.HTTP_204_NO_CONTENT)

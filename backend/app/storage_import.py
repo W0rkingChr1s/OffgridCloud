@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -170,6 +171,7 @@ class ImportJob:
     folder_name: str = ""
     target: str = ""  # cache: snapshot path on the cache drive
     eject_after: bool = False
+    auto: bool = False  # started by app.auto_import (it reports on its own)
     status: str = "pending"  # pending | running | done | failed | cancelled
     total_files: int = 0
     total_bytes: int = 0
@@ -310,11 +312,13 @@ def start(
     tags: list[str],
     skip_duplicates: bool,
     run_async: bool = True,
+    auto: bool = False,
 ) -> ImportJob:
     """Start an upload import (see module docstring)."""
     job = ImportJob(
         id=uuid.uuid4().hex,
         kind="import",
+        auto=auto,
         device=device,
         user_id=user_id,
         folder_id=folder_id,
@@ -340,11 +344,13 @@ def start_cache(
     only_new: bool,
     eject_after: bool,
     run_async: bool = True,
+    auto: bool = False,
 ) -> ImportJob:
     """Start mirroring ``files`` (under ``root``) into ``snapshot_dir``."""
     job = ImportJob(
         id=uuid.uuid4().hex,
         kind="cache",
+        auto=auto,
         device=device,
         user_id=user_id,
         target=f"{cache_device}::{snapshot_dir.name}",
@@ -357,6 +363,15 @@ def start_cache(
         _run_cache(j, root, files, snapshot_dir, only_new, ev)
 
     return _register(job, run, run_async)
+
+
+_SNAPSHOT_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def snapshot_dir(cache_root: Path, label: str) -> Path:
+    """Today's card copy on a cache drive, named after the source medium."""
+    name = _SNAPSHOT_RE.sub("_", label).strip("_") or "medium"
+    return cache_root / f"{name}_{datetime.now().strftime('%Y-%m-%d')}"
 
 
 def _unique_name(taken: set[str], name: str) -> str:
@@ -593,7 +608,7 @@ def _run_cache(
 
 def _announce(job: ImportJob) -> None:
     """One summary notification per import instead of one per file."""
-    if job.imported == 0:
+    if job.imported == 0 or job.auto:
         return
     try:
         from . import notify

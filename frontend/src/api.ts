@@ -229,6 +229,7 @@ export interface DiskUsage {
 }
 
 export interface SystemStatus {
+  notify_queued: Record<string, number>;
   delete_local_after_upload: boolean;
   delete_remote_on_local_delete: boolean;
   auto_resync: boolean;
@@ -247,6 +248,7 @@ export interface SystemStatus {
   notify_on_reconnect: boolean;
   notify_on_bandwidth: boolean;
   notify_on_pool: boolean;
+  notify_on_auto_import: boolean;
   telegram_chat_id: string;
   telegram_configured: boolean;
   telegram_conflict: boolean;
@@ -379,6 +381,32 @@ export interface StorageCache {
   free: number;
   snapshots: StorageCacheSnapshot[];
   error: string;
+}
+
+export interface AutoImportMedium {
+  device: string;
+  label: string;
+  state: "busy" | "done" | "error";
+  message: string;
+  job_id: string;
+  ejected: boolean;
+}
+
+export interface AutoImport {
+  enabled: boolean;
+  mode: "import" | "cache";
+  folder_id: number | null;
+  cache_uuid: string;
+  media_only: boolean;
+  skip_duplicates: boolean;
+  eject_after: boolean;
+  led_enabled: boolean;
+  led_name: string;
+  manage_enabled: boolean;
+  leds: string[];
+  led_active: string;
+  led_state: "idle" | "busy" | "done" | "error";
+  media: AutoImportMedium[];
 }
 
 export interface StorageBrowse {
