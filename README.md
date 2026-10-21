@@ -269,10 +269,12 @@ Historie und Roadmap: [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
 ## Companion-App
 
 Die **[OffgridCloud Companion](https://github.com/W0rkingChr1s/OffgridCloud-Companion)**
-ist eine geplante Mobile-App für iOS und Android: die Box per **Bluetooth Low Energy**
+ist eine Mobile-App für iOS und Android: die Box per **Bluetooth Low Energy**
 verwalten — auch wenn sie gerade nicht im Netz erreichbar ist (z. B. im falschen WLAN)
-— und per HTTPS, sobald sie es ist. Ende-zu-Ende-verschlüsselt, Kopplung per QR-Code.
-Status: Planungsphase.
+— und per HTTPS, sobald sie es ist. Ende-zu-Ende-verschlüsselt (Noise), Kopplung per
+Code über das Web-Portal (*Bluetooth → Gerät koppeln*). Die Box bringt dafür einen
+eigenen Bluetooth-Dienst mit (im Installer wählbar, im Portal abschaltbar, siehe
+[Betriebshandbuch](docs/BETRIEB.md)); die App selbst ist noch in Entwicklung.
 
 ## Dokumentation
 
