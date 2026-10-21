@@ -28,8 +28,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Signing key of net-merge's package repositories (see its README).
 KEY_FPR="0168C7AB77721656904811AE904F61E7F4F1C2A1"
 REPO="https://rohit267.github.io/net-merge"
-# Pinned release. Bumping it: update the version and the tarball hashes below
-# (sha256sum of each net-merge-linux-<arch>.tar.gz from the GitHub release).
+# Pinned release. Bumped by scripts/netmerge-bump.sh (weekly via the
+# "net-merge update" workflow, which opens a PR): version + tarball SHA-256s.
 NM_VERSION="0.3.3"
 declare -A NM_SHA256=(
   [x86_64]="f9092de729478c0e51f9972397ffbc80d3470017fb24315ed4fa045a84b8cff5"

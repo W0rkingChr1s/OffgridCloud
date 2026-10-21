@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🔀 net-merge-Updates per PR
+
+- **Workflow „net-merge update“:** Prüft montags, ob es ein neues net-merge-Release gibt, und öffnet dann einen PR, der den Pin in `deploy/netmerge/install.sh` anhebt (Version und SHA-256, berechnet von `scripts/netmerge-bump.sh`). Erst wenn das apt-Repository die Version für alle Pi-Architekturen hat. Gemergt wird von Hand; der Image-Build läuft auf dem PR mit.
+
 ## [0.8.0] – 2026-10-21
 
 Die Companion-App verwaltet die Box jetzt per Bluetooth, auch ohne gemeinsames Netz. Leitungsbündelung ist ab Werk installiert, und auf Wunsch hält sich die Box nachts in einem ruhigen Zeitfenster selbst aktuell.

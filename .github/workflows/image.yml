@@ -18,6 +18,7 @@ on:
       - ".github/workflows/image.yml"
       - "deploy/image/**"
       - "deploy/setup/**"
+      - "deploy/netmerge/**"   # net-merge is installed from apt in the image
   workflow_dispatch:
     inputs:
       ref:
