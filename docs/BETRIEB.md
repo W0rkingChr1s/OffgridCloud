@@ -436,8 +436,33 @@ geschaltet (`storage.sh led …`), das Blinken übernimmt der Kernel-Trigger `ti
 
 **Status mit Netz:** Zusätzlich geht pro Medium eine Nachricht über die eingerichteten
 Kanäle (Telegram, E-Mail, Webhook) — Ereignis „Auto-Import fertig/fehlgeschlagen“
-unter *System → Benachrichtigungen*, standardmäßig an. Ist gerade kein Netz da, geht
-die Nachricht verloren; die LED zeigt den Status trotzdem.
+unter *System → Benachrichtigungen*, standardmäßig an. Ist gerade kein Netz da, wartet
+die Nachricht in der Warteschlange und kommt nach, sobald die Box wieder online ist
+(siehe unten).
+
+#### Warteschlange für Offline-Benachrichtigungen
+
+Kann ein Kanal (Telegram, E-Mail, Webhook) eine Meldung nicht zustellen, weil die Box
+offline oder der Dienst nicht erreichbar ist, landet sie in einer Warteschlange in der
+Datenbank — übersteht also auch einen Neustart oder eine leere Powerbank. Die Box
+versucht es mit wachsendem Abstand erneut (30 s bis 15 min) und sofort, wenn die
+Verbindung zurückkommt.
+
+- **Telegram/E-Mail:** mehrere wartende Meldungen kommen als **eine Sammelnachricht**
+  („📬 5 Meldungen aus der Offline-Zeit“) mit der jeweils ursprünglichen Uhrzeit; eine
+  einzelne als „verzögert“ markiert. Lange Listen werden auf mehrere Telegram-Nachrichten
+  verteilt.
+- **Webhook:** jede Meldung einzeln, im JSON zusätzlich `"delayed": true` und
+  `"queued_at"`.
+- **Reihenfolge bleibt:** Solange ein Kanal einen Rückstand hat, reihen sich neue
+  Meldungen hinten an, statt vorzudrängeln (und die Box wartet offline nicht bei jeder
+  Meldung auf einen Netzwerk-Timeout).
+- **Grenzen:** max. 500 Meldungen je Kanal und 7 Tage, ältere fallen raus. Dauerhafte
+  Fehler (z. B. ungültiger Bot-Token, SMTP-Login abgelehnt) werden nicht gespeichert —
+  das löst kein erneuter Versuch. Wird ein Kanal abgeschaltet, verfällt sein Rückstand.
+
+Unter *System → Benachrichtigungen* zeigt ein Hinweis, wie viele Meldungen warten, mit
+**„Jetzt senden“** und **„Verwerfen“**.
 
 **Schutz:** Laufwerke mit einem Dateisystem außerhalb von `/media`, `/mnt` oder
 `/run/media` (also die System-SD/-SSD) und das Laufwerk mit dem OffgridCloud-Puffer

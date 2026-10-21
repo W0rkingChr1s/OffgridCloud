@@ -689,3 +689,24 @@ class AutoImportSettings(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     led_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     led_name: Mapped[str] = mapped_column(String(64), default="")  # "" = ACT / led0
+
+
+class NotificationOutbox(Base):
+    """A notification one channel could not deliver (box offline, provider down).
+
+    Kept until the channel is reachable again, then sent with its original time
+    (see :mod:`app.notify_queue`). One row per channel, so a working e-mail
+    server isn't held back by an unreachable Telegram and vice versa.
+    """
+
+    __tablename__ = "notification_outbox"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel: Mapped[str] = mapped_column(String(16), index=True)  # webhook | telegram | email
+    event: Mapped[str] = mapped_column(String(64))
+    title: Mapped[str] = mapped_column(Text, default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    payload: Mapped[str] = mapped_column(Text, default="{}")  # JSON, for the webhook
+    attempts: Mapped[int] = mapped_column(default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

@@ -229,6 +229,7 @@ export interface DiskUsage {
 }
 
 export interface SystemStatus {
+  notify_queued: Record<string, number>;
   delete_local_after_upload: boolean;
   delete_remote_on_local_delete: boolean;
   auto_resync: boolean;

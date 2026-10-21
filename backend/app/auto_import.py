@@ -13,7 +13,8 @@ Feedback works on two channels:
 * **offline** — the status LED (:mod:`app.status_led`): slow blink while
   copying, steady on when the medium may be pulled, fast flicker on errors;
 * **online** — one Telegram/e-mail/webhook message per medium (event
-  ``storage.auto_import``), if a channel is configured and reachable.
+  ``storage.auto_import``) on every configured channel; without an uplink it
+  waits in the outbox (:mod:`app.notify_queue`) and arrives later.
 
 A medium is handled once per insertion, keyed by filesystem UUID; it is
 forgotten when it disappears. After a successful copy the medium is ejected

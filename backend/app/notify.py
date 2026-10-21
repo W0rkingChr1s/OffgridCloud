@@ -7,7 +7,9 @@ Channels (all optional, all best-effort):
   * **E-mail**   — the same message over SMTP.
 
 Every send is wrapped so a broken channel can never disturb an upload or the
-transfer worker: failures are logged and swallowed. Which events are allowed to
+transfer worker: failures are logged and never propagate. A channel that is
+unreachable (box offline, provider down) gets the message later — it waits in
+the outbox (:mod:`app.notify_queue`) until the channel answers again. Which events are allowed to
 notify is gated per-event in :class:`SystemSettings`, so an admin can silence
 the noisy ones (e.g. "Upload angenommen") without touching the channels.
 """
@@ -148,29 +150,51 @@ def dispatch(
         return False
 
     if settings.webhook_url:
-        _guard("webhook", event, lambda: senders.webhook(settings.webhook_url, payload))
+        _deliver(
+            "webhook", event, title, message, payload,
+            lambda: senders.webhook(settings.webhook_url, payload),
+        )
 
     token = decrypt(settings.telegram_bot_token_encrypted)
     if token and settings.telegram_chat_id:
-        _guard(
-            "telegram",
-            event,
+        _deliver(
+            "telegram", event, title, message, payload,
             lambda: senders.telegram(
                 token, settings.telegram_chat_id, telegram_text(event, title, message)
             ),
         )
 
     if settings.smtp_host and settings.smtp_to:
-        _guard("email", event, lambda: senders.email(settings, title, message or title))
+        _deliver(
+            "email", event, title, message, payload,
+            lambda: senders.email(settings, title, message or title),
+        )
 
     return True
 
 
-def _guard(channel: str, event: str, fn: Callable[[], None]) -> None:
+def _deliver(
+    channel: str, event: str, title: str, message: str, payload: dict, fn: Callable[[], None]
+) -> None:
+    """Send now — or keep it in the outbox (app.notify_queue) for later.
+
+    A channel with a backlog queues new messages too: they stay in order, and
+    an offline box doesn't sit through a network timeout per event.
+    """
+    from . import notify_queue
+
+    if notify_queue.has_pending(channel):
+        notify_queue.enqueue(channel, event, title, message, payload)
+        return
     try:
         fn()
     except Exception as exc:  # noqa: BLE001 - a channel failure must never propagate
-        logger.warning("Notify via %s failed for %s: %s", channel, event, exc)
+        if notify_queue.is_permanent(exc):
+            logger.warning("Notify via %s failed for %s: %s", channel, event, exc)
+            return
+        logger.warning("Notify via %s failed for %s (queued for later): %s",
+                       channel, event, exc)
+        notify_queue.enqueue(channel, event, title, message, payload, str(exc))
 
 
 def notify_event(

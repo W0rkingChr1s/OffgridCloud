@@ -265,11 +265,20 @@ def check_connectivity_once() -> None:
     online = netinfo.is_online()
     if note_online(online) == "reconnect":
         logger.info("Uplink recovered — sending reconnect announcement")
+        from . import notify_queue
+
+        notify_queue.kick()
         try:
             with SessionLocal() as db:
                 announce_reconnect(db)
         except Exception:  # noqa: BLE001
             logger.warning("Reconnect announcement failed", exc_info=True)
+        # Held-back notifications (and the ping above, if it had to queue
+        # behind them) go out now instead of on the next outbox round.
+        try:
+            notify_queue.flush(force=True)
+        except Exception:  # noqa: BLE001
+            logger.warning("Outbox flush after reconnect failed", exc_info=True)
 
 
 CONNECTIVITY_INTERVAL = 20.0  # seconds between uplink checks

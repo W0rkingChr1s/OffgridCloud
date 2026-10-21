@@ -404,6 +404,8 @@ class DiskUsageOut(BaseModel):
 
 
 class SystemStatusOut(BaseModel):
+    # Notifications waiting for an unreachable channel, per channel.
+    notify_queued: dict[str, int] = {}
     delete_local_after_upload: bool
     delete_remote_on_local_delete: bool
     auto_resync: bool
