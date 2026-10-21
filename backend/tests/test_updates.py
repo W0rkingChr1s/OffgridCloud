@@ -293,6 +293,17 @@ def test_state_roundtrip_and_log_tail(tmp_path):
     assert "line2" in read_log_tail(tmp_path)
 
 
+def test_log_tail_strips_ansi_colours(tmp_path):
+    (tmp_path / "update.log").write_bytes(
+        b"\n\x1b[1;36m>> Copying files to /opt/offgridcloud...\x1b[0m\n"
+        b"   \x1b[1;32mUpdated to 0.8.1 and healthy.\x1b[0m\n"
+    )
+    tail = read_log_tail(tmp_path)
+    assert "\x1b" not in tail
+    assert ">> Copying files to /opt/offgridcloud..." in tail
+    assert "Updated to 0.8.1 and healthy." in tail
+
+
 def test_read_state_defaults_to_idle_when_missing(tmp_path):
     assert read_state(tmp_path).phase == "idle"
 
