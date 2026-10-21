@@ -955,14 +955,15 @@ export default function Pool() {
 
       {jobsNode && (
         <NodeJobs
-          key={jobsFor}
+          // Prefixed: a bare peer id ("1") would collide with sibling keys.
+          key={`jobs-${jobsFor}`}
           node={jobsNode}
           onClose={() => setJobsFor(null)}
           onChanged={loadOverview}
         />
       )}
 
-      <PriorityPanel key={peers.length} overview={overview} onSaved={loadOverview} />
+      <PriorityPanel key={`prio-${peers.length}`} overview={overview} onSaved={loadOverview} />
 
       <NearbyBoxes
         onPaired={() => {
