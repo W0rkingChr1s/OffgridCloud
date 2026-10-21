@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -34,21 +35,42 @@ router = APIRouter(prefix="/api/ble", tags=["ble"])
 # offgridcloud-ble rewrites this file every few seconds while it runs.
 SERVICE_STATUS_FILE = "service.json"
 SERVICE_STALE_SECONDS = 30
+SERVICE_UNIT = Path("/etc/systemd/system/offgridcloud-ble.service")
+SYS_BLUETOOTH = Path("/sys/class/bluetooth")
+
+
+def _service_status() -> dict:
+    try:
+        data = json.loads((ble_dir() / SERVICE_STATUS_FILE).read_text("utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def service_running() -> bool:
     try:
-        data = json.loads((ble_dir() / SERVICE_STATUS_FILE).read_text("utf-8"))
-        return time.time() - float(data["updated"]) < SERVICE_STALE_SECONDS
-    except (OSError, ValueError, KeyError, TypeError):
+        return time.time() - float(_service_status()["updated"]) < SERVICE_STALE_SECONDS
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def adapter_present() -> bool:
+    try:
+        return any(p.name.startswith("hci") for p in SYS_BLUETOOTH.iterdir())
+    except OSError:
         return False
 
 
 def _status(db: Session) -> BleStatusOut:
     pk = base64.urlsafe_b64encode(box_public_key()).rstrip(b"=").decode("ascii")
+    running = service_running()
+    error = None if running else _service_status().get("error")
     return BleStatusOut(
         enabled=get_system_settings(db).ble_enabled,
-        service_running=service_running(),
+        service_running=running,
+        service_installed=SERVICE_UNIT.exists(),
+        adapter_present=adapter_present(),
+        service_error=error if isinstance(error, str) else None,
         box_name=node_name(),
         box_public_key=pk,
     )

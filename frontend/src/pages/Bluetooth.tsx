@@ -150,12 +150,36 @@ export default function Bluetooth() {
             !status.enabled && <p className="text-slate-300">Bluetooth ist vom Administrator abgeschaltet.</p>
           )}
           {status.enabled && !status.service_running && (
-            <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
-              Der Bluetooth-Dienst der Box meldet sich nicht. Er wird nur eingerichtet, wenn die Box einen
-              Bluetooth-Adapter hat
-              {isAdmin && " (Installation und Diagnose: docs/BETRIEB.md, Abschnitt 9d)"}. Solange er nicht läuft,
-              kann kein Handy koppeln oder sich verbinden.
-            </p>
+            <div className="space-y-1 rounded-lg bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
+              <p>
+                {!status.service_installed
+                  ? "Der Bluetooth-Dienst ist auf der Box nicht installiert."
+                  : !status.adapter_present
+                    ? "Die Box findet keinen Bluetooth-Adapter (abgeschaltet, blockiert oder nicht vorhanden)."
+                    : "Der Bluetooth-Dienst der Box meldet sich nicht."}{" "}
+                Solange er nicht läuft, kann kein Handy koppeln oder sich verbinden.
+              </p>
+              {isAdmin && status.service_error && (
+                <p>
+                  Letzter Fehler: <span className="font-mono">{status.service_error}</span>
+                </p>
+              )}
+              {isAdmin && (
+                <p>
+                  {!status.service_installed ? (
+                    <>
+                      Nachinstallieren:{" "}
+                      <span className="font-mono">sudo /opt/offgridcloud/src/deploy/ble/install.sh</span>.{" "}
+                    </>
+                  ) : (
+                    <>
+                      Diagnose: <span className="font-mono">journalctl -u offgridcloud-ble -e</span>.{" "}
+                    </>
+                  )}
+                  Details: docs/BETRIEB.md, Abschnitt 9d.
+                </p>
+              )}
+            </div>
           )}
           {status.enabled && status.service_running && (
             <p className="text-xs text-slate-500">

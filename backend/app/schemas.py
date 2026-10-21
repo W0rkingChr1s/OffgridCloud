@@ -1199,6 +1199,12 @@ class BleStatusOut(BaseModel):
     enabled: bool
     # offgridcloud-ble reported itself recently (installed and running).
     service_running: bool
+    # The systemd unit exists (deploy/ble/install.sh ran).
+    service_installed: bool
+    # The kernel sees a Bluetooth adapter (/sys/class/bluetooth/hci*).
+    adapter_present: bool
+    # Why the last start of the service failed, if it did and isn't running.
+    service_error: str | None = None
     box_name: str
     # Static X25519 key of the box, base64url without padding (§3.2).
     box_public_key: str

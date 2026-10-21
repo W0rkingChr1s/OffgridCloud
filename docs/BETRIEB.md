@@ -631,10 +631,14 @@ Dienst `offgridcloud-ble`; Protokoll und Sicherheitsmodell:
 **[docs/BLE-PROTOKOLL.md](BLE-PROTOKOLL.md)**.
 
 - **Installation:** im Installer die Option *Bluetooth für die Companion-App*
-  (vorausgewählt, wenn die Box einen Bluetooth-Adapter hat), nachträglich
-  `sudo /opt/offgridcloud/deploy/ble/install.sh`. Raspberry Pi 3B/3B+, 4, 5
-  und Zero 2 W haben Bluetooth eingebaut; sonst ein USB-Dongle. Docker wird
-  nicht unterstützt.
+  (vorausgewählt, wenn die Box einen Bluetooth-Adapter hat oder ein Pi mit
+  eingebautem Bluetooth ist — das gilt auch für Updates), nachträglich
+  `sudo /opt/offgridcloud/src/deploy/ble/install.sh`. Raspberry Pi 3B/3B+/3A+,
+  4, 5 und Zero W / Zero 2 W haben Bluetooth eingebaut; sonst ein USB-Dongle.
+  Docker wird nicht unterstützt.
+- **Gelber Hinweis im Portal:** Die Seite *Bluetooth* sagt, ob der Dienst
+  fehlt, kein Adapter gefunden wird oder der Dienst beim Start scheitert, und
+  zeigt Admins die letzte Fehlermeldung.
 - **Koppeln:** nur über das Web-Portal, unter *Bluetooth → Gerät koppeln*. Die
   Seite zeigt einen QR-Code und den Code zum Abtippen; er gilt 5 Minuten und
   einmal. Sobald das Handy fertig ist, verschwindet der Code und das Gerät steht

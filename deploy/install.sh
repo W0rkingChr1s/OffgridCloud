@@ -66,6 +66,12 @@ _has_netmerge=1
 # Bluetooth: keep it if installed, otherwise suggest it when the box has a radio.
 _has_ble=0;      [[ -f /etc/systemd/system/offgridcloud-ble.service ]] && _has_ble=1
 [[ $_has_ble -eq 0 ]] && compgen -G "/sys/class/bluetooth/hci*" >/dev/null 2>&1 && _has_ble=1
+# Pis with a built-in radio count too: without BlueZ (or with hciuart not yet up)
+# there's no hci* yet, so a self-update on a Pi 3 would otherwise never set it up.
+if [[ $_has_ble -eq 0 && -r /proc/device-tree/model ]] \
+   && tr -d '\0' </proc/device-tree/model | grep -qE 'Raspberry Pi (3 Model (B|A Plus)|4|5|400|500|Zero W|Zero 2 W)'; then
+  _has_ble=1
+fi
 _has_ffmpeg=0;   command -v ffmpeg >/dev/null 2>&1 && _has_ffmpeg=1
 _has_speed=1;    # installed by default; keep on unless the operator opts out
 _has_chrome=0;   { command -v chromium-browser || command -v chromium; } >/dev/null 2>&1 \

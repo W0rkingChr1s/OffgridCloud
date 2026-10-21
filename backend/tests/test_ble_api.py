@@ -136,3 +136,37 @@ def test_box_host_reads_settings_and_open_codes(client, admin_auth):
     client.post("/api/ble/pairings", headers=admin_auth)
     assert asyncio.run(host.read_enabled()) is True
     assert asyncio.run(host.pairing_open()) is True
+
+
+def test_status_reports_install_adapter_and_error(client, admin_auth, tmp_path, monkeypatch):
+    import json
+    import time
+
+    from app.ble import service
+    from app.ble.keys import ble_dir
+    from app.routers import ble as ble_router
+
+    unit = tmp_path / "offgridcloud-ble.service"
+    sysbt = tmp_path / "bluetooth"
+    sysbt.mkdir()
+    monkeypatch.setattr(ble_router, "SERVICE_UNIT", unit)
+    monkeypatch.setattr(ble_router, "SYS_BLUETOOTH", sysbt)
+
+    body = client.get("/api/ble/status", headers=admin_auth).json()
+    assert body["service_installed"] is False
+    assert body["adapter_present"] is False
+
+    unit.write_text("")
+    (sysbt / "hci0").mkdir()
+    service.write_startup_error("RuntimeError: Kein Bluetooth-Adapter")
+    body = client.get("/api/ble/status", headers=admin_auth).json()
+    assert body["service_installed"] is True
+    assert body["adapter_present"] is True
+    assert body["service_running"] is False
+    assert body["service_error"] == "RuntimeError: Kein Bluetooth-Adapter"
+
+    # A running service hides the stale error.
+    (ble_dir() / service.STATUS_FILE).write_text(json.dumps({"updated": time.time()}))
+    body = client.get("/api/ble/status", headers=admin_auth).json()
+    assert body["service_running"] is True
+    assert body["service_error"] is None

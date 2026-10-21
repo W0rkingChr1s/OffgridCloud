@@ -478,6 +478,9 @@ export function passkeysSupported(): boolean {
 export interface BleStatus {
   enabled: boolean;
   service_running: boolean;
+  service_installed: boolean;
+  adapter_present: boolean;
+  service_error: string | null;
   box_name: string;
   box_public_key: string;
 }

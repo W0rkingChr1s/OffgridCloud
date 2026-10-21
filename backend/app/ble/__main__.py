@@ -11,7 +11,7 @@ from ..db import init_db
 from .bridge import BoxHost
 from .gatt_bluez import BlueZGatt
 from .keys import load_or_create_box_key
-from .service import BleService
+from .service import BleService, write_startup_error
 
 
 async def main() -> None:
@@ -22,9 +22,15 @@ async def main() -> None:
     host = BoxHost(load_or_create_box_key(), settings.ble_backend_url)
     gatt = BlueZGatt(settings.ble_adapter)
     service = BleService(host, gatt)
-    # Connect to BlueZ first: refresh() already advertises, which needs the bus.
-    await gatt.start(service.on_write, service.on_disconnect)
-    await service.refresh()
+    try:
+        # Connect to BlueZ first: refresh() already advertises, which needs the bus.
+        await gatt.start(service.on_write, service.on_disconnect)
+        await service.refresh()
+    except Exception as exc:
+        # No adapter, BlueZ down, too old, no permission … — show it in the web UI
+        # instead of only in the journal; systemd restarts us (RestartSec).
+        write_startup_error(f"{type(exc).__name__}: {exc}")
+        raise
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
