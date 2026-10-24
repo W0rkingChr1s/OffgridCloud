@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -87,9 +88,31 @@ def format_startup_lines(report: dict) -> list[str]:
     return lines
 
 
-def format_reconnect_message(kbps: float, external_ip: str | None, internal_ip: str | None) -> str:
+def format_duration(seconds: float) -> str:
+    """Compact German duration: ``45 s``, ``4 min``, ``1 h 12 min``."""
+    secs = max(0, int(round(seconds)))
+    if secs < 60:
+        return f"{secs} s"
+    minutes = secs // 60
+    if minutes < 60:
+        return f"{minutes} min"
+    hours, rest = divmod(minutes, 60)
+    return f"{hours} h {rest} min" if rest else f"{hours} h"
+
+
+def format_reconnect_message(
+    kbps: float,
+    external_ip: str | None,
+    internal_ip: str | None,
+    outage_seconds: float | None = None,
+) -> str:
+    head = (
+        f"Verbindung nach {format_duration(outage_seconds)} wiederhergestellt."
+        if outage_seconds is not None
+        else "Verbindung wiederhergestellt."
+    )
     return (
-        f"Verbindung wiederhergestellt. Bandbreite: {format_kbps(kbps)}. "
+        f"{head} Bandbreite: {format_kbps(kbps)}. "
         f"Externe IP: {external_ip or 'unbekannt'}, interne IP: {internal_ip or 'unbekannt'}."
     )
 
@@ -194,7 +217,7 @@ def announce_startup() -> None:
         logger.warning("Startup announcement failed", exc_info=True)
 
 
-def announce_reconnect(db: Session) -> None:
+def announce_reconnect(db: Session, outage_seconds: float | None = None) -> None:
     """Send the short "back online" ping with fresh bandwidth + IPs."""
     kbps = round(get_policy(db).last_kbps, 1)
     ext = netinfo.external_ip()
@@ -204,12 +227,13 @@ def announce_reconnect(db: Session) -> None:
         event="server.online",
         level="success",
         title="Wieder online",
-        message=format_reconnect_message(kbps, ext, internal),
+        message=format_reconnect_message(kbps, ext, internal, outage_seconds),
         payload={
             "event": "server.online",
             "bandwidth_kbps": kbps,
             "external_ip": ext,
             "internal_ip": internal,
+            "outage_seconds": None if outage_seconds is None else round(outage_seconds),
         },
     )
 
@@ -238,24 +262,62 @@ def announce_bandwidth_resumed(db: Session, kbps: float) -> None:
 
 # --- Connectivity monitor -------------------------------------------------
 
+# Consecutive failed probes before the uplink counts as down. One probe is two
+# 3 s TCP dials, so a short Wi-Fi hiccup (power save, roaming, a lost SYN) used
+# to read as an outage and produced a "Wieder online" ping on every blip. With
+# the 20 s poll interval, 3 misses ≈ one minute of real downtime.
+OFFLINE_THRESHOLD = 3
+
 _conn_lock = threading.Lock()
 _conn_online: bool | None = None
+_conn_fails = 0
+_offline_since: float | None = None  # monotonic time of the first failed probe
+_last_outage: float | None = None  # seconds, set on the offline→online edge
 
 
-def note_online(online: bool) -> str | None:
+def _now() -> float:
+    return time.monotonic()
+
+
+def note_online(online: bool, now: float | None = None) -> str | None:
     """Fold an observed online state into the tracked state (pure transition).
 
-    Returns ``"reconnect"`` on an offline→online edge (a real recovery),
-    otherwise ``None``. The first observation only sets the baseline — startup
-    already reports the initial state, so it never fires a reconnect.
+    Returns ``"offline"`` once ``OFFLINE_THRESHOLD`` probes in a row failed,
+    ``"reconnect"`` on the following offline→online edge (its duration is then
+    available from :func:`last_outage_seconds`), otherwise ``None``. Failures
+    below the threshold are absorbed silently. The first observation only sets
+    the baseline — startup already reports the initial state, so it never
+    fires; a box that boots offline is treated as down right away.
     """
-    global _conn_online
+    global _conn_online, _conn_fails, _offline_since, _last_outage
+    now = _now() if now is None else now
     with _conn_lock:
-        prev = _conn_online
-        _conn_online = online
-    if prev is False and online:
-        return "reconnect"
-    return None
+        if _conn_online is None:
+            _conn_online = online
+            _conn_fails = 0 if online else OFFLINE_THRESHOLD
+            _offline_since = None if online else now
+            return None
+        if online:
+            was_down = not _conn_online
+            if was_down and _offline_since is not None:
+                _last_outage = now - _offline_since
+            _conn_online = True
+            _conn_fails = 0
+            _offline_since = None
+            return "reconnect" if was_down else None
+        _conn_fails += 1
+        if _conn_fails == 1:
+            _offline_since = now
+        if _conn_online and _conn_fails >= OFFLINE_THRESHOLD:
+            _conn_online = False
+            return "offline"
+        return None
+
+
+def last_outage_seconds() -> float | None:
+    """Duration of the outage that ended with the last ``"reconnect"``."""
+    with _conn_lock:
+        return _last_outage
 
 
 def check_connectivity_once() -> None:
@@ -263,14 +325,23 @@ def check_connectivity_once() -> None:
     from .db import SessionLocal
 
     online = netinfo.is_online()
-    if note_online(online) == "reconnect":
-        logger.info("Uplink recovered — sending reconnect announcement")
+    transition = note_online(online)
+    if transition == "offline":
+        logger.warning(
+            "Uplink down — %d connectivity checks in a row failed", OFFLINE_THRESHOLD
+        )
+    elif transition == "reconnect":
+        outage = last_outage_seconds()
+        logger.info(
+            "Uplink recovered after %s — sending reconnect announcement",
+            format_duration(outage) if outage is not None else "unknown time",
+        )
         from . import notify_queue
 
         notify_queue.kick()
         try:
             with SessionLocal() as db:
-                announce_reconnect(db)
+                announce_reconnect(db, outage)
         except Exception:  # noqa: BLE001
             logger.warning("Reconnect announcement failed", exc_info=True)
         # Held-back notifications (and the ping above, if it had to queue
@@ -279,6 +350,8 @@ def check_connectivity_once() -> None:
             notify_queue.flush(force=True)
         except Exception:  # noqa: BLE001
             logger.warning("Outbox flush after reconnect failed", exc_info=True)
+    elif not online:
+        logger.debug("Connectivity check failed (%d/%d)", _conn_fails, OFFLINE_THRESHOLD)
 
 
 CONNECTIVITY_INTERVAL = 20.0  # seconds between uplink checks
@@ -338,8 +411,11 @@ def note_bandwidth_gate(
 
 def reset_state() -> None:
     """Reset the module's transition state (used by tests)."""
-    global _conn_online, _bw_paused
+    global _conn_online, _conn_fails, _offline_since, _last_outage, _bw_paused
     with _conn_lock:
         _conn_online = None
+        _conn_fails = 0
+        _offline_since = None
+        _last_outage = None
     with _bw_lock:
         _bw_paused = False

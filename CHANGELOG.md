@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Weniger falsche „Wieder online“-Meldungen:** Ein einzelner gescheiterter Verbindungstest (zwei TCP-Verbindungen à 3 s) galt bisher schon als Ausfall. Kurze WLAN-Aussetzer lösten so mehrmals täglich eine Meldung aus. Jetzt gilt die Box erst nach 3 gescheiterten Tests in Folge (≈ 1 Minute) als offline. Die Meldung nennt die Ausfalldauer („Verbindung nach 4 min wiederhergestellt“), der Webhook liefert sie als `outage_seconds`. Den Beginn eines Ausfalls loggt das Backend jetzt auch („Uplink down“).
+
 ## [0.8.2] – 2026-10-21
 
 Auto-Import von Wechselmedien mit Status-LED, Warteschlange für Benachrichtigungen, die offline nicht zugestellt werden können, und robustere Updates: Bluetooth fehlt auf dem Pi 3 nicht mehr stillschweigend, und gescheiterte Zusatzfunktionen meldet das Update jetzt.
