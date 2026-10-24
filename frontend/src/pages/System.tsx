@@ -505,7 +505,7 @@ const EVENT_TOGGLES: { key: keyof SystemStatus; label: string; help: string }[] 
   {
     key: "notify_on_reconnect",
     label: "Wieder online",
-    help: "Meldet sich kurz, sobald die Internetverbindung nach einem Ausfall wiederhergestellt ist – mit aktueller Bandbreite sowie neuer externer und interner IP.",
+    help: "Meldet sich kurz, sobald die Internetverbindung nach einem Ausfall (ab etwa einer Minute) wiederhergestellt ist – mit Ausfalldauer, aktueller Bandbreite sowie neuer externer und interner IP.",
   },
   {
     key: "notify_on_bandwidth",

@@ -49,10 +49,52 @@ def test_note_online_baseline_never_reconnects():
 
 
 def test_note_online_reports_reconnect_edge():
-    announce.note_online(True)  # baseline online
-    assert announce.note_online(False) is None  # went offline: no message
-    assert announce.note_online(True) == "reconnect"  # recovered
-    assert announce.note_online(True) is None  # stays online: no repeat
+    announce.note_online(True, now=0)  # baseline online
+    for i in range(announce.OFFLINE_THRESHOLD - 1):
+        assert announce.note_online(False, now=20 * (i + 1)) is None
+    assert announce.note_online(False, now=60) == "offline"
+    assert announce.note_online(False, now=80) is None  # stays offline: no repeat
+    assert announce.note_online(True, now=260) == "reconnect"  # recovered
+    assert announce.last_outage_seconds() == 240  # since the first failed probe
+    assert announce.note_online(True, now=280) is None  # stays online: no repeat
+
+
+def test_note_online_absorbs_short_blips():
+    announce.note_online(True, now=0)
+    # Fewer misses than the threshold, then back: no offline, no reconnect.
+    for _ in range(announce.OFFLINE_THRESHOLD - 1):
+        assert announce.note_online(False, now=20) is None
+    assert announce.note_online(True, now=60) is None
+    # The miss counter resets, so another short blip stays silent too.
+    for _ in range(announce.OFFLINE_THRESHOLD - 1):
+        assert announce.note_online(False, now=80) is None
+    assert announce.note_online(True, now=120) is None
+
+
+def test_note_online_boot_offline_reconnects_on_first_success():
+    assert announce.note_online(False, now=0) is None  # baseline: down
+    assert announce.note_online(True, now=90) == "reconnect"
+    assert announce.last_outage_seconds() == 90
+
+
+def test_check_connectivity_once_sends_reconnect_with_duration(client, monkeypatch):
+    from app import notify_queue
+
+    probes = iter([True] + [False] * announce.OFFLINE_THRESHOLD + [True])
+    monkeypatch.setattr(announce.netinfo, "is_online", lambda *a, **k: next(probes))
+    clock = iter([0, 20, 40, 60, 320])
+    monkeypatch.setattr(announce, "_now", lambda: next(clock))
+    monkeypatch.setattr(notify_queue, "kick", lambda: None)
+    monkeypatch.setattr(notify_queue, "flush", lambda **k: None)
+    sent: list[float | None] = []
+    monkeypatch.setattr(
+        announce, "announce_reconnect", lambda db, outage=None: sent.append(outage)
+    )
+    for _ in range(announce.OFFLINE_THRESHOLD + 1):
+        announce.check_connectivity_once()
+    assert sent == []
+    announce.check_connectivity_once()
+    assert sent == [300]
 
 
 # --- bandwidth-gate transitions -------------------------------------------
@@ -155,6 +197,18 @@ def test_reconnect_message_includes_ips_and_bandwidth():
     assert "wiederhergestellt" in msg
     assert "800 KB/s" in msg
     assert "203.0.113.7" in msg and "192.168.1.50" in msg
+
+
+def test_reconnect_message_includes_outage_duration():
+    msg = announce.format_reconnect_message(800, None, None, outage_seconds=245)
+    assert msg.startswith("Verbindung nach 4 min wiederhergestellt.")
+
+
+def test_format_duration():
+    assert announce.format_duration(45) == "45 s"
+    assert announce.format_duration(240) == "4 min"
+    assert announce.format_duration(3600) == "1 h"
+    assert announce.format_duration(4320) == "1 h 12 min"
 
 
 # --- integration: gather + gating -----------------------------------------
