@@ -6,9 +6,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.8.5] – 2026-10-25
+
+Der Zustands-Verlauf passt jetzt über Bluetooth: Die Companion-App zeigt den Health Monitor samt 24-h-Verlauf auch ohne Netz, direkt per Funk zur Box.
+
 ### 🐛 Fehlerbehebungen
 
-- **Zustands-Verlauf passt wieder über Bluetooth:** `GET /api/monitor/history` lieferte immer alle Minutenwerte der letzten 24 h, als JSON rund 240 kB. Eine BLE-Nachricht fasst aber höchstens 64 KiB, deshalb scheiterte der Abruf über Bluetooth nach gut 6 Stunden Laufzeit mit `too_large`. Neu sind die Parameter `step` (Mittelwerte über 60–3600 s, Ausfälle bleiben sichtbar) und `hours` (nur die letzten 1–24 Stunden). Mit `?step=900` ist der ganze Tag rund 15 kB groß. Ohne Parameter bleibt die Antwort wie bisher.
+- **Zustands-Verlauf passt wieder über Bluetooth:** `GET /api/monitor/history` lieferte immer alle Minutenwerte der letzten 24 h, als JSON rund 240 kB. Eine BLE-Nachricht fasst aber höchstens 64 KiB, deshalb scheiterte der Abruf über Bluetooth nach gut 6 Stunden Laufzeit mit `too_large`. Neu sind die Parameter `step` (Mittelwerte über 60–3600 s, Ausfälle bleiben sichtbar) und `hours` (nur die letzten 1–24 Stunden). Mit `?step=900` ist der ganze Tag rund 15 kB groß. Ohne Parameter bleibt die Antwort wie bisher. (#223)
 
 ## [0.8.4] – 2026-10-25
 
