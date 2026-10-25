@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Safari zeigt statt einer Fehlermeldung eine Hilfeseite, wenn die Box nicht erreichbar ist:** Fand der Service Worker bei einem Seitenaufruf weder die Box noch die App-Seite im Cache, zeigte Safari eine eigene Fehlerseite ohne Ausweg. Jetzt kommt eine Seite „Box nicht erreichbar“ mit Erklärung zum Zertifikat und „Neu verbinden“-Knopf (setzt Service Worker und Cache zurück). Hinweis: Die Meldung „Returned response is null“ stammt von Service-Worker-Versionen vor 0.7.5. Safari kann so einen alten Worker bei abgelaufenem Zertifikat nicht selbst ersetzen, dann einmal die Websitedaten von `<name>.local` in Safari löschen.
+
 ## [0.8.5] – 2026-10-25
 
 Der Zustands-Verlauf passt jetzt über Bluetooth: Die Companion-App zeigt den Health Monitor samt 24-h-Verlauf auch ohne Netz, direkt per Funk zur Box.
