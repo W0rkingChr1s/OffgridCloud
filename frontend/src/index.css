@@ -167,3 +167,36 @@ body {
     background-color: currentColor;
   }
 }
+
+/*
+  Health monitor (pages/Health.tsx): cards rise in on load (staggered via
+  animation-delay), trend lines draw themselves once. Both are skipped for
+  reduced motion.
+*/
+.ogc-rise {
+  animation: ogc-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes ogc-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.ogc-draw {
+  stroke-dasharray: 1;
+  animation: ogc-draw 1.2s ease-out both;
+}
+@keyframes ogc-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ogc-rise,
+  .ogc-draw {
+    animation: none;
+  }
+}

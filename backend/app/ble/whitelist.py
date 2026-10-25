@@ -23,6 +23,7 @@ _DENY = (
 
 _ALLOW: tuple[tuple[frozenset[str], re.Pattern[str]], ...] = (
     (READ, re.compile(r"^/api/health$")),
+    (READ, re.compile(r"^/api/monitor(/history)?$")),
     (WRITE, re.compile(r"^/api/network(/.*)?$")),
     (WRITE, re.compile(r"^/api/transfers(/.*)?$")),
     (WRITE, re.compile(r"^/api/bandwidth(/.*)?$")),

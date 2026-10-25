@@ -1283,3 +1283,23 @@ class BleDeviceOut(BaseModel):
 
 class BleDeviceUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+
+
+class MonitorTokenOut(BaseModel):
+    """A read-only monitoring token. The plaintext is never returned."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    hint: str
+    created_at: datetime
+    last_used_at: datetime | None = None
+
+
+class MonitorTokenCreated(MonitorTokenOut):
+    token: str  # shown exactly once
+
+
+class MonitorTokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
