@@ -581,6 +581,33 @@ def _disk_line() -> str:
     )
 
 
+def _access_links() -> list[str]:
+    """Clickable portal URLs for /status and /netz, best first.
+
+    The public domain (if HTTPS was set up with one) comes before
+    ``<hostname>.local``. Without the Caddy proxy the portal is plain HTTP on
+    the backend port. A container-ID hostname (Docker) yields no .local link —
+    nobody can resolve it.
+    """
+    from .config import get_settings
+    from .https_config import is_active, read_state
+
+    settings = get_settings()
+    state = read_state(settings.data_dir)
+    active = is_active(settings.data_dir)
+    hostname = state["hostname"] or _box_name().split(".")[0].lower()
+    urls = []
+    if state["domain"]:
+        urls.append(f"https://{state['domain']}")
+    if hostname and hostname != "localhost" and not re.fullmatch(r"[0-9a-f]{12}", hostname):
+        urls.append(
+            f"https://{hostname}.local"
+            if active
+            else f"http://{hostname}.local:{settings.mdns_port}"
+        )
+    return [f'<a href="{html.escape(u)}">{html.escape(u.split("://", 1)[1])}</a>' for u in urls]
+
+
 def _cmd_status(db: Session) -> str:
     from .announce import _vpn_connected, format_kbps
     from .bandwidth import get_policy
@@ -601,6 +628,9 @@ def _cmd_status(db: Session) -> str:
         f"🔐 VPN: {'verbunden' if _vpn_connected() else 'getrennt'}",
         f"🏷 Version: {html.escape(__version__)}",
     ]
+    links = _access_links()
+    if links:
+        lines.append(f"🔗 Portal: {links[0]}")
     return "\n".join(lines)
 
 
@@ -707,6 +737,7 @@ def _cmd_netz(db: Session) -> str:
             f"Interne IP: {html.escape(netinfo.internal_ip() or 'unbekannt')}",
             f"VPN: {'verbunden' if _vpn_connected() else 'getrennt'}",
             f"Bandbreite: {format_kbps(policy.last_kbps)}",
+            *(f"Portal: {link}" for link in _access_links()),
         ]
     )
 

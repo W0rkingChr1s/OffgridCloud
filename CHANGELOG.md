@@ -10,6 +10,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 - **Health Monitor:** Neue Admin-Seite *Zustand* mit animierten Anzeigen für CPU, Arbeitsspeicher, Temperatur und Speicher, Prüfungen mit Ampel, Internet-Details (Latenz, Ausfälle der letzten 24 h, WLAN-Signal, IPs, VPN) und einem 24-h-Verlauf als Diagramm oder Tabelle. Auf dem Raspberry Pi zeigt sie auch Unterspannung und Drosselung — jetzt und seit dem Start.
 - **Maschinenlesbar:** `GET /api/monitor` liefert alle Werte als JSON, als Prometheus-Metriken (`/api/monitor/metrics`) und als erweiterten PRTG-Sensor (`?format=prtg`); `/api/monitor/history` den Verlauf. Zugriff mit Admin-Anmeldung oder einem **Monitoring-Token** (nur Lesen, im UI erzeugen und widerrufen). Die Companion-App erreicht `/api/monitor` und den Verlauf auch per Bluetooth. Details: [docs/BETRIEB.md](docs/BETRIEB.md) §8.
+- **Portal-Link im Telegram-Bot:** `/status` zeigt einen anklickbaren Link aufs Portal, `/netz` alle Adressen — zuerst die öffentliche Domain (falls unter *System → HTTPS* eingetragen), dann `<hostname>.local`. Ohne HTTPS-Proxy zeigt der Link auf `http://<hostname>.local:<port>`.
 
 ## [0.8.3] – 2026-10-25
 

@@ -956,3 +956,39 @@ def test_sleep_returns_early_when_woken():
     telegram_bot._sleep(stop, 30)
     assert time.monotonic() - started < 1
     assert not telegram_bot._wake.is_set()
+
+
+def test_access_links_prefer_domain_then_local(monkeypatch):
+    from app import https_config
+
+    monkeypatch.setattr(
+        https_config, "read_state", lambda _d: {"hostname": "boot", "domain": "cloud.example.com"}
+    )
+    monkeypatch.setattr(https_config, "is_active", lambda _d: True)
+    assert telegram_bot._access_links() == [
+        '<a href="https://cloud.example.com">cloud.example.com</a>',
+        '<a href="https://boot.local">boot.local</a>',
+    ]
+
+
+def test_access_links_without_https_use_backend_port(monkeypatch):
+    from app import https_config
+    from app.config import get_settings
+
+    monkeypatch.setattr(https_config, "read_state", lambda _d: {"hostname": "", "domain": ""})
+    monkeypatch.setattr(https_config, "is_active", lambda _d: False)
+    monkeypatch.setattr(telegram_bot, "_box_name", lambda: "boot")
+    port = get_settings().mdns_port
+    assert telegram_bot._access_links() == [
+        f'<a href="http://boot.local:{port}">boot.local:{port}</a>'
+    ]
+    # Docker container ID: no resolvable .local name, no link.
+    monkeypatch.setattr(telegram_bot, "_box_name", lambda: "0123456789ab")
+    assert telegram_bot._access_links() == []
+
+
+def test_status_and_netz_show_portal_link(client, monkeypatch):
+    monkeypatch.setattr(telegram_bot, "_access_links", lambda: ['<a href="https://x">x</a>'])
+    with SessionLocal() as db:
+        assert "🔗 Portal: <a" in telegram_bot.handle_message(db, _msg("/status"), "42").text
+        assert "Portal: <a" in telegram_bot.handle_message(db, _msg("/netz"), "42").text
