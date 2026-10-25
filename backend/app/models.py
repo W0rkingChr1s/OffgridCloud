@@ -305,6 +305,23 @@ class PoolAccessToken(Base):
     last_used_hub: Mapped[str] = mapped_column(String(100), default="")  # X-Pool-Hub
 
 
+class MonitorToken(Base):
+    """Read-only token for monitoring systems (``/api/monitor``, Prometheus, PRTG).
+
+    Like :class:`PoolAccessToken`, only the SHA-256 is stored and the plaintext
+    is shown once.
+    """
+
+    __tablename__ = "monitor_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))  # e.g. "Grafana", "PRTG"
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    hint: Mapped[str] = mapped_column(String(8), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class CloudProvider(Base):
     """A configured upload target. Credentials are stored encrypted as JSON."""
 

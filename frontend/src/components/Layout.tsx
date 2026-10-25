@@ -60,6 +60,11 @@ const icons = {
       <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" />
     </svg>
   ),
+  health: (p: IconProps) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+    </svg>
+  ),
   network: (p: IconProps) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
       <path d="M5 12.5a10 10 0 0 1 14 0M8 15.5a6 6 0 0 1 8 0M2 9.5a15 15 0 0 1 20 0" />
@@ -124,6 +129,7 @@ const NAV: NavItem[] = [
   { to: "/admin/pool", label: "Pool", icon: icons.pool, admin: true },
   { to: "/users", label: "Benutzer", icon: icons.users, admin: true },
   { to: "/admin/groups", label: "Teams", icon: icons.teams, admin: true },
+  { to: "/admin/health", label: "Zustand", icon: icons.health, admin: true },
   { to: "/admin/system", label: "System", icon: icons.system, admin: true },
 ];
 

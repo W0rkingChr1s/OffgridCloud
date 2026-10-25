@@ -507,6 +507,10 @@ Wiederherstellen:
 
 - `GET /api/health` — unauthentifizierter Liveness-Check (für Uptime-Monitore).
 - `GET /api/health?format=prtg` — dieselben Daten als **PRTG**-Sensor-JSON (siehe unten).
+- `GET /api/monitor` — ausführlicher **Zustand** (Token oder Admin, siehe
+  [Health Monitor](#health-monitor)), auch als Prometheus (`/api/monitor/metrics`)
+  und erweiterter PRTG-Sensor (`?format=prtg`).
+- Admin-Seite **Zustand** — dieselben Werte grafisch, mit 24-h-Verlauf.
 - Admin **System**-Seite — Disk-Auslastung, rclone-Verfügbarkeit, Einstellungen.
 - Logs:
   - nativ: `journalctl -u offgridcloud -f`
@@ -556,6 +560,62 @@ die beiden Speicher-Kanäle — Status und rclone bleiben erhalten.
 > Speicher-Kennzahlen (Prozent belegt, freie Bytes) im Netz sichtbar. Soll das
 > nicht sein, den Endpunkt im Reverse-Proxy auf das Monitoring-Netz beschränken
 > (siehe [§3](#3-https--reverse-proxy)).
+
+### Health Monitor
+
+Die Seite **Zustand** (Admin-Menü) und `GET /api/monitor` zeigen dieselben Werte:
+
+| Bereich | Werte | Warnung / Fehler ab |
+| --- | --- | --- |
+| CPU | Auslastung, Load 1/5/15 min, Kerne | — |
+| Arbeitsspeicher | belegt, verfügbar, Swap | 90 % / 97 % |
+| Temperatur | CPU/SoC in °C | 70 °C / 80 °C |
+| Stromversorgung (Pi) | Unterspannung, Drosselung — jetzt und seit dem Start | Unterspannung jetzt = Fehler, alles andere Warnung |
+| Speicher | Puffer belegt/frei | 85 % / 95 % |
+| Internet | online, Latenz, Ausfälle und Ausfallzeit der letzten 24 h, letzter Ausfall | offline = Fehler; Latenz 300 / 1000 ms; ab 3 Ausfällen in 24 h Warnung |
+| WLAN | Signal (dBm), Linkqualität je Schnittstelle | −75 / −85 dBm |
+| Weiteres | IPs, VPN, Bandbreite, Warteschlange, Cloud-Ziele, rclone | Fehlgeschlagene Übertragungen, Cloud-Ziel mit Fehler = Warnung; rclone fehlt = Fehler |
+
+Aus den Prüfungen ergibt sich ein Gesamtzustand `ok`, `warning` oder `error`.
+Der Verlauf (ein Punkt pro Minute, 24 h) liegt bewusst nur im Arbeitsspeicher, um
+die SD-Karte zu schonen — nach einem Neustart beginnt er neu. Langzeitdaten
+gehören in Prometheus oder PRTG.
+
+**Zugriff:** Unter *Zustand → Zugriff für Monitoring-Systeme* einen
+**Monitoring-Token** erzeugen (nur Lesen, wird einmal angezeigt, jederzeit
+widerrufbar). Er wird als `Authorization: Bearer <token>` übergeben oder, wo
+kein Header möglich ist, als `?token=<token>`. Eine Admin-Anmeldung funktioniert
+ebenfalls (so liest die Companion-App die Werte, auch per Bluetooth).
+
+| Endpunkt | Format |
+| --- | --- |
+| `GET /api/monitor` | JSON-Snapshot |
+| `GET /api/monitor?format=prometheus` bzw. `GET /api/monitor/metrics` | Prometheus-Textformat |
+| `GET /api/monitor?format=prtg` | PRTG *HTTP Data Advanced* mit allen Kanälen und Schwellwerten |
+| `GET /api/monitor/history` | Verlauf der letzten 24 h |
+
+Prometheus:
+
+```yaml
+- job_name: offgridcloud
+  metrics_path: /api/monitor/metrics
+  authorization:
+    credentials: ogcm_…
+  static_configs:
+    - targets: ["<box>:8000"]
+```
+
+Metriken tragen das Präfix `offgridcloud_`, z. B. `offgridcloud_health_status`
+(0/1/2), `offgridcloud_check_status{check="…"}`, `offgridcloud_cpu_temperature_celsius`,
+`offgridcloud_throttled{flag="under_voltage",scope="now"}`,
+`offgridcloud_internet_up`, `offgridcloud_internet_latency_seconds`,
+`offgridcloud_disk_free_bytes`, `offgridcloud_wifi_signal_dbm{interface="wlan0"}`.
+
+PRTG: Sensor **HTTP Data Advanced** auf
+`http://<box>:8000/api/monitor?format=prtg&token=ogcm_…`. Zusätzlich zu den
+Kanälen oben kommen Gesamtzustand, CPU-Last, Arbeitsspeicher, CPU-Temperatur,
+Unterspannung, Internet, Latenz, Ausfälle (24 h), WLAN-Signal, Warteschlange und
+Fehlgeschlagen — Schwellwerte sind wieder eingebaut.
 
 ## 9. Updates
 

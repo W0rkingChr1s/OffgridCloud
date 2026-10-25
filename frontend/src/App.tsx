@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import FolderDetail from "./pages/FolderDetail";
 import Folders from "./pages/Folders";
 import Groups from "./pages/Groups";
+import Health from "./pages/Health";
 import Login from "./pages/Login";
 import Network from "./pages/Network";
 import Overview from "./pages/Overview";
@@ -160,6 +161,14 @@ function AppRoutes() {
               element={
                 <ProtectedRoute requireAdmin>
                   <Storage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/health"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <Health />
                 </ProtectedRoute>
               }
             />

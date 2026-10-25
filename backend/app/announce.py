@@ -23,6 +23,7 @@ import asyncio
 import logging
 import threading
 import time
+from collections import deque
 from datetime import datetime
 
 from sqlalchemy import func, select
@@ -273,6 +274,8 @@ _conn_online: bool | None = None
 _conn_fails = 0
 _offline_since: float | None = None  # monotonic time of the first failed probe
 _last_outage: float | None = None  # seconds, set on the offline→online edge
+# Finished outages as (ended_at wall clock, seconds) for the health monitor.
+_outages: deque[tuple[float, float]] = deque(maxlen=200)
 
 
 def _now() -> float:
@@ -301,6 +304,7 @@ def note_online(online: bool, now: float | None = None) -> str | None:
             was_down = not _conn_online
             if was_down and _offline_since is not None:
                 _last_outage = now - _offline_since
+                _outages.append((time.time(), _last_outage))
             _conn_online = True
             _conn_fails = 0
             _offline_since = None
@@ -318,6 +322,31 @@ def last_outage_seconds() -> float | None:
     """Duration of the outage that ended with the last ``"reconnect"``."""
     with _conn_lock:
         return _last_outage
+
+
+def connectivity_state(window: float = 86400.0) -> dict:
+    """Uplink state for the health monitor: current state, running outage, history.
+
+    ``online`` is ``None`` until the monitor took its first probe.
+    """
+    wall = time.time()
+    with _conn_lock:
+        online = _conn_online
+        offline_for = _now() - _offline_since if online is False and _offline_since else None
+        recent = [(end, secs) for end, secs in _outages if wall - end <= window]
+        last = _outages[-1] if _outages else None
+    return {
+        "online": online,
+        "offline_for_seconds": round(offline_for) if offline_for is not None else None,
+        "outages_24h": len(recent),
+        "downtime_24h_seconds": round(sum(secs for _, secs in recent)),
+        "last_outage": (
+            {"ended_at": datetime.fromtimestamp(last[0]).isoformat(timespec="seconds"),
+             "seconds": round(last[1])}
+            if last
+            else None
+        ),
+    }
 
 
 def check_connectivity_once() -> None:
@@ -417,5 +446,6 @@ def reset_state() -> None:
         _conn_fails = 0
         _offline_since = None
         _last_outage = None
+        _outages.clear()
     with _bw_lock:
         _bw_paused = False

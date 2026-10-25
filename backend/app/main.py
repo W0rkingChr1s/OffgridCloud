@@ -34,6 +34,7 @@ from .bootstrap import autostart_vpn, ensure_initial_admin
 from .config import get_settings
 from .db import SessionLocal, init_db
 from .discovery import discovery
+from .health import sample_loop as health_sample_loop
 from .integrity import run_startup_checks
 from .network import ensure_network_settings
 from .pool import ensure_node_id, node_name
@@ -50,6 +51,7 @@ from .routers import (
     groups,
     https,
     media,
+    monitor,
     network,
     pool,
     providers,
@@ -106,6 +108,8 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(notify_queue.watch_loop(stop)))
         # Watch the uplink so a dropped-then-restored connection pings the field.
         tasks.append(asyncio.create_task(announce.connectivity_loop(stop)))
+        # One health point per minute for the 24 h history on the Zustand page.
+        tasks.append(asyncio.create_task(health_sample_loop(stop)))
         # Pool hub: one bundled message when peers change (offline, full, …).
         tasks.append(asyncio.create_task(pool_watch.pool_watch_loop(stop)))
         # Unattended updates in the configured window (opt-in, app.autoupdate).
@@ -159,6 +163,7 @@ app.include_router(descriptions.router)
 app.include_router(pool.router)
 app.include_router(updates.router)
 app.include_router(network.router)
+app.include_router(monitor.router)
 app.include_router(vpn.router)
 app.include_router(storage.router)
 app.include_router(storage.public_router)

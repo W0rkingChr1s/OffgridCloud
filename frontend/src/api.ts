@@ -937,3 +937,92 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
+
+// --- Health monitor (/api/monitor) -----------------------------------------
+
+export type HealthStatus = "ok" | "warning" | "error";
+
+export interface HealthCheck {
+  id: string;
+  label: string;
+  status: HealthStatus;
+  message: string;
+}
+
+export interface ThrottleFlags {
+  under_voltage: boolean;
+  freq_capped: boolean;
+  throttled: boolean;
+  soft_temp_limit: boolean;
+}
+
+export interface HealthSnapshot {
+  status: HealthStatus;
+  generated_at: string;
+  version: string;
+  hostname: string;
+  checks: HealthCheck[];
+  system: {
+    cpu_percent: number | null;
+    cpu_count: number | null;
+    load_average: number[] | null;
+    memory: {
+      total: number;
+      used: number;
+      available: number;
+      percent_used: number;
+      swap_total: number;
+      swap_used: number;
+    } | null;
+    temperature_c: number | null;
+    uptime_seconds: number | null;
+    throttling: { raw: string; now: ThrottleFlags; since_boot: ThrottleFlags } | null;
+  };
+  storage: {
+    buffer: { total: number; used: number; free: number; percent_used: number; low_space: boolean } | null;
+  };
+  network: {
+    online: boolean | null;
+    offline_for_seconds: number | null;
+    outages_24h: number;
+    downtime_24h_seconds: number;
+    last_outage: { ended_at: string; seconds: number } | null;
+    latency_ms: number | null;
+    bandwidth_kbps: number | null;
+    internal_ip: string | null;
+    external_ip: string | null;
+    wifi: { interface: string; quality_percent: number; signal_dbm: number }[];
+    vpn_connected: boolean | null;
+  };
+  transfers: { queued?: number; running?: number; failed?: number };
+  providers: { total?: number; ok?: number; error?: number };
+  rclone: { available: boolean; version: string | null; error: string | null };
+}
+
+export interface HealthPoint {
+  t: number;
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  temperature_c: number | null;
+  disk_percent: number | null;
+  latency_ms: number | null;
+  online: number | null;
+  bandwidth_kbps: number | null;
+}
+
+export interface HealthHistory {
+  interval_seconds: number;
+  points: HealthPoint[];
+}
+
+export interface MonitorToken {
+  id: number;
+  name: string;
+  hint: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface MonitorTokenCreated extends MonitorToken {
+  token: string;
+}

@@ -410,6 +410,8 @@ Segmente (`/api/network` erlaubt `/api/network` und `/api/network/…`).
 | Pfad | Methoden | Bemerkung |
 |---|---|---|
 | `/api/health` | GET | |
+| `/api/monitor` | GET | Zustands-Snapshot: System, Speicher, Internet, Prüfungen (Admin) |
+| `/api/monitor/history` | GET | Verlauf der letzten 24 h, ein Punkt pro Minute (Admin) |
 | `/api/network` | alle | WLAN-Scan, bekannte Netze, anwenden (Admin) |
 | `/api/transfers` | alle | Liste, Retry |
 | `/api/bandwidth` | alle | Gate, Limit, Probe, Uplinks (Admin) |
@@ -432,7 +434,8 @@ Segmente (`/api/network` erlaubt `/api/network` und `/api/network/…`).
 Nicht erreichbar sind insbesondere: Datei-Downloads und Thumbnails,
 Provider-Zugangsdaten, Benutzer, Gruppen, Passkeys, HTTPS-Einstellungen,
 die Zugangsverwaltung des Pools (`/api/pool/tokens`, Peers per URL + Token
-anlegen/ändern/löschen über `/api/pool/peers`), `/api/events` (dafür gibt es §7.7).
+anlegen/ändern/löschen über `/api/pool/peers`), die Monitoring-Tokens
+(`/api/monitor/tokens`), `/api/events` (dafür gibt es §7.7).
 Vom Pool sind nur die oben genannten Pfade freigegeben — Übersicht, Steuerung,
 Kopplung per Code und die gemeinsame Leitung, also das, was im Feld neben dem Hub
 gebraucht wird. Antworten mit einem anderen
