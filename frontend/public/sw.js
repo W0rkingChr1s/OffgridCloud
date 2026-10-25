@@ -1,6 +1,6 @@
 // Minimal service worker: makes OffgridCloud installable and serves a cached
 // app shell when offline. API and SSE requests are never cached.
-const CACHE = "ogc-shell-v2";
+const CACHE = "ogc-shell-v3";
 
 // Precache the app shell. This doubles as a probe: if the worker itself can't
 // reach the box — e.g. Safari doesn't apply the user's exception for the
@@ -42,6 +42,32 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
+// Last resort for a navigation with neither network nor cached shell: a real
+// page instead of a browser error screen, with a button that drops this worker
+// and its cache so the next load goes straight to the network (and Safari shows
+// its certificate warning again instead of failing silently).
+function unreachablePage() {
+  const html = `<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Box nicht erreichbar</title>
+<style>body{font:16px/1.5 system-ui,sans-serif;background:#0f172a;color:#e2e8f0;
+margin:0;padding:24px;max-width:36rem}button{font:inherit;padding:10px 16px;
+border:0;border-radius:8px;background:#f59e0b;color:#111;cursor:pointer}</style>
+</head><body><h1>Box nicht erreichbar</h1>
+<p>Die App-Seite konnte nicht geladen werden. Auf <code>https://&lt;name&gt;.local</code>
+liegt das meist am selbst ausgestellten Zertifikat der Box, das sich regelm&auml;&szlig;ig
+erneuert. Dauerhaft hilft das Root-Zertifikat der Box (System &rarr; Erweitert).</p>
+<p><button id="r">Neu verbinden</button></p>
+<script>document.getElementById("r").onclick=async()=>{try{
+const r=await navigator.serviceWorker.getRegistrations();await Promise.all(r.map(x=>x.unregister()));
+const k=await caches.keys();await Promise.all(k.map(x=>caches.delete(x)));}finally{location.reload();}};</script>
+</body></html>`;
+  return new Response(html, {
+    status: 503,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
@@ -65,6 +91,7 @@ self.addEventListener("fetch", (event) => {
         if (event.request.mode === "navigate") {
           const shell = await caches.match("/");
           if (shell) return shell;
+          return unreachablePage();
         }
         return Response.error();
       }),
