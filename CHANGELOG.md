@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🎨 Design
+
+- **Farben wie in der Companion-App:** Web-Oberfläche und Logo tragen jetzt das Waldgrün der App mit dem Sonnen-Amber als Zweitfarbe statt Teal/Blau/Indigo. Auch die Grautöne sind vom blaustichigen Slate auf die grünstichigen Neutraltöne der App umgestellt, im dunklen wie im hellen Theme. Kontraste bleiben auf dem bisherigen Niveau.
+
 ## [0.8.3] – 2026-10-25
 
 Ruhigere Verbindungsmeldungen: Kurze WLAN-Aussetzer lösen kein „Wieder online“ mehr aus, und echte Ausfälle kommen mit Dauer.

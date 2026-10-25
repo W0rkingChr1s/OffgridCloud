@@ -193,7 +193,7 @@ export default function Folders() {
                         key={g.id}
                         onClick={() => toggleGroupAccess(f, g.id)}
                         className={`rounded-full px-3 py-1 text-sm transition ${
-                          on ? "bg-ogc-blue/20 text-ogc-blue ring-1 ring-ogc-blue/40" : "bg-slate-700/50 text-slate-400 hover:text-white"
+                          on ? "bg-ogc-sun/15 text-ogc-sun ring-1 ring-ogc-sun/40" : "bg-slate-700/50 text-slate-400 hover:text-white"
                         }`}
                       >
                         {on ? "✓ " : ""}⛂ {g.name}

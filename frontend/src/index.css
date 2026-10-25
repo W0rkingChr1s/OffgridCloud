@@ -2,10 +2,38 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  Brand colours from the Companion app (OffgridCloud-Companion,
+  src/ui/theme.ts and assets/brand/icon.svg): forest green with a sun-amber
+  accent. The token names are historical (the UI used to be teal/blue/indigo)
+  and stay so the markup doesn't change:
+
+  - ogc-teal   primary green: links, active states, buttons
+  - ogc-blue   deep green, end of the button gradient
+  - ogc-indigo darkest green for tinted backgrounds
+  - ogc-sun    the amber of the app icon's sun, a sparing second accent
+
+  slate is re-tinted from blue to the Companion's green-grey neutrals (same
+  lightness steps as Tailwind's slate, hue 160, lower chroma), so the whole
+  UI — not just the accents — reads as the same product as the app.
+*/
 @theme {
-  --color-ogc-teal: #0ea5a4;
-  --color-ogc-blue: #1d4ed8;
-  --color-ogc-indigo: #312e81;
+  --color-ogc-teal: #45a574;
+  --color-ogc-blue: #22573d;
+  --color-ogc-indigo: #1b4632;
+  --color-ogc-sun: #f2b134;
+
+  --color-slate-50: oklch(98.4% 0.003 160);
+  --color-slate-100: oklch(96.8% 0.006 160);
+  --color-slate-200: oklch(92.9% 0.01 160);
+  --color-slate-300: oklch(86.9% 0.015 160);
+  --color-slate-400: oklch(70.4% 0.02 160);
+  --color-slate-500: oklch(55.4% 0.022 160);
+  --color-slate-600: oklch(44.6% 0.02 160);
+  --color-slate-700: oklch(37.2% 0.019 160);
+  --color-slate-800: oklch(27.9% 0.017 160);
+  --color-slate-900: oklch(20.8% 0.015 160);
+  --color-slate-950: oklch(12.9% 0.012 160);
 }
 
 /*
@@ -58,7 +86,8 @@ html.dark {
     white/5–white/10 hover tints, borders and rings turn into dark ones.
   - the light accent shades used as text on dark (red/emerald/amber/sky/
     orange 50–400) map to their dark counterparts; 500+ are unchanged.
-  - brand: a deeper teal for legible links, a pale indigo for backgrounds.
+  - brand: the Companion's light-mode green for legible links, its pale
+    tonal green for backgrounds, a dark amber for sun-coloured text.
 
   Opacity utilities resolve through color-mix(var(--color-…)), which is why
   theme.ts only offers light mode where color-mix() is supported. The retro
@@ -67,18 +96,18 @@ html.dark {
 html.light:not(.retro) {
   color-scheme: light;
 
-  --color-white: oklch(20.8% 0.042 265.755);
+  --color-white: oklch(20.8% 0.015 160);
 
-  --color-slate-50: oklch(12.9% 0.042 264.695);
-  --color-slate-100: oklch(20.8% 0.042 265.755);
-  --color-slate-200: oklch(27.9% 0.041 260.031);
-  --color-slate-300: oklch(37.2% 0.044 257.287);
-  --color-slate-400: oklch(44.6% 0.043 257.281);
-  --color-slate-600: oklch(70.4% 0.04 256.788);
-  --color-slate-700: oklch(92.9% 0.013 255.508);
+  --color-slate-50: oklch(12.9% 0.012 160);
+  --color-slate-100: oklch(20.8% 0.015 160);
+  --color-slate-200: oklch(27.9% 0.017 160);
+  --color-slate-300: oklch(37.2% 0.019 160);
+  --color-slate-400: oklch(44.6% 0.02 160);
+  --color-slate-600: oklch(70.4% 0.02 160);
+  --color-slate-700: oklch(92.9% 0.01 160);
   --color-slate-800: oklch(100% 0 0);
-  --color-slate-900: oklch(96.8% 0.007 247.896);
-  --color-slate-950: oklch(92.9% 0.013 255.508);
+  --color-slate-900: oklch(96.8% 0.006 160);
+  --color-slate-950: oklch(92.9% 0.01 160);
 
   --color-red-50: oklch(39.6% 0.141 25.723);
   --color-red-100: oklch(44.4% 0.177 26.899);
@@ -106,8 +135,9 @@ html.light:not(.retro) {
   --color-sky-300: oklch(50% 0.134 242.749);
   --color-sky-400: oklch(58.8% 0.158 241.966);
 
-  --color-ogc-teal: #0d8584;
-  --color-ogc-indigo: #c7d2fe;
+  --color-ogc-teal: #2e7d57;
+  --color-ogc-indigo: #d0e8d6;
+  --color-ogc-sun: #8b5000;
 }
 
 /*
@@ -129,9 +159,9 @@ html.light:not(.retro)
     [class*="bg-black/7"]
   ):not([class*="inset-0"]) {
   --color-white: #fff;
-  --color-slate-100: oklch(96.8% 0.007 247.896);
-  --color-slate-200: oklch(92.9% 0.013 255.508);
-  --color-slate-300: oklch(86.9% 0.022 252.894);
+  --color-slate-100: oklch(96.8% 0.006 160);
+  --color-slate-200: oklch(92.9% 0.01 160);
+  --color-slate-300: oklch(86.9% 0.015 160);
 }
 
 body {

@@ -8,7 +8,7 @@ import { useEvents, type FolderSnapshot } from "../events";
 const ACCENTS = [
   "from-ogc-teal to-ogc-blue",
   "from-ogc-blue to-ogc-indigo",
-  "from-ogc-indigo to-ogc-teal",
+  "from-ogc-sun to-ogc-teal",
 ];
 
 export default function Dashboard() {

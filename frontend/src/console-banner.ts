@@ -28,11 +28,11 @@ export async function fetchVersion(): Promise<string> {
 // Shared style fragments so every line reads as one system.
 const S = {
   brand:
-    "color:#0EA5A4;font:700 22px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;" +
-    "text-shadow:0 0 10px rgba(14,165,164,0.45)",
-  tagline: "color:#94a3b8;font:400 12px ui-monospace,monospace",
-  label: "color:#0EA5A4;font:600 12px ui-monospace,monospace",
-  value: "color:#e2e8f0;font:400 12px ui-monospace,monospace",
+    "color:#45A574;font:700 22px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;" +
+    "text-shadow:0 0 10px rgba(69,165,116,0.45)",
+  tagline: "color:#96a49b;font:400 12px ui-monospace,monospace",
+  label: "color:#45A574;font:600 12px ui-monospace,monospace",
+  value: "color:#e2eae5;font:400 12px ui-monospace,monospace",
   warnHead:
     "color:#fecaca;background:#7f1d1d;font:700 13px ui-monospace,monospace;padding:2px 8px",
   warnBody: "color:#fca5a5;font:400 12px/1.5 ui-monospace,monospace",
