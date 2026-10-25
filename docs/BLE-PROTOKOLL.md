@@ -411,7 +411,7 @@ Segmente (`/api/network` erlaubt `/api/network` und `/api/network/…`).
 |---|---|---|
 | `/api/health` | GET | |
 | `/api/monitor` | GET | Zustands-Snapshot: System, Speicher, Internet, Prüfungen (Admin) |
-| `/api/monitor/history` | GET | Verlauf der letzten 24 h, ein Punkt pro Minute (Admin) |
+| `/api/monitor/history` | GET | Verlauf der letzten 24 h (Admin). Die App SOLL mit `step` fragen (z. B. `?step=900`): Der volle Tag mit einem Punkt pro Minute ist größer als eine Nachricht (§4) |
 | `/api/network` | alle | WLAN-Scan, bekannte Netze, anwenden (Admin) |
 | `/api/transfers` | alle | Liste, Retry |
 | `/api/bandwidth` | alle | Gate, Limit, Probe, Uplinks (Admin) |

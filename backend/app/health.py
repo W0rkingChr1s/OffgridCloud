@@ -352,9 +352,42 @@ def record_sample(db: Session) -> dict:
     return point
 
 
-def history() -> list[dict]:
+def history(*, step: int | None = None, since: int | None = None) -> list[dict]:
+    """The recorded points, optionally only from ``since`` (unix time) on and
+    merged into ``step``-second buckets (see :func:`downsample`)."""
     with _history_lock:
-        return list(_history)
+        points = list(_history)
+    if since is not None:
+        points = [p for p in points if p["t"] >= since]
+    return downsample(points, step) if step else points
+
+
+def downsample(points: list[dict], step: int) -> list[dict]:
+    """Merge points into ``step``-second buckets, keyed by the bucket start.
+
+    Numeric values become the mean of the bucket (missing values skipped),
+    ``online`` the worst value, so a short outage stays visible. The full 24 h
+    are ~240 kB of JSON, more than one BLE message carries (64 KiB); the app
+    asks for 15-minute buckets instead.
+    """
+    buckets: dict[int, list[dict]] = {}
+    for point in points:
+        buckets.setdefault(point["t"] - point["t"] % step, []).append(point)
+    merged = []
+    for start, group in buckets.items():
+        out: dict[str, Any] = {"t": start}
+        for key in group[0]:
+            if key == "t":
+                continue
+            values = [p[key] for p in group if p.get(key) is not None]
+            if not values:
+                out[key] = None
+            elif key == "online":
+                out[key] = min(values)
+            else:
+                out[key] = round(sum(values) / len(values), 1)
+        merged.append(out)
+    return merged
 
 
 def _sample_once() -> None:

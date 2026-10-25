@@ -242,6 +242,60 @@ def test_history_records_points(client, admin_auth, offline_probes):
     assert body["points"][1]["latency_ms"] == 42.0
 
 
+def test_history_step_merges_buckets(client, admin_auth, monkeypatch):
+    now = 1_800_000_000 - 1_800_000_000 % 900
+    monkeypatch.setattr("app.routers.monitor.time.time", lambda: now + 1800)
+    base = {"memory_percent": None, "temperature_c": 50.0, "disk_percent": 10.0}
+    with health._history_lock:
+        for i, (cpu, online) in enumerate([(10.0, 1), (30.0, 0), (20.0, 1)]):
+            point = {"t": now + i * 60, "cpu_percent": cpu, "online": online, **base}
+            health._history.append(point)
+        health._history.append({"t": now + 900, "cpu_percent": 5.0, "online": 1, **base})
+
+    body = client.get("/api/monitor/history?step=900", headers=admin_auth).json()
+    assert body["interval_seconds"] == 900
+    first, second = body["points"]
+    assert first == {
+        "t": now,
+        "cpu_percent": 20.0,
+        "online": 0,  # the outage in the bucket wins
+        "memory_percent": None,
+        "temperature_c": 50.0,
+        "disk_percent": 10.0,
+    }
+    assert second["t"] == now + 900 and second["cpu_percent"] == 5.0
+
+
+def test_history_hours_and_step_bounds(client, admin_auth, monkeypatch):
+    now = 1_800_000_000
+    monkeypatch.setattr("app.routers.monitor.time.time", lambda: now)
+    with health._history_lock:
+        health._history.append({"t": now - 3 * 3600, "cpu_percent": 1.0})
+        health._history.append({"t": now - 60, "cpu_percent": 2.0})
+
+    body = client.get("/api/monitor/history?hours=1", headers=admin_auth).json()
+    assert [p["cpu_percent"] for p in body["points"]] == [2.0]
+    for bad in ("step=30", "step=7200", "hours=0", "hours=25"):
+        assert client.get(f"/api/monitor/history?{bad}", headers=admin_auth).status_code == 422
+
+
+def test_history_full_day_in_15_minute_steps_fits_one_ble_message(client, admin_auth):
+    import json
+
+    from app.db import SessionLocal
+
+    with SessionLocal() as db:
+        point = health.record_sample(db)
+    with health._history_lock:
+        health._history.clear()
+        for i in range(health.HISTORY_POINTS):
+            health._history.append({**point, "t": point["t"] - i * 60})
+
+    body = client.get("/api/monitor/history?step=900", headers=admin_auth).json()
+    assert len(body["points"]) <= 97
+    assert len(json.dumps(body)) < 65_535 // 2
+
+
 def test_prometheus_escapes_labels():
     p = health._Prom()
     p.add("info", "x", 1, {"hostname": 'a"b'})

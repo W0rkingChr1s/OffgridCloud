@@ -592,7 +592,7 @@ ebenfalls (so liest die Companion-App die Werte, auch per Bluetooth).
 | `GET /api/monitor` | JSON-Snapshot |
 | `GET /api/monitor?format=prometheus` bzw. `GET /api/monitor/metrics` | Prometheus-Textformat |
 | `GET /api/monitor?format=prtg` | PRTG *HTTP Data Advanced* mit allen Kanälen und Schwellwerten |
-| `GET /api/monitor/history` | Verlauf der letzten 24 h |
+| `GET /api/monitor/history` | Verlauf der letzten 24 h, ein Punkt pro Minute. `?step=900` fasst zu Mittelwerten über 15 min zusammen (60–3600 s; `online` nimmt den schlechtesten Wert), `?hours=6` kürzt auf die letzten Stunden (1–24) |
 
 Prometheus:
 
