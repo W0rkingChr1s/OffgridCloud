@@ -6,9 +6,17 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.8.3] – 2026-10-25
+
+Ruhigere Verbindungsmeldungen: Kurze WLAN-Aussetzer lösen kein „Wieder online“ mehr aus, und echte Ausfälle kommen mit Dauer.
+
 ### 🐛 Fehlerbehebungen
 
-- **Weniger falsche „Wieder online“-Meldungen:** Ein einzelner gescheiterter Verbindungstest (zwei TCP-Verbindungen à 3 s) galt bisher schon als Ausfall. Kurze WLAN-Aussetzer lösten so mehrmals täglich eine Meldung aus. Jetzt gilt die Box erst nach 3 gescheiterten Tests in Folge (≈ 1 Minute) als offline. Die Meldung nennt die Ausfalldauer („Verbindung nach 4 min wiederhergestellt“), der Webhook liefert sie als `outage_seconds`. Den Beginn eines Ausfalls loggt das Backend jetzt auch („Uplink down“).
+- **Weniger falsche „Wieder online“-Meldungen:** Ein einzelner gescheiterter Verbindungstest (zwei TCP-Verbindungen à 3 s) galt bisher schon als Ausfall. Kurze WLAN-Aussetzer lösten so mehrmals täglich eine Meldung aus. Jetzt gilt die Box erst nach 3 gescheiterten Tests in Folge (≈ 1 Minute) als offline. Die Meldung nennt die Ausfalldauer („Verbindung nach 4 min wiederhergestellt“), der Webhook liefert sie als `outage_seconds`. Den Beginn eines Ausfalls loggt das Backend jetzt auch („Uplink down“). (#217)
+
+### 🧰 Unter der Haube
+
+- **Abhängigkeiten:** SQLAlchemy 2.1.6, Vite 8.3.5; für die Entwicklung ruff 0.17.2 und httpx2 2.16.0. (#215, #216)
 
 ## [0.8.2] – 2026-10-21
 
