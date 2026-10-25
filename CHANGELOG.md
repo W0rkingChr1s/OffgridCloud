@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Zustands-Verlauf passt wieder über Bluetooth:** `GET /api/monitor/history` lieferte immer alle Minutenwerte der letzten 24 h, als JSON rund 240 kB. Eine BLE-Nachricht fasst aber höchstens 64 KiB, deshalb scheiterte der Abruf über Bluetooth nach gut 6 Stunden Laufzeit mit `too_large`. Neu sind die Parameter `step` (Mittelwerte über 60–3600 s, Ausfälle bleiben sichtbar) und `hours` (nur die letzten 1–24 Stunden). Mit `?step=900` ist der ganze Tag rund 15 kB groß. Ohne Parameter bleibt die Antwort wie bisher.
+
 ## [0.8.4] – 2026-10-25
 
 Health Monitor: eine neue Seite *Zustand* zeigt System, Speicher und Internet grafisch mit 24-h-Verlauf, und Monitoring-Systeme wie Prometheus, PRTG oder die Companion-App lesen dieselben Werte maschinenlesbar. Dazu ein Portal-Link im Telegram-Bot.

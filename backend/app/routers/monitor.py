@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -107,9 +108,21 @@ def metrics(db: Session = Depends(get_db)) -> PlainTextResponse:
 
 
 @router.get("/history", dependencies=[Depends(require_monitor_access)])
-def history() -> dict:
-    """One point per minute for the last 24 h (in memory, empty after a restart)."""
-    return {"interval_seconds": int(health.HISTORY_INTERVAL), "points": health.history()}
+def history(
+    step: int | None = Query(None, ge=60, le=3600, description="Mittelwert über so viele s"),
+    hours: int | None = Query(None, ge=1, le=24, description="Nur die letzten so vielen Stunden"),
+) -> dict:
+    """One point per minute for the last 24 h (in memory, empty after a restart).
+
+    ``step`` merges them into buckets (mean values, worst ``online``) — over
+    BLE the raw day doesn't fit into one message. ``hours`` filters by wall
+    clock, so it's opt-in: a Pi without RTC stamps points before NTP sync.
+    """
+    since = int(time.time()) - hours * 3600 if hours else None
+    return {
+        "interval_seconds": step or int(health.HISTORY_INTERVAL),
+        "points": health.history(step=step, since=since),
+    }
 
 
 # --- Monitoring tokens (admin) --------------------------------------------
