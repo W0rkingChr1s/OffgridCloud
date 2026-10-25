@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Portal-Link im Telegram-Bot:** `/status` zeigt einen anklickbaren Link aufs Portal, `/netz` alle Adressen — zuerst die öffentliche Domain (falls unter *System → HTTPS* eingetragen), dann `<hostname>.local`. Ohne HTTPS-Proxy zeigt der Link auf `http://<hostname>.local:<port>`.
+
 ## [0.8.3] – 2026-10-25
 
 Ruhigere Verbindungsmeldungen: Kurze WLAN-Aussetzer lösen kein „Wieder online“ mehr aus, und echte Ausfälle kommen mit Dauer.
