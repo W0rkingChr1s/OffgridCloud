@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **HTTPS auch per IP:** `https://<IP der Box>` brach bisher mit einem TLS-Fehler ab, weil es für eine nackte IP kein Zertifikat gab. Caddy stellt jetzt beim ersten Aufruf ein Zertifikat für die aufgerufene IP aus, von derselben lokalen CA wie für `<name>.local`. Mit installiertem Root-Zertifikat (*System → Erweitert*) gibt es also keine Warnung. Das Backend gibt nur IPs der Box selbst frei (`/api/system/https/ask`). `http://<IP>` bleibt unverändert erreichbar. Bestehende Boxen bekommen die neue Caddy-Konfiguration beim nächsten Update.
+
 ### 🐛 Fehlerbehebungen
 
 - **Safari zeigt statt einer Fehlermeldung eine Hilfeseite, wenn die Box nicht erreichbar ist:** Fand der Service Worker bei einem Seitenaufruf weder die Box noch die App-Seite im Cache, zeigte Safari eine eigene Fehlerseite ohne Ausweg. Jetzt kommt eine Seite „Box nicht erreichbar“ mit Erklärung zum Zertifikat und „Neu verbinden“-Knopf (setzt Service Worker und Cache zurück). Hinweis: Die Meldung „Returned response is null“ stammt von Service-Worker-Versionen vor 0.7.5. Safari kann so einen alten Worker bei abgelaufenem Zertifikat nicht selbst ersetzen, dann einmal die Websitedaten von `<name>.local` in Safari löschen.

@@ -390,3 +390,42 @@ def test_https_status_reports_ca(client, admin_auth, monkeypatch, tmp_path: Path
     body = client.get("/api/system/https", headers=admin_auth).json()
     assert body["ca_available"] is True
     assert body["ca_fingerprint"] == https_config.ca_fingerprint(_FAKE_DER)
+
+
+# --- https://<IP>: on-demand tls-internal gate (Caddy's `ask`) -------------
+
+
+def test_is_own_ip_accepts_local_address():
+    assert https_config.is_own_ip("127.0.0.1") is True
+
+
+def test_is_own_ip_rejects_foreign_address():
+    # TEST-NET-3 (RFC 5737) is never assigned to a real interface.
+    assert https_config.is_own_ip("203.0.113.7") is False
+
+
+@pytest.mark.parametrize("bad", ["", "box1.local", "example.com", "192.168.1", "1.2.3.4:443"])
+def test_is_own_ip_rejects_non_ip_without_binding(bad):
+    def fail_bind(_ip):
+        raise AssertionError("must not try to bind a non-IP")
+
+    assert https_config.is_own_ip(bad, bind=fail_bind) is False
+
+
+def test_is_own_ip_passes_parsed_ip_to_bind():
+    seen = []
+    assert https_config.is_own_ip(" fe80::1 ", bind=lambda ip: seen.append(ip) or True) is True
+    assert str(seen[0]) == "fe80::1"
+
+
+def test_ask_endpoint_is_public_and_gated(client, monkeypatch):
+    # Caddy calls this without credentials before issuing a certificate.
+    import app.routers.https as https_router
+
+    monkeypatch.setattr(
+        https_router.https_config, "is_own_ip", lambda d: d == "192.168.1.50"
+    )
+    assert client.get("/api/system/https/ask?domain=192.168.1.50").status_code == 200
+    assert client.get("/api/system/https/ask?domain=10.9.9.9").status_code == 403
+    assert client.get("/api/system/https/ask?domain=evil.example").status_code == 403
+    assert client.get("/api/system/https/ask").status_code == 403

@@ -12,10 +12,12 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import ipaddress
 import json
 import plistlib
 import re
 import shlex
+import socket
 import subprocess
 import uuid
 from pathlib import Path
@@ -118,6 +120,36 @@ def is_active(data_dir: Path, *, run=subprocess.run) -> bool:
     if read_state(data_dir)["hostname"]:
         return True
     return caddy_running(run=run)
+
+
+def is_own_ip(value: str, *, bind=None) -> bool:
+    """True if ``value`` is an IP literal assigned to this machine.
+
+    Backs Caddy's on-demand TLS ``ask`` hook for the ``https://<IP>`` catch-all:
+    only the box's own addresses get a tls-internal certificate, so a client
+    sending arbitrary SNI names can't make Caddy mint and store certificates
+    without end. Hostnames are refused outright (the .local names and the
+    domain have their own, non-on-demand sites). Ownership is tested by binding
+    a throwaway socket to the address — the kernel only allows that for local
+    addresses, no interface enumeration needed. ``bind`` is injectable for tests.
+    """
+    try:
+        ip = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return False
+    if bind is None:
+        bind = _try_bind
+    return bind(ip)
+
+
+def _try_bind(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    family = socket.AF_INET6 if ip.version == 6 else socket.AF_INET
+    try:
+        with socket.socket(family, socket.SOCK_DGRAM) as sock:
+            sock.bind((str(ip), 0))
+    except OSError:
+        return False
+    return True
 
 
 def run_apply(command: str, *, hostname: str, domain: str, run=subprocess.run) -> str:
