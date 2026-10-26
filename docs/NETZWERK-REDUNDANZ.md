@@ -181,7 +181,7 @@ sudo /opt/offgridcloud/deploy/netmerge/install.sh
 ```
 
 Das Skript installiert eine fest gepinnte net-merge-Version (`NM_VERSION` im
-Skript, derzeit 0.3.3): auf Raspberry Pi OS/Debian aus dessen signiertem
+Skript, derzeit 0.3.5): auf Raspberry Pi OS/Debian aus dessen signiertem
 apt-Repository (Schlüssel-Fingerabdruck geprüft, Paket per `apt-mark hold`
 festgehalten), sonst aus dem Release-Tarball (SHA-256 geprüft). Neuere
 net-merge-Versionen kommen also nur mit einem OffgridCloud-Update. Es startet den Dienst und trägt `OGC_NETMERGE_PROXY` in die `.env`
