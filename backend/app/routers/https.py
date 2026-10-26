@@ -15,11 +15,13 @@ command is empty.
 The root CA downloads (``ca.crt`` / ``ca.mobileconfig``) live on a separate,
 unauthenticated router: they are needed exactly when a device cannot reach the
 box over https:// yet (so cannot log in), and a CA certificate is public data.
+So does ``ask``, which Caddy calls (without credentials) before issuing an
+on-demand certificate for ``https://<IP>``.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from .. import https_config
@@ -132,3 +134,14 @@ def download_root_ca_profile() -> Response:
         media_type="application/x-apple-aspen-config",
         headers={"Content-Disposition": 'attachment; filename="offgridcloud.mobileconfig"'},
     )
+
+
+@public_router.get("/ask")
+def ask_on_demand(domain: str = Query("")) -> Response:
+    """Caddy's on-demand TLS gate: 200 = issue a certificate for ``domain``.
+
+    Only the box's own IP addresses qualify; see ``https_config.is_own_ip``.
+    """
+    if not https_config.is_own_ip(domain):
+        raise HTTPException(status_code=403, detail="Kein Zertifikat für diesen Namen.")
+    return Response(status_code=200)

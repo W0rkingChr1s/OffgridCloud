@@ -193,13 +193,21 @@ mDNS-Namen und erzeugt:
   den Zufallsnamen nicht merken muss. Laufen mehrere Boxen im selben Netz,
   bekommt nur die erste den Alias; die anderen sind weiter unter ihrem
   eindeutigen Namen erreichbar;
-- **Zugriff per IP**: `http://<IP der Box>` (ohne `s` — für eine nackte IP gibt
-  es kein Zertifikat). Die `.local`-Namen leiten weiterhin auf HTTPS um;
+- **Zugriff per IP**: `http://<IP der Box>` und `https://<IP der Box>`. Für
+  HTTPS stellt Caddy beim ersten Aufruf ein Zertifikat für genau die
+  aufgerufene IP aus (`tls internal` mit `on_demand`, auch nach einem
+  DHCP-Wechsel). Es stammt von derselben lokalen CA wie das `.local`-Zertifikat,
+  ohne installiertes Root-Zertifikat (siehe unten) gibt es also auch hier eine
+  Warnung. Vor dem Ausstellen fragt Caddy das Backend
+  (`/api/system/https/ask`), das nur IPs der Box selbst freigibt, damit
+  beliebige Namen keine Zertifikate erzeugen. `http://<IP>` leitet bewusst
+  nicht auf HTTPS um: ein Gerät ohne Root-Zertifikat käme sonst gar nicht mehr
+  auf die Box. Die `.local`-Namen leiten weiterhin auf HTTPS um;
 - optional zusätzlich einen **öffentlichen Zugang** über eine echte Domain mit
   automatischem Let's-Encrypt-Zertifikat, sobald eine Domain hinterlegt ist.
 
 **Zertifikat auf Geräten vertrauen (empfohlen):** Das Zertifikat für
-`https://<hostname>.local` stellt Caddy selbst aus (`tls internal`) und erneuert
+`https://<hostname>.local` (und `https://<IP>`) stellt Caddy selbst aus (`tls internal`) und erneuert
 es etwa alle 12 Stunden. Eine im Browser bestätigte Warnung gilt nur für das
 alte Zertifikat. Danach schlagen Anmeldung und Datenabrufe still fehl („Box
 nicht erreichbar“), Safari zeigt oft keine neue Warnung, weil der Service Worker

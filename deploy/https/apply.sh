@@ -3,8 +3,9 @@
 #
 # Always emits a LAN block for <hostname>.local and the fixed alias
 # offgridcloud.local (published by offgridcloud-mdns-alias) with a self-signed
-# cert (Caddy 'tls internal'), plus a plain-HTTP catch-all so the box also
-# answers on http://<its IP> — there is no certificate for a bare IP. If
+# cert (Caddy 'tls internal'), plus catch-alls so the box also answers on
+# http://<its IP> and https://<its IP> — the latter with an on-demand
+# 'tls internal' certificate for whichever local IP was dialled. If
 # --domain is given, ALSO emits a public block that gets a real Let's Encrypt
 # certificate automatically. Both coexist — LAN access never depends on the
 # domain (design decision B).
@@ -71,6 +72,17 @@ SITE
   echo "# Managed by deploy/https/apply.sh — edits are overwritten. Change the"
   echo "# hostname/domain via the installer or System → HTTPS in the web UI."
   echo
+  # On-demand certificates (the https://<IP> catch-all below) only for the
+  # box's own addresses: the backend answers 200 for those, 4xx otherwise, so
+  # random SNI names can't make Caddy mint and store certificates endlessly.
+  cat <<GLOBAL
+{
+    on_demand_tls {
+        ask http://localhost:${BACKEND_PORT}/api/system/https/ask
+    }
+}
+GLOBAL
+  echo
   LAN_SITES="${HOSTNAME_SHORT}.local"
   [[ "$HOSTNAME_SHORT" != "$ALIAS" ]] && LAN_SITES+=", ${ALIAS}.local"
   render_site "$LAN_SITES" "tls internal"
@@ -93,8 +105,23 @@ ${HTTP_LAN_SITES} {
 SITE
   echo
   # Any other Host on port 80 (the IP address): plain HTTP. Named sites above
-  # keep their automatic HTTP→HTTPS redirect — Caddy puts those first.
+  # keep their automatic HTTP→HTTPS redirect — Caddy puts those first. No
+  # redirect to https://<IP> here: a device without the root CA could then no
+  # longer reach the box at all (nor download the CA).
   render_site "http://" ""
+  echo
+  # Any other name on port 443 (https://<IP>): a bare IP has no SNI, so Caddy
+  # issues a tls-internal certificate for the local address the client dialled
+  # — on first use, which also covers a DHCP address change. Same local CA as
+  # the .local names, so a device that trusts the root CA trusts this too.
+  cat <<SITE
+https:// {
+    tls internal {
+        on_demand
+    }
+    reverse_proxy localhost:${BACKEND_PORT}
+}
+SITE
   if [[ -n "$DOMAIN" ]]; then
     echo
     render_site "$DOMAIN" ""

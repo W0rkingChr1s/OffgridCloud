@@ -77,7 +77,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 📱 **USB-Tethering** — iPhone oder Android-Handy per Kabel als Uplink, automatisch erkannt und hinter Kabel und WLAN eingereiht; Uploads über die getaktete Verbindung wahlweise normal, bis zu einem Tagesvolumen oder pausiert
 - 🔀 **Leitungsbündelung** — mit [net-merge](https://github.com/rohit267/net-merge) laufen Uploads über alle Uplinks gleichzeitig (z. B. WLAN + LTE-Handy); nur für rclone, ohne Eingriff ins Routing der Box, Ziele im LAN/VPN gehen weiter direkt
 - 🔐 **VPN-Client** — wählt sich per WireGuard/OpenVPN ins Heimnetz ein, damit intern-only Ziele (z. B. ein NAS) erreichbar sind
-- 🌐 **HTTPS out of the box** — Caddy + mDNS: `https://offgridcloud-XXXXX.local`, Alias `https://offgridcloud.local` und per IP `http://<host-ip>` — auch offline im Feld
+- 🌐 **HTTPS out of the box** — Caddy + mDNS: `https://offgridcloud-XXXXX.local`, Alias `https://offgridcloud.local` und per IP `http://<host-ip>` bzw. `https://<host-ip>` — auch offline im Feld
 - 🛰️ **Multi-Server-Pool** — mehrere Boxen als Flotte in einer gemeinsamen Übersicht (Knoten, Medien, Transfers, Durchsatz, Speicher)
 
 ### Bedienung & Verwaltung
@@ -174,7 +174,8 @@ Der Installer richtet standardmäßig auch **HTTPS** ein (Caddy + avahi/mDNS): d
 Box ist danach unter `https://offgridcloud-XXXXX.local` erreichbar (`XXXXX` =
 zufälliger Suffix je Box, im Installer frei überschreibbar) — mit selbstsigniertem
 Zertifikat, auch offline im Feld nutzbar. Zusätzlich hört sie auf den festen Alias
-`https://offgridcloud.local` und per IP auf `http://<host-ip>` (bzw. `:8000` direkt).
+`https://offgridcloud.local` und per IP auf `http://<host-ip>` oder `https://<host-ip>`
+(bzw. `:8000` direkt).
 Login mit `admin@offgrid.local`. Details zu HTTPS/Domain im
 [Betriebshandbuch, Kapitel 3](docs/BETRIEB.md#3-https--reverse-proxy).
 
