@@ -89,6 +89,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 🧭 **Setup-Assistent** — das fertige Pi-Image richtet sich im Browser ein (per Kabel oder über ein Setup-WLAN mit Captive Portal); keine Geheimnisse im Image
 - 🖥️ **OffgridCloud OS** — hängt ein Bildschirm an der Box, startet sie in ein **getabbtes Dashboard** (Live-Status, Provider, Netz/Bandbreite/VPN, Speicher, Pool, Benutzer & Gruppen, System mit Version/Updates und Live-Update-Fortschritt) — die **komplette Verwaltung ohne Web-UI**, direkt an der Box oder per SSH. Ins darunterliegende Raspberry Pi OS geht es erst per **Admin-PIN**; optionaler Vollbild-Browser-Kiosk für Pi 4/5
 - 🔄 **One-Click- und Auto-Update** — aus Web-UI, Konsole oder Telegram, oder auf Wunsch automatisch in einem ruhigen Zeitfenster (nur wenn nichts überträgt, nicht übers Handy-Netz); die Installation bleibt auf ihrem Update-Kanal (Release oder `main`)
+- 📈 **Health Monitor** — Admin-Seite **Zustand** mit CPU, RAM, Temperatur, Pi-Stromversorgung, Speicher, Internet (Latenz, Ausfälle) und WLAN-Signal samt 24-h-Verlauf und Gesamtampel (ok/Warnung/Fehler). Für Monitoring-Systeme per Lese-Token als JSON, **Prometheus** (`/api/monitor/metrics`) und **PRTG**-Sensor (`/api/monitor?format=prtg`) — siehe [Betriebshandbuch](docs/BETRIEB.md#health-monitor)
 - 🧾 **Härtung** — Audit-Log, verschlüsselte Credentials, Disk-Monitoring, Backup
 
 ### Benachrichtigungen & Telegram
@@ -97,7 +98,7 @@ Status für alle transparent. Sparsam genug für einen **Raspberry Pi 3**.
 - 📬 **Offline-Warteschlange** — kann ein Kanal nicht zustellen (Box offline), wartet die Meldung und wird nachgeliefert, sobald wieder Verbindung besteht; bei Telegram/E-Mail gebündelt als Sammelnachricht mit Originalzeiten
 - 🧭 **Telegram-Einrichtungsassistent** — schlägt Bot-Namen für @BotFather vor, prüft den Token und findet den Chat von selbst (Privatchat oder Gruppe per Klick übernehmen, keine Chat-ID abtippen)
 - 🤖 **Telegram-Bot mit Befehlen** — nach dem Hinterlegen meldet sich der Bot mit „OffgridCloud verbunden“, richtet Befehlsmenü & Beschreibung ein und brandet Gruppen/Kanäle (Name „OffgridCloud · &lt;Box&gt;“, Beschreibung, Logo, angepinnte Begrüßung – sofern der Bot Admin ist). Im freigeschalteten Chat:
-  - **Abfragen:** `/status`, `/queue`, `/speicher`, `/fehler`, `/retry`, `/netz`, `/ping`, `/hilfe`
+  - **Abfragen:** `/status`, `/queue`, `/speicher`, `/fehler`, `/retry`, `/netz` (`/status` und `/netz` mit Link zum Portal), `/ping`, `/hilfe`
   - **Messen:** `/speedtest` (max. eine Messung alle 5 min, `OGC_TELEGRAM_SPEEDTEST_COOLDOWN`)
   - **Steuern:** `/restart` (nur Dienst), `/reboot`, `/shutdown` und `/update` (One-Click-Update inkl. Ergebnis-Meldung) — jeweils nur nach Bestätigung per Button, 60 s gültig, nur durch den Anfragenden
   - Long-Polling – kein offener Port, funktioniert hinter CGNAT/LTE; fremde Chats bekommen nur ihre Chat-ID via `/id`
@@ -261,7 +262,7 @@ Beiträge, Branch-/PR-Konventionen und Auto-Merge: [CONTRIBUTING.md](CONTRIBUTIN
 Seitdem dazugekommen (siehe [CHANGELOG](CHANGELOG.md)): Telegram-Steuerung,
 fertiges Pi-Image mit Setup-Assistent, Docker-Image auf GHCR, HTTPS-Alias
 `offgridcloud.local`, Hell-Modus, überarbeitete Konsole mit Speicher-Tab,
-Wechselmedien als Puffer und USB-Tethering.
+Wechselmedien als Puffer, USB-Tethering und der Health Monitor.
 
 **In Arbeit:** Phase 9 — [Desktop-Client](docs/CLIENT.md) (Auto-Upload-Agent).
 Historie und Roadmap: [Entwicklungsplan](docs/ENTWICKLUNGSPLAN.md).
