@@ -4,8 +4,10 @@
 # Opt-in, root-only. It:
 #   1. ensures NetworkManager (+ dnsmasq-base for the AP's DHCP) is installed,
 #   2. installs the root watchdog service that hosts the fallback AP,
-#   3. grants the service user a NOPASSWD sudoers rule for apply.sh only, and
-#   4. wires OGC_NET_APPLY_COMMAND into .env so "Anwenden" in the UI works.
+#   3. grants the service user NOPASSWD sudoers rules for apply.sh and the
+#      upload-handover helper (handover.sh up/down) only, and
+#   4. wires OGC_NET_APPLY_COMMAND / OGC_NET_HANDOVER_COMMAND into .env so
+#      "Anwenden" in the UI and the companion app's upload Wi-Fi work.
 #
 # It changes nothing about who the box connects to until an admin configures
 # networks + the AP in the web UI and clicks "Anwenden".
@@ -36,7 +38,9 @@ step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 CONFIG_FILE="$PREFIX/data/network.json"
 APPLY="$HERE/apply.sh"
 WATCHDOG="$HERE/watchdog.sh"
-chmod +x "$APPLY" "$WATCHDOG" "$HERE/_apply.py" 2>/dev/null || true
+HANDOVER="$HERE/handover.sh"
+HANDOVER_FILE="$PREFIX/data/handover.json"
+chmod +x "$APPLY" "$WATCHDOG" "$HANDOVER" "$HERE/_apply.py" "$HERE/_handover.py" 2>/dev/null || true
 
 # --- 1. NetworkManager + dnsmasq-base --------------------------------------
 step "Ensuring NetworkManager is installed and running..."
@@ -53,6 +57,15 @@ else
   command -v apt-get >/dev/null 2>&1 && \
     dpkg -s dnsmasq-base >/dev/null 2>&1 || \
     { command -v apt-get >/dev/null 2>&1 && apt-get install -y --no-install-recommends dnsmasq-base iw || true; }
+fi
+# hostapd runs the companion app's upload Wi-Fi (handover.sh). Only started on
+# demand by that helper — its own service must never grab the Wi-Fi adapter.
+if command -v apt-get >/dev/null 2>&1 && ! command -v hostapd >/dev/null 2>&1; then
+  apt-get install -y --no-install-recommends hostapd \
+    || echo "   hostapd not installed — the app's upload Wi-Fi only works via the fallback AP." >&2
+fi
+if command -v systemctl >/dev/null 2>&1 && [[ ! -f /etc/hostapd/hostapd.conf ]]; then
+  systemctl disable --now hostapd.service >/dev/null 2>&1 || true
 fi
 if command -v systemctl >/dev/null 2>&1; then
   systemctl enable --now NetworkManager 2>/dev/null || \
@@ -82,9 +95,12 @@ systemctl restart offgridcloud-netwatch.service || \
   echo "   Watchdog did not start — check: journalctl -u offgridcloud-netwatch -e" >&2
 
 # --- 3. sudoers rule for the apply helper ----------------------------------
-step "Granting '$SERVICE_USER' a NOPASSWD rule for apply.sh..."
+step "Granting '$SERVICE_USER' NOPASSWD rules for apply.sh and handover.sh..."
 SUDOERS=/etc/sudoers.d/offgridcloud-network
-echo "$SERVICE_USER ALL=(root) NOPASSWD: $APPLY, $APPLY \"\"" > "$SUDOERS.tmp"
+{
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $APPLY, $APPLY \"\""
+  echo "$SERVICE_USER ALL=(root) NOPASSWD: $HANDOVER up $HANDOVER_FILE, $HANDOVER down"
+} > "$SUDOERS.tmp"
 if visudo -cf "$SUDOERS.tmp" >/dev/null 2>&1; then
   install -m 440 "$SUDOERS.tmp" "$SUDOERS"; rm -f "$SUDOERS.tmp"
   echo "   Installed $SUDOERS"
@@ -102,8 +118,13 @@ if [[ -f "$ENV_FILE" ]]; then
   else
     echo "OGC_NET_APPLY_COMMAND=sudo $APPLY $CONFIG_FILE" >> "$ENV_FILE"
   fi
+  if grep -q '^OGC_NET_HANDOVER_COMMAND=' "$ENV_FILE"; then
+    sed -i "s#^OGC_NET_HANDOVER_COMMAND=.*#OGC_NET_HANDOVER_COMMAND=sudo $HANDOVER#" "$ENV_FILE"
+  else
+    echo "OGC_NET_HANDOVER_COMMAND=sudo $HANDOVER" >> "$ENV_FILE"
+  fi
   chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
-  echo "   Set OGC_NET_APPLY_COMMAND in $ENV_FILE"
+  echo "   Set OGC_NET_APPLY_COMMAND and OGC_NET_HANDOVER_COMMAND in $ENV_FILE"
   command -v systemctl >/dev/null 2>&1 && systemctl try-restart offgridcloud 2>/dev/null || true
 else
   echo "   $ENV_FILE not found — add manually:"

@@ -511,6 +511,8 @@ export interface BleStatus {
   service_error: string | null;
   box_name: string;
   box_public_key: string;
+  /** Users may start the app's upload Wi-Fi even when it takes the box offline. */
+  handover_users_may_pause: boolean;
 }
 
 export interface BlePairing {
@@ -537,6 +539,13 @@ export async function setBleEnabled(enabled: boolean): Promise<BleStatus> {
   return api<BleStatus>("/api/ble/settings", {
     method: "PUT",
     body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function setHandoverUsersMayPause(allowed: boolean): Promise<BleStatus> {
+  return api<BleStatus>("/api/ble/settings", {
+    method: "PUT",
+    body: JSON.stringify({ handover_users_may_pause: allowed }),
   });
 }
 

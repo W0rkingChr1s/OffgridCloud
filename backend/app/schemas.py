@@ -1257,10 +1257,14 @@ class BleStatusOut(BaseModel):
     box_name: str
     # Static X25519 key of the box, base64url without padding (§3.2).
     box_public_key: str
+    # Users (not only admins) may start the upload Wi-Fi even when that takes
+    # the box offline (app.handover).
+    handover_users_may_pause: bool = False
 
 
 class BleSettingsUpdate(BaseModel):
-    enabled: bool
+    enabled: bool | None = None
+    handover_users_may_pause: bool | None = None
 
 
 class BlePairingOut(BaseModel):
@@ -1283,6 +1287,45 @@ class BleDeviceOut(BaseModel):
 
 class BleDeviceUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+
+
+# --- Upload handover (app.handover) --------------------------------------------
+
+
+class HandoverStart(BaseModel):
+    # Required when the upload Wi-Fi takes the box's only uplink offline.
+    confirm_pause: bool = False
+
+
+class HandoverConnectionOut(BaseModel):
+    mode: str  # "fallback" (AP already up) | "ap" (upload Wi-Fi on demand)
+    ssid: str
+    passphrase: str  # empty = open network
+    address: str  # the box inside that Wi-Fi
+    scheme: str  # "https" | "http"
+    port: int
+    # Box root CA to pin (Caddy's leaf certificate rotates), SHA-256 hex and DER
+    # base64; None without HTTPS.
+    ca_sha256: str | None = None
+    ca_der: str | None = None
+    # Bearer token for the chunk-upload endpoints only, bound to this session.
+    upload_token: str
+    expires_in: int
+    idle_timeout: int
+    uplink_pause: bool
+    band: str
+    est_mbit: int
+
+
+class HandoverStatusOut(BaseModel):
+    active: bool
+    mine: bool  # the running session belongs to the calling device
+    possible: bool
+    uplink_pause: bool
+    allowed: bool
+    reason: str = ""
+    lan_addresses: list[str] = []
+    connection: HandoverConnectionOut | None = None
 
 
 class MonitorTokenOut(BaseModel):

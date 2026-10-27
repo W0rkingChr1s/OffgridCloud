@@ -235,6 +235,48 @@ und setzt `OGC_NETMERGE_PROXY` auf eine Adresse, die der Container erreicht.
 **Entfernen:** `deploy/uninstall.sh` nimmt den Dienst mit. Das Paket selbst bleibt
 (`sudo apt remove net-merge`).
 
+## Upload-WLAN für die Companion-App
+
+Die Companion-App lädt Fotos vom Handy auch dann hoch, wenn Handy und Box in
+keinem gemeinsamen Netz sind: Über Bluetooth fordert sie ein WLAN an
+(`/api/uplink/handover`, siehe [BLE-PROTOKOLL.md §7.8](BLE-PROTOKOLL.md)), tritt
+bei (ein Systemdialog beim ersten Mal) und lädt per HTTPS hoch.
+
+Welches WLAN die Box dafür nimmt:
+
+| Lage | Upload-WLAN | Box bleibt online? |
+|---|---|---|
+| Rückfall-WLAN läuft schon | genau dieses | ja (war ohnehin offline) |
+| Zweiter WLAN-Adapter (USB-Stick) | `OGC-<Box>-up` auf dem freien Adapter | ja |
+| Uplink per Kabel oder Handy-Tethering | `OGC-<Box>-up` auf `wlan0` | ja |
+| `wlan0` ist der einzige Uplink | `OGC-<Box>-up` auf `wlan0`, Uplink pausiert | **nein**, bis zum Ende des Uploads |
+
+Im letzten Fall ist die Box für die Dauer des Uploads offline: Cloud-Transfers
+warten (die Warteschlange läuft danach weiter), VPN und Fernzugriff sind weg.
+Admins dürfen das immer, normale Benutzer nur, wenn ein Admin unter
+*Bluetooth* „Benutzer dürfen für Uploads aus der App das WLAN der Box
+übernehmen“ setzt (Standard: aus). Die App muss die Pause außerdem bestätigen.
+
+Technik: Das Upload-WLAN betreibt nicht NetworkManager, sondern `hostapd`
+(nur so bekommt jedes gekoppelte Handy einen eigenen Schlüssel auf derselben,
+festen SSID) und ein `dnsmasq` nur für DHCP, ohne Gateway und DNS – das Handy
+behält sein Mobilfunk-Internet. Gestartet und beendet wird es vom Root-Helfer
+`deploy/netfallback/handover.sh` (sudoers-Regel und `OGC_NET_HANDOVER_COMMAND`
+richtet `install.sh` ein, `hostapd` installiert er mit). Der Helfer nimmt den
+Adapter NetworkManager weg und gibt ihn danach zurück; NetworkManager verbindet
+sich dann von selbst wieder mit dem bisherigen Netz, sonst greift wie gewohnt
+der Watchdog.
+
+Das Upload-WLAN geht aus, wenn die App fertig ist, nach **5 min ohne Upload**,
+spätestens nach **60 min**, beim Widerruf des Geräts und beim Neustart des
+Dienstes. Die 60 min setzt zusätzlich der Watchdog durch, falls das Backend
+hängt. Start und Ende stehen im Audit-Log (`uplink.handover_start`/`_end`).
+
+**Grenzen:** 2,4 GHz, Kanal 6 (jeder Pi kann das; realistisch 2–4 MB/s). Nicht
+auf der Hardware geprüft ist bisher, wie stabil die Rückgabe an
+NetworkManager auf allen Pi-Modellen und Firmware-Ständen läuft – Rückmeldungen
+dazu bitte als Issue.
+
 ## Sicherheit & Grenzen
 
 - **Klartext-Passwörter:** `network.json` enthält die WLAN-Passwörter im Klartext

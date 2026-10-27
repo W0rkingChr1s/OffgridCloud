@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from .. import buffers
 from ..db import get_db
-from ..deps import get_current_user
+from ..deps import get_upload_user
 from ..models import MediaItem, MediaStatus, Role, UploadFolder, UploadSession, User
 from ..schemas import MediaItemOut, UploadCreate, UploadSessionOut
 from ..storage import folder_dir, safe_filename, uploads_tmp_dir, user_can_access_folder
@@ -50,7 +50,7 @@ def _get_session(db: Session, upload_id: str, user: User) -> UploadSession:
 def create_upload(
     folder_id: int,
     payload: UploadCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_upload_user),
     db: Session = Depends(get_db),
 ) -> UploadSession:
     if db.get(UploadFolder, folder_id) is None:
@@ -83,7 +83,7 @@ def create_upload(
 @router.get("/api/uploads/{upload_id}", response_model=UploadSessionOut)
 def upload_status(
     upload_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_upload_user),
     db: Session = Depends(get_db),
 ) -> UploadSession:
     return _get_session(db, upload_id, user)
@@ -94,7 +94,7 @@ async def upload_chunk(
     upload_id: str,
     request: Request,
     x_offset: int = Header(default=0, alias="X-Offset"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_upload_user),
     db: Session = Depends(get_db),
 ) -> UploadSession:
     session = _get_session(db, upload_id, user)
@@ -140,7 +140,7 @@ async def upload_chunk(
 @router.post("/api/uploads/{upload_id}/complete", response_model=MediaItemOut)
 def complete_upload(
     upload_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_upload_user),
     db: Session = Depends(get_db),
 ) -> MediaItem:
     session = _get_session(db, upload_id, user)
@@ -193,7 +193,7 @@ def complete_upload(
 )
 def abort_upload(
     upload_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_upload_user),
     db: Session = Depends(get_db),
 ) -> Response:
     session = _get_session(db, upload_id, user)

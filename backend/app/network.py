@@ -699,6 +699,20 @@ def apply_config(db: Session) -> ApplyResult:
     return ApplyResult(ok=True, message="Netzwerk-Konfiguration angewendet.", output=output)
 
 
+def wifi_interfaces() -> list[str]:
+    """Kernel names of the Wi-Fi adapters NetworkManager sees, e.g. ``["wlan0"]``.
+
+    Includes adapters NetworkManager currently leaves alone (``unmanaged``),
+    such as one hosting the upload handover's Wi-Fi.
+    """
+    if not nmcli_available():
+        return []
+    raw = _run_nmcli(["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"])
+    if not raw:
+        return []
+    return [row["device"] for row in parse_device_status(raw) if row["type"] == "wifi"]
+
+
 def scan_wifi() -> list[str]:
     """Return visible SSIDs (best-effort). Empty list if unsupported."""
     if not nmcli_available():

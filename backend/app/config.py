@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     # ``deploy/netfallback/install.sh`` via a NOPASSWD sudoers rule, off by
     # default — flipping real network state needs root, so it must be deliberate.
     net_apply_command: str = ""
+    # Opt-in privileged command that raises/drops the upload Wi-Fi for the
+    # companion app's handover (``deploy/netfallback/handover.sh``; the backend
+    # appends ``up <file>`` or ``down``). Wired up by the same install.sh; empty
+    # = only the already running fallback AP can be handed over.
+    net_handover_command: str = ""
 
     # --- HTTPS reverse proxy (Caddy) ---------------------------------------
     # Opt-in privileged command that re-renders the Caddyfile + sets the mDNS

@@ -13,26 +13,62 @@ from .security import decode_access_token
 
 _bearer = HTTPBearer(auto_error=True)
 
+# Scope of the short-lived token the upload handover hands out (app.handover).
+UPLOAD_SCOPE = "upload"
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    db: Session = Depends(get_db),
-) -> User:
-    invalid = HTTPException(
+
+def _invalid() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = decode_access_token(credentials.credentials)
-        user_id = int(payload["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError):
-        raise invalid from None
 
-    user = db.get(User, user_id)
+
+def _payload(credentials: HTTPAuthorizationCredentials, scope: str | None = None) -> dict:
+    try:
+        payload = decode_access_token(credentials.credentials, scope=scope)
+        int(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError):
+        raise _invalid() from None
+    return payload
+
+
+def _active_user(db: Session, payload: dict) -> User:
+    user = db.get(User, int(payload["sub"]))
     if user is None or not user.active:
-        raise invalid
+        raise _invalid()
     return user
+
+
+def get_token_payload(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> dict:
+    """Claims of a regular (unscoped) token, e.g. ``dev`` when it came via BLE."""
+    return _payload(credentials)
+
+
+def get_current_user(
+    payload: dict = Depends(get_token_payload),
+    db: Session = Depends(get_db),
+) -> User:
+    return _active_user(db, payload)
+
+
+def get_upload_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    """Like :func:`get_current_user`, but also accepts the handover's upload token."""
+    try:
+        return _active_user(db, _payload(credentials))
+    except HTTPException:
+        payload = _payload(credentials, UPLOAD_SCOPE)
+    from . import handover
+
+    if not handover.token_valid(db, payload):
+        raise _invalid()
+    return _active_user(db, payload)
 
 
 def user_from_query_token(db: Session, token: str) -> User:

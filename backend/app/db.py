@@ -120,6 +120,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("system_settings", "auto_update_metered", "BOOLEAN NOT NULL DEFAULT 0"),
     ("system_settings", "auto_update_last_day", "VARCHAR(10) NOT NULL DEFAULT ''"),
     ("system_settings", "auto_update_failed_target", "VARCHAR(100) NOT NULL DEFAULT ''"),
+    # Upload handover over BLE (app.handover).
+    ("system_settings", "handover_users_may_pause", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("ble_devices", "wifi_psk_encrypted", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 

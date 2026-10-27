@@ -23,6 +23,7 @@ from . import (
     auto_import,
     autoupdate,
     buffers,
+    handover,
     notify_queue,
     pool_watch,
     setup_wizard,
@@ -60,6 +61,7 @@ from .routers import (
     system,
     transfers,
     updates,
+    uplink,
     uploads,
     users,
     vpn,
@@ -91,10 +93,13 @@ async def lifespan(app: FastAPI):
     # portal shows success/failure instead of a perpetual "running" spinner.
     resolve_pending(settings.data_dir, __version__)
     autostart_vpn()
+    # An upload Wi-Fi from before a restart has lost its session.
+    handover.cleanup_on_startup()
 
     stop = asyncio.Event()
     bot_stop = threading.Event()
-    tasks: list[asyncio.Task] = []
+    # Upload handover: idle timeout / maximum duration (cheap, always on).
+    tasks: list[asyncio.Task] = [asyncio.create_task(handover.expiry_loop(stop))]
     if settings.worker_enabled:
         tasks.append(asyncio.create_task(worker_loop(stop)))
         # Running uploads follow limit changes (pool share, schedule) live.
@@ -169,6 +174,7 @@ app.include_router(storage.router)
 app.include_router(storage.public_router)
 app.include_router(setup.router)
 app.include_router(ble.router)
+app.include_router(uplink.router)
 
 # API paths that stay open while the image's setup wizard has not run yet.
 _SETUP_OPEN_API = ("/api/setup/", "/api/health")

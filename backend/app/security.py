@@ -24,9 +24,17 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(*, user_id: int, role: str, ttl: timedelta = ACCESS_TOKEN_TTL) -> str:
+def create_access_token(
+    *,
+    user_id: int,
+    role: str,
+    ttl: timedelta = ACCESS_TOKEN_TTL,
+    claims: dict | None = None,
+) -> str:
+    """``claims`` adds e.g. ``dev`` (BLE device) or ``scope`` (upload handover)."""
     now = datetime.now(UTC)
     payload = {
+        **(claims or {}),
         "sub": str(user_id),
         "role": role,
         "iat": now,
@@ -35,6 +43,13 @@ def create_access_token(*, user_id: int, role: str, ttl: timedelta = ACCESS_TOKE
     return jwt.encode(payload, get_settings().secret_key, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict:
-    """Decode and validate a token. Raises jwt.PyJWTError on failure."""
-    return jwt.decode(token, get_settings().secret_key, algorithms=[ALGORITHM])
+def decode_access_token(token: str, *, scope: str | None = None) -> dict:
+    """Decode and validate a token. Raises jwt.PyJWTError on failure.
+
+    A token carrying a ``scope`` claim (the upload handover's) is only accepted
+    where exactly that scope is asked for, so it never opens the rest of the API.
+    """
+    payload = jwt.decode(token, get_settings().secret_key, algorithms=[ALGORITHM])
+    if payload.get("scope") != scope:
+        raise jwt.InvalidTokenError("token scope not accepted here")
+    return payload

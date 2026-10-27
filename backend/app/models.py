@@ -498,6 +498,10 @@ class SystemSettings(Base):
     # docs/BLE-PROTOKOLL.md). On by default: pairing still needs a code from
     # the web portal, and switching it off removes the rescue path.
     ble_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Upload handover (app.handover): may a non-admin start the upload Wi-Fi
+    # when that takes the box's only uplink offline for its duration? Off by
+    # default — the pause hits every user (cloud sync, VPN, remote access).
+    handover_users_may_pause: Mapped[bool] = mapped_column(Boolean, default=False)
     # Unattended updates (app.autoupdate). Off by default: an update restarts
     # the service, so the operator opts in and picks a quiet time window
     # (box-local hours, start == end means around the clock).
@@ -611,6 +615,10 @@ class BleDevice(Base):
     public_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # hex
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # This phone's own key for the box's upload Wi-Fi (app.handover), created
+    # on first use. Stable, so the phone's OS only asks once to join; gone with
+    # the device on revocation.
+    wifi_psk_encrypted: Mapped[str] = mapped_column(Text, default="")
 
     user: Mapped[User] = relationship()
 
