@@ -20,6 +20,7 @@
 # for testing).
 set -uo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DEFAULT="/opt/offgridcloud/data/network.json"
 ONESHOT=0
 CONFIG=""
@@ -36,6 +37,8 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 FAIL_FILE="$STATE_DIR/net-fail-count"
 PROBE_FILE="$STATE_DIR/ap-probe-last"
 BLIND_FILE="$STATE_DIR/ap-blind-probe-last"
+# Written by handover.sh while the companion app's upload Wi-Fi is up.
+HANDOVER_STATE="$STATE_DIR/handover.state"
 # How long `nmcli connection up` may take when rejoining a known network.
 JOIN_WAIT="${OGC_NETWATCH_JOIN_WAIT:-25}"
 # Settle time after a rescan before reading the scan results.
@@ -199,10 +202,28 @@ probe_known_networks() {
   return 1
 }
 
+# While the upload Wi-Fi is up its adapter belongs to hostapd, and on a
+# single-radio box the uplink is paused on purpose — hands off, no fallback AP.
+# Only enforce its deadline, in case the backend that should end it is gone.
+# Returns 0 while a handover is running (skip this round).
+handover_running() {
+  [[ -f "$HANDOVER_STATE" ]] || return 1
+  local iface deadline managed
+  read -r iface deadline managed < "$HANDOVER_STATE" || true
+  if [[ "$deadline" =~ ^[0-9]+$ ]] && (( $(date +%s) >= deadline )); then
+    log "upload Wi-Fi on $iface past its maximum duration — dropping it"
+    bash "$HERE/handover.sh" down || true
+    return 1
+  fi
+  echo 0 > "$FAIL_FILE"
+  return 0
+}
+
 evaluate_once() {
   if ! command -v nmcli >/dev/null 2>&1; then
     log "nmcli not present — nothing to do"; return 0
   fi
+  handover_running && return 0
   local enabled ap_name threshold
   enabled="$(cfg fallback_enabled 0)"
   ap_name="$(cfg ap_connection_name offgridcloud-ap)"

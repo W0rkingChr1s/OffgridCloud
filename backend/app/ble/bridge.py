@@ -33,6 +33,8 @@ from .session import NOTICE_TEXT, BackendUnavailable, NotJson
 TOKEN_TTL = timedelta(minutes=5)
 TOKEN_RENEW = 240.0  # seconds; renew well before expiry
 REQUEST_TIMEOUT = 15.0
+# Raising the upload Wi-Fi (hostapd, handing the adapter over) takes longer.
+HANDOVER_TIMEOUT = 60.0
 HEALTH_TIMEOUT = 2.0
 
 
@@ -132,12 +134,16 @@ class BoxHost:
         return await _db(registry.device_still_valid, device_id)
 
     def _token(self, device: DeviceInfo) -> str:
-        cached = self._tokens.get(device.user_id)
+        # Per device, not per user: the token names the device (``dev``), which
+        # e.g. the upload handover binds its Wi-Fi key and session to.
+        cached = self._tokens.get(device.id)
         now = time.monotonic()
         if cached and now - cached[1] < TOKEN_RENEW:
             return cached[0]
-        token = create_access_token(user_id=device.user_id, role=device.role, ttl=TOKEN_TTL)
-        self._tokens[device.user_id] = (token, now)
+        token = create_access_token(
+            user_id=device.user_id, role=device.role, ttl=TOKEN_TTL, claims={"dev": device.id}
+        )
+        self._tokens[device.id] = (token, now)
         return token
 
     async def forward(
@@ -152,7 +158,8 @@ class BoxHost:
         if query:
             url += "?" + urlencode({str(k): str(v) for k, v in query.items()})
         headers = {"Authorization": f"Bearer {self._token(device)}"}
-        return await asyncio.to_thread(_http, method, url, body, headers, REQUEST_TIMEOUT)
+        timeout = HANDOVER_TIMEOUT if path == "/api/uplink/handover" else REQUEST_TIMEOUT
+        return await asyncio.to_thread(_http, method, url, body, headers, timeout)
 
     async def backend_up(self) -> bool:
         try:

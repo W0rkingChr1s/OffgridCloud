@@ -421,7 +421,7 @@ Segmente (`/api/network` erlaubt `/api/network` und `/api/network/…`).
 | `/api/updates` | alle | prüfen, einspielen (Admin) |
 | `/api/folders` | GET | Ordner- und Medienliste, ohne Downloads (`…/download` gesperrt) |
 | `/api/media/search` | GET | |
-| `/api/uplink/handover` | GET, POST, DELETE | Upload-Handover (Companion-Plan §3.6) |
+| `/api/uplink/handover` | GET, POST, DELETE | Upload-Handover, siehe §7.8 |
 | `/api/pool/overview` | GET | Flottenübersicht (Admin). Der Hub fragt dabei alle Peers ab: bis 8 Peers höchstens ~6 s, darüber länger |
 | `/api/pool/peers/{id}/control` | POST | Uploads eines Peers pausieren/fortsetzen, Fehlgeschlagene neu (Admin) |
 | `/api/pool/peers/{id}/jobs` | GET | Job-Liste eines Peers, max. 100 (Admin). Die App SOLL mit `status`-Filter fragen |
@@ -471,6 +471,48 @@ denselben Rechten (Admin-Felder nur für Admins):
 | `notices` | Admin | höchstens 3 jüngste Hinweise (Text gekürzt auf 120 Zeichen) |
 
 **`session`**: Änderungen der Verbindung, z. B. `{"write": false}` (§7.6).
+
+### 7.8 Upload-Handover
+
+Medien laufen nie über BLE. Die App handelt über BLE eine WLAN-Verbindung zur
+Box aus und lädt darüber mit dem normalen Chunk-Protokoll hoch
+(`POST /api/folders/{id}/uploads`, `PUT`/`GET`/`DELETE /api/uploads/{id}`,
+`POST /api/uploads/{id}/complete`). Hintergrund und Entscheidungen:
+Companion-Plan §3.6.
+
+Die Endpunkte gibt es **nur über die Brücke**: Ihr Token nennt das gekoppelte
+Gerät (Claim `dev`). Aus dem Web-UI antworten sie mit 403.
+
+- **`GET /api/uplink/handover`** — Lagebild, ohne etwas zu starten:
+  `active`, `mine` (läuft für dieses Gerät), `possible`, `uplink_pause` (die Box
+  ginge offline), `allowed`, `reason` (deutsch, für die Anzeige),
+  `lan_addresses` (IPs der Box, falls das Handy schon im selben Netz ist) und bei
+  `mine` die `connection` wie bei `POST`. Ein `GET` zählt als Lebenszeichen der
+  eigenen Sitzung.
+- **`POST /api/uplink/handover`**, Body optional `{"confirm_pause": true}` —
+  startet die Sitzung oder liefert die laufende des Geräts erneut. Antwort:
+
+  | Feld | Bedeutung |
+  |---|---|
+  | `mode` | `fallback` (Rückfall-WLAN läuft schon) oder `ap` (Upload-WLAN auf Abruf) |
+  | `ssid`, `passphrase` | WLAN-Zugang; bei `ap` ein fester Schlüssel je Gerät, bei `fallback` der des Rückfall-WLANs (leer = offen) |
+  | `address` | IP der Box in diesem WLAN (`10.43.0.1` bzw. die des Rückfall-WLANs) |
+  | `scheme`, `port` | `https`/443, ohne eingerichtetes HTTPS `http`/8000 |
+  | `ca_sha256`, `ca_der` | Root-CA der Box (SHA-256 hex, DER base64) zum Pinnen; `null` ohne HTTPS. Das Leaf-Zertifikat wechselt etwa alle 12 h, deshalb die CA |
+  | `upload_token` | Bearer-Token **nur** für die Chunk-Upload-Endpunkte, an diese Sitzung gebunden |
+  | `expires_in`, `idle_timeout` | Sekunden bis zum harten Ende (max. 60 min) bzw. Leerlauf-Grenze (5 min) |
+  | `uplink_pause` | die Box ist während der Sitzung offline |
+  | `band`, `est_mbit` | Funkband und grob erwarteter Durchsatz für die Dauer-Schätzung |
+
+  Fehler: `403` Gerät nicht gekoppelt oder Benutzer darf die Box nicht offline
+  nehmen (*Admin → Bluetooth*), `409` anderes Gerät ist dran, kein Weg möglich
+  oder `confirm_pause` fehlt, `502` das WLAN ließ sich nicht starten.
+- **`DELETE /api/uplink/handover`** — beendet die eigene Sitzung; das Token wird
+  sofort ungültig, das Upload-WLAN geht aus, ein pausierter Uplink kommt zurück.
+
+Die Box beendet die Sitzung auch selbst: nach 5 min ohne Upload-Anfrage oder
+`GET`, nach 60 min am Stück, beim Widerruf des Geräts und beim Neustart des
+Dienstes. Es gibt höchstens eine Sitzung je Box.
 
 ## 8. Grenzen und Schutzmaßnahmen
 

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import handover
 from ..admin_ops import audit, get_system_settings
 from ..ble.keys import ble_dir, box_public_key
 from ..ble.registry import PAIRING_TTL, create_pairing, pairing_link
@@ -65,14 +66,16 @@ def _status(db: Session) -> BleStatusOut:
     pk = base64.urlsafe_b64encode(box_public_key()).rstrip(b"=").decode("ascii")
     running = service_running()
     error = None if running else _service_status().get("error")
+    settings = get_system_settings(db)
     return BleStatusOut(
-        enabled=get_system_settings(db).ble_enabled,
+        enabled=settings.ble_enabled,
         service_running=running,
         service_installed=SERVICE_UNIT.exists(),
         adapter_present=adapter_present(),
         service_error=error if isinstance(error, str) else None,
         box_name=node_name(),
         box_public_key=pk,
+        handover_users_may_pause=settings.handover_users_may_pause,
     )
 
 
@@ -106,9 +109,13 @@ def update_settings(
     admin: User = Depends(require_admin),
 ) -> BleStatusOut:
     row = get_system_settings(db)
-    row.ble_enabled = payload.enabled
+    changes = payload.model_dump(exclude_none=True)
+    if "enabled" in changes:
+        row.ble_enabled = changes["enabled"]
+    if "handover_users_may_pause" in changes:
+        row.handover_users_may_pause = changes["handover_users_may_pause"]
     db.commit()
-    audit(db, admin, "ble.settings", f"enabled={payload.enabled}")
+    audit(db, admin, "ble.settings", ", ".join(f"{k}={v}" for k, v in changes.items()))
     return _status(db)
 
 
@@ -159,5 +166,7 @@ def revoke_device(
     name = device.name
     db.delete(device)
     db.commit()
-    # The BLE service drops open sessions of revoked devices within seconds.
+    # Its upload Wi-Fi goes at once; the BLE service drops open sessions of
+    # revoked devices within seconds.
+    handover.stop(db, "Gerät widerrufen", device_id=device_id)
     audit(db, user, "ble.revoke", f"{name} (id {device_id})")
