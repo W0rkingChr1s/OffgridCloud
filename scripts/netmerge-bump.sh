@@ -3,9 +3,11 @@
 #
 # Looks up the latest net-merge release (or takes VERSION as argument), and if
 # it is newer than NM_VERSION:
-#   1. downloads the release tarballs, computes their SHA-256 and checks the
+#   1. checks the signed apt repository carries it for amd64, arm64 and armhf
+#      (install.sh installs exactly that version from there),
+#   2. downloads the release tarballs, computes their SHA-256 and checks the
 #      x86_64 binary reports that version,
-#   2. rewrites NM_VERSION, the hashes and the version named in
+#   3. rewrites NM_VERSION, the hashes and the version named in
 #      docs/NETZWERK-REDUNDANZ.md.
 #
 # Run from the repository root. Used by .github/workflows/netmerge-bump.yml.
@@ -16,7 +18,8 @@ set -euo pipefail
 
 SCRIPT="deploy/netmerge/install.sh"
 DOC="docs/NETZWERK-REDUNDANZ.md"
-UPSTREAM="rohit267/net-merge"
+UPSTREAM="net-merge/net-merge"
+APT="https://pkg.net-merge.org/apt/dists/stable/main"
 
 out() { [[ -n "${GITHUB_OUTPUT:-}" ]] && echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
 
@@ -38,7 +41,16 @@ if [[ "$old" == "$new" || "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1
   exit 0
 fi
 
-# 1. Tarballs: hashes for the pin, plus a smoke test of the x86_64 build.
+# 1. apt repository: install.sh asks for net-merge=$new, so all three must have it.
+for arch in amd64 arm64 armhf; do
+  if ! curl -fsSL "$APT/binary-$arch/Packages" | grep -qx "Version: $new"; then
+    echo "::warning::net-merge $new is not in the apt repository for $arch yet — trying again next run."
+    out changed false
+    exit 0
+  fi
+done
+
+# 2. Tarballs: hashes for the pin, plus a smoke test of the x86_64 build.
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 declare -A sums
@@ -54,7 +66,7 @@ if [[ "$reported" != "net-merge $new" ]]; then
   exit 1
 fi
 
-# 2. Rewrite the pin.
+# 3. Rewrite the pin.
 sed -i "s/^NM_VERSION=\"$old\"$/NM_VERSION=\"$new\"/" "$SCRIPT"
 for arch in x86_64 aarch64 armv7l; do
   sed -i "s/^  \[$arch\]=\"[0-9a-f]\{64\}\"$/  [$arch]=\"${sums[$arch]}\"/" "$SCRIPT"

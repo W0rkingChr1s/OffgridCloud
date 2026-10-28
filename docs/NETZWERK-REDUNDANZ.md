@@ -158,7 +158,7 @@ Zweifel das Handy separat laden oder ein Netzteil mit genug Reserve nehmen.
 Normalerweise trägt genau ein Uplink die Uploads: der mit der besten Routen-
 Metrik. Mit der Leitungsbündelung nutzt die Box **alle Uplinks gleichzeitig**,
 z. B. WLAN und ein per USB angestecktes LTE-Handy. Dafür sorgt
-[net-merge](https://github.com/rohit267/net-merge) (MIT-Lizenz) von Rohit Mahto.
+[net-merge](https://github.com/net-merge/net-merge) (MIT-Lizenz) von Rohit Mahto.
 
 **Wie es eingebaut ist:** net-merge läuft als eigener Dienst
 `offgridcloud-netmerge` und stellt einen SOCKS5-Proxy auf `127.0.0.1:1080`
@@ -181,9 +181,9 @@ sudo /opt/offgridcloud/deploy/netmerge/install.sh
 ```
 
 Das Skript installiert eine fest gepinnte net-merge-Version (`NM_VERSION` im
-Skript, derzeit 0.3.3) aus dem Release-Tarball nach `/usr/local/bin`
-(SHA-256 geprüft). Das frühere apt-Repository von net-merge gibt es nicht mehr;
-dessen Eintrag und das alte Paket räumt das Skript weg. Neuere
+Skript, derzeit 0.3.3): auf Raspberry Pi OS/Debian aus dessen signiertem
+apt-Repository `pkg.net-merge.org` (Schlüssel-Fingerabdruck geprüft, Paket per `apt-mark hold`
+festgehalten), sonst, oder wenn das Repository die gepinnte Version nicht mehr führt, aus dem Release-Tarball (SHA-256 geprüft). Neuere
 net-merge-Versionen kommen also nur mit einem OffgridCloud-Update. Es startet den Dienst und trägt `OGC_NETMERGE_PROXY` in die `.env`
 ein. Beim Installer `deploy/install.sh` ist es der Punkt „Leitungsbündelung“
 (bzw. `OGC_WITH_NETMERGE=1`). Danach unter **Bandbreite → Leitungsbündelung**
@@ -232,8 +232,8 @@ eigener rclone-Prozess.
 **Docker:** Nicht vorgesehen. Wer es trotzdem will, startet net-merge auf dem Host
 und setzt `OGC_NETMERGE_PROXY` auf eine Adresse, die der Container erreicht.
 
-**Entfernen:** `deploy/uninstall.sh` nimmt den Dienst mit. Das Programm selbst bleibt
-(`sudo rm /usr/local/bin/net-merge`).
+**Entfernen:** `deploy/uninstall.sh` nimmt den Dienst mit. Das Paket selbst bleibt
+(`sudo apt remove net-merge`).
 
 ## Upload-WLAN für die Companion-App
 

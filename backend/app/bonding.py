@@ -1,6 +1,6 @@
 """Link bundling ("Leitungsbündelung") via net-merge.
 
-`net-merge <https://github.com/rohit267/net-merge>`_ spreads connections over
+`net-merge <https://github.com/net-merge/net-merge>`_ spreads connections over
 every uplink the box has — cable, Wi-Fi, a USB-tethered phone — instead of
 letting the default route pick one. OffgridCloud runs it as a plain SOCKS5
 proxy on loopback (``deploy/netmerge/install.sh``) and routes only rclone

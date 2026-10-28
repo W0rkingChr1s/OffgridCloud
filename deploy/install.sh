@@ -431,10 +431,11 @@ warn() { echo "   $1" >&2; WARNINGS+=("$1"); }
 # --- System dependencies ----------------------------------------------------
 step "Installing system dependencies..."
 if command -v apt-get >/dev/null 2>&1; then
-  # net-merge's apt repository is gone; older link-bundling installs still list
-  # it, and apt-get update fails on it (exit 100). netmerge/install.sh now uses
-  # the release tarball.
-  rm -f /etc/apt/sources.list.d/net-merge.list /usr/share/keyrings/net-merge.gpg
+  # net-merge moved its apt repository to pkg.net-merge.org (same signing key);
+  # apt-get update fails on the old URL that older link-bundling installs
+  # wrote (exit 100). netmerge/install.sh writes the new one.
+  sed -i 's#https://rohit267.github.io/net-merge/apt#https://pkg.net-merge.org/apt#' \
+    /etc/apt/sources.list.d/net-merge.list 2>/dev/null || true
   # One dead third-party repository must not stop an update: carry on with the
   # package lists apt still has; a really missing package fails below anyway.
   apt-get update \
