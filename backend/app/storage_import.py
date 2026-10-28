@@ -21,6 +21,12 @@ Jobs run in a background thread, one file at a time, streaming 1 MiB blocks
 (fsync before the rename) so a 1 GB Pi never holds a video in RAM and a power
 cut leaves at most an orphan temp file. Job state is in memory only: after a
 restart the admin simply re-runs the job — finished files are skipped.
+
+A copy must never make the box unresponsive: only one job runs at a time
+(others wait as ``pending``), its thread runs at the lowest CPU and I/O
+priority, and it keeps its footprint in the page cache small. Otherwise a card
+copy fills the service's memory limit with dirty pages for a slow USB drive and
+the web UI stalls behind the writeback.
 """
 
 from __future__ import annotations
@@ -29,6 +35,8 @@ import hashlib
 import logging
 import os
 import re
+import shutil
+import subprocess
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -43,6 +51,8 @@ from .storage import folder_dir, safe_filename, uploads_tmp_dir
 logger = logging.getLogger("offgridcloud.storage_import")
 
 CHUNK = 1024 * 1024
+# Flush the target and drop both files from the page cache this often.
+FLUSH_EVERY = 16 * CHUNK
 # Leave this much headroom on the target so the box never fills to the brim.
 SPACE_RESERVE = 512 * 1024 * 1024
 MAX_FILES = 20000
@@ -193,6 +203,8 @@ class ImportJob:
 _jobs: dict[str, ImportJob] = {}
 _cancel: dict[str, threading.Event] = {}
 _lock = threading.Lock()
+# One copy at a time: two would only fight over the same USB bus.
+_run_slot = threading.Lock()
 
 
 def list_jobs() -> list[ImportJob]:
@@ -288,16 +300,37 @@ def _size(p: Path) -> int:
     return _stat(p)[0]
 
 
+def _lower_priority() -> None:
+    """Lowest CPU and best-effort I/O priority for the calling thread only."""
+    tid = threading.get_native_id()
+    try:
+        os.setpriority(os.PRIO_PROCESS, tid, 19)
+    except (AttributeError, OSError):
+        pass
+    if shutil.which("ionice"):
+        try:
+            subprocess.run(["ionice", "-c", "2", "-n", "7", "-p", str(tid)],
+                           capture_output=True, timeout=5, check=False)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
 def _register(job: ImportJob, run, run_async: bool) -> ImportJob:
     ev = threading.Event()
     with _lock:
         _jobs[job.id] = job
         _cancel[job.id] = ev
+
+    def worker() -> None:
+        _lower_priority()
+        with _run_slot:
+            run(job, ev)
+
     if run_async:
-        threading.Thread(target=run, args=(job, ev), name=f"{job.kind}-{job.id[:8]}",
-                         daemon=True).start()
+        threading.Thread(target=worker, name=f"{job.kind}-{job.id[:8]}", daemon=True).start()
     else:
-        run(job, ev)
+        with _run_slot:
+            run(job, ev)
     return job
 
 
@@ -388,8 +421,16 @@ def _unique_name(taken: set[str], name: str) -> str:
         n += 1
 
 
+def _drop_cache(fh) -> None:
+    try:
+        os.posix_fadvise(fh.fileno(), 0, 0, os.POSIX_FADV_DONTNEED)
+    except (AttributeError, OSError):
+        pass
+
+
 def _copy(src: Path, dst_tmp: Path, ev: threading.Event, job: ImportJob) -> str:
     digest = hashlib.sha256()
+    unflushed = 0
     with open(src, "rb") as fin, open(dst_tmp, "wb") as fout:
         while True:
             if ev.is_set():
@@ -399,10 +440,21 @@ def _copy(src: Path, dst_tmp: Path, ev: threading.Event, job: ImportJob) -> str:
                 break
             fout.write(block)
             digest.update(block)
+            unflushed += len(block)
+            if unflushed >= FLUSH_EVERY:
+                # Write back now, in small steps, instead of piling up dirty
+                # pages until the kernel throttles everything (module docstring).
+                fout.flush()
+                os.fdatasync(fout.fileno())
+                _drop_cache(fout)
+                _drop_cache(fin)
+                unflushed = 0
             with _lock:
                 job.done_bytes += len(block)
         fout.flush()
         os.fsync(fout.fileno())
+        _drop_cache(fout)
+        _drop_cache(fin)
     return digest.hexdigest()
 
 

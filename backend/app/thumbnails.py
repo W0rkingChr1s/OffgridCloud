@@ -6,11 +6,13 @@ Thumbnails are cached under ``<buffer>/.thumbs/<media_id>.jpg``.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import shutil
 import subprocess
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .config import get_settings
@@ -19,6 +21,18 @@ logger = logging.getLogger("offgridcloud.thumbnails")
 
 THUMB_MAX = 480
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mpg", ".mpeg"}
+
+# Thumbnails are rendered on these two threads only; the endpoints await them.
+# A gallery fires hundreds of requests at once, and they must queue here, not
+# in the server's shared thread pool: that pool also serves every other API
+# call and the web UI's static files. Blocking it on a thumbnail slot took the
+# whole site down while a card copy slowed the thumbnails to a crawl.
+_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="thumbs")
+
+
+async def render(fn, *args):
+    """Run a thumbnail function on the thumbnail threads and await it."""
+    return await asyncio.get_running_loop().run_in_executor(_EXECUTOR, fn, *args)
 
 
 def _thumbs_dir() -> Path:
@@ -83,10 +97,10 @@ def get_or_create_thumb(media_id: int, source_path: str, filename: str) -> Path 
 # The storage gallery shows hundreds of camera files at once. Generating them
 # must stay cheap on a Pi 3: JPEGs decode in draft mode (DCT scaling, ~1/8 the
 # work), RAW files use the preview JPEG every camera embeds, and at most two
-# thumbnails are computed at a time so a gallery scroll can't starve uploads.
+# thumbnails are computed at a time (see _EXECUTOR) so a gallery scroll can't
+# starve uploads.
 
 SOURCE_SIZES = (320, 1600)
-_SOURCE_LIMIT = threading.BoundedSemaphore(2)
 _SOURCE_CACHE_MAX = 6000  # files; oldest are pruned beyond this
 _RAW_SCAN_BYTES = 24 * 1024 * 1024
 
@@ -165,35 +179,40 @@ def _raw_thumb(src: Path, dst: Path, size: int) -> bool:
         return False
 
 
+def source_thumb_path(size: int, key: str) -> Path:
+    """Where the thumbnail of a medium file is cached (see :func:`source_thumb`)."""
+    size = min(SOURCE_SIZES, key=lambda s: abs(s - size))
+    digest = hashlib.sha1(f"{key}|{size}".encode()).hexdigest()
+    return _source_dir() / f"{digest}.jpg"
+
+
 def source_thumb(src: Path, kind: str, size: int, key: str) -> Path | None:
     """Cached thumbnail for a file on an attached medium, or None.
 
     ``key`` identifies the exact file version (device UUID, path, size, mtime)
-    so a re-shot card with recycled names never shows a stale picture.
+    so a re-shot card with recycled names never shows a stale picture. Call it
+    through :func:`render` from a request.
     """
+    dst = source_thumb_path(size, key)
     size = min(SOURCE_SIZES, key=lambda s: abs(s - size))
-    digest = hashlib.sha1(f"{key}|{size}".encode()).hexdigest()
-    dst = _source_dir() / f"{digest}.jpg"
     if dst.exists():
         return dst
     if kind not in {"photo", "raw", "video"}:
         return None
-    with _SOURCE_LIMIT:
-        if dst.exists():
-            return dst
-        tmp = dst.with_suffix(".tmp.jpg")
-        if kind == "video":
-            ok = _make_video_thumb(src, tmp)
-            if ok and size != THUMB_MAX:
-                ok = _image_thumb(tmp, tmp, size)
-        elif kind == "raw":
-            ok = _raw_thumb(src, tmp, size) or _image_thumb(src, tmp, size)
-        else:
-            ok = _image_thumb(src, tmp, size)
-        if not ok:
-            tmp.unlink(missing_ok=True)
-            return None
-        tmp.replace(dst)
-    if hash(digest) % 50 == 0:
+    # Per thread: both thumbnail threads may render the same file at once.
+    tmp = dst.with_suffix(f".{threading.get_ident()}.tmp.jpg")
+    if kind == "video":
+        ok = _make_video_thumb(src, tmp)
+        if ok and size != THUMB_MAX:
+            ok = _image_thumb(tmp, tmp, size)
+    elif kind == "raw":
+        ok = _raw_thumb(src, tmp, size) or _image_thumb(src, tmp, size)
+    else:
+        ok = _image_thumb(src, tmp, size)
+    if not ok:
+        tmp.unlink(missing_ok=True)
+        return None
+    tmp.replace(dst)
+    if hash(dst.stem) % 50 == 0:
         _prune_source_cache()
     return dst

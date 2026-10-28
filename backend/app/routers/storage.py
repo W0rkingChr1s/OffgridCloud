@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .. import auto_import, buffers, drives, status_led, storage_import, thumbnails
 from ..admin_ops import audit, disk_usage
@@ -452,12 +453,28 @@ def gallery(device: str, path: str = Query("", max_length=4096)) -> StorageGalle
 
 
 @public_router.get("/thumb")
-def thumb(
+async def thumb(
     device: str,
     path: str = Query(..., max_length=4096),
     token: str = Query(...),
     size: int = Query(320, ge=64, le=2048),
 ) -> FileResponse:
+    # async on purpose: see thumbnails._EXECUTOR.
+    src, key = await run_in_threadpool(_thumb_source, device, path, token)
+    out = thumbnails.source_thumb_path(size, key)
+    if not await run_in_threadpool(out.exists):
+        out = await thumbnails.render(
+            thumbnails.source_thumb, src, storage_import.media_kind(src.name), size, key
+        )
+    if out is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
+    return FileResponse(
+        out, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"}
+    )
+
+
+def _thumb_source(device: str, path: str, token: str) -> tuple[Path, str]:
+    """Check access, resolve the file and its cache key (quick, no rendering)."""
     with SessionLocal() as db:
         user = user_from_query_token(db, token)
         if user.role != Role.ADMIN:
@@ -475,13 +492,7 @@ def thumb(
     if not src.is_file() or src.is_symlink():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     fsize, mtime = storage_import._stat(src)
-    key = f"{part.uuid or device}|{path}|{fsize}|{int(mtime)}"
-    out = thumbnails.source_thumb(src, storage_import.media_kind(src.name), size, key)
-    if out is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
-    return FileResponse(
-        out, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"}
-    )
+    return src, f"{part.uuid or device}|{path}|{fsize}|{int(mtime)}"
 
 
 # --- Cache drives ----------------------------------------------------------------
