@@ -13,6 +13,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Weboberfläche hängt während einer Kopie auf den Cache:** Die Galerie fordert hunderte Vorschaubilder auf einmal an. Jede dieser Anfragen belegte einen Thread des gemeinsamen Server-Pools, während sie auf einen der zwei Render-Plätze wartete. Bremste ein laufender Kopiervorgang das Lesen von der Karte, waren alle 40 Threads belegt, und die ganze Website samt Login und statischen Dateien hing. Vorschaubilder warten jetzt ohne Thread in einer eigenen Warteschlange. Der Kopierjob selbst läuft mit niedrigster CPU- und I/O-Priorität, schreibt alle 16 MiB zurück, statt den Page-Cache (im 400-MB-Limit des Dienstes) vollzuschreiben, und es läuft nur noch ein Import- oder Cache-Job gleichzeitig. Weitere Jobs warten als „wartet“.
 - **Safari zeigt statt einer Fehlermeldung eine Hilfeseite, wenn die Box nicht erreichbar ist:** Fand der Service Worker bei einem Seitenaufruf weder die Box noch die App-Seite im Cache, zeigte Safari eine eigene Fehlerseite ohne Ausweg. Jetzt kommt eine Seite „Box nicht erreichbar“ mit Erklärung zum Zertifikat und „Neu verbinden“-Knopf (setzt Service Worker und Cache zurück). Hinweis: Die Meldung „Returned response is null“ stammt von Service-Worker-Versionen vor 0.7.5. Safari kann so einen alten Worker bei abgelaufenem Zertifikat nicht selbst ersetzen, dann einmal die Websitedaten von `<name>.local` in Safari löschen.
 
 ## [0.8.5] – 2026-10-25

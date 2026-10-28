@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -411,6 +413,44 @@ def test_thumbnails_for_photo_and_raw(client, admin_auth, rig):
     assert r.status_code == 401
 
 
+def test_slow_thumbnails_do_not_block_the_rest_of_the_site(client, admin_auth, rig,
+                                                              monkeypatch):
+    """A gallery's flood of thumbnails, slowed down by a card copy, used to
+    occupy every thread of the server's shared pool, so the whole web UI hung."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app import thumbnails
+
+    release = threading.Event()
+    started = threading.Semaphore(0)
+
+    def stuck(*args):
+        started.release()
+        release.wait(30)
+        return None
+
+    monkeypatch.setattr(thumbnails, "source_thumb", stuck)
+    tok = _token_of(admin_auth)
+    # More than anyio's 40 worker threads that serve every sync endpoint.
+    n = 60
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        futures = [
+            pool.submit(client.get, "/api/storage/thumb",
+                        params={"device": "/dev/sdb1", "token": tok,
+                                "path": "DCIM/100CANON/IMG_0001.JPG", "size": 64 + i})
+            for i in range(n)
+        ]
+        try:
+            assert started.acquire(timeout=10)
+            t0 = time.monotonic()
+            r = client.get("/api/storage", headers=admin_auth)
+            assert r.status_code == 200
+            assert time.monotonic() - t0 < 5
+        finally:
+            release.set()
+        assert all(f.result(timeout=60).status_code == 404 for f in futures)
+
+
 def test_cache_backup_browse_and_import(client, admin_auth, rig):
     r = client.post("/api/storage/caches", headers=admin_auth, json={"device": "/dev/sdd1"})
     assert r.status_code == 201, r.text
@@ -582,3 +622,20 @@ def test_buffer_drive_refuses_fat32(client, admin_auth, rig):
     assert r.status_code == 409 and "exFAT" in r.json()["detail"]
     r = client.post("/api/storage/buffers", headers=admin_auth, json={"device": "/dev/mmcblk0p2"})
     assert r.status_code == 409
+
+
+def test_copy_flushes_in_steps_and_keeps_the_hash(tmp_path, monkeypatch):
+    import hashlib
+
+    monkeypatch.setattr(storage_import, "FLUSH_EVERY", storage_import.CHUNK)
+    synced = []
+    real = os.fdatasync
+    monkeypatch.setattr(os, "fdatasync", lambda fd: (synced.append(fd), real(fd)))
+    data = os.urandom(3 * storage_import.CHUNK + 123)
+    src, dst = tmp_path / "a.mov", tmp_path / "b.part"
+    src.write_bytes(data)
+    job = storage_import.ImportJob(id="x", kind="cache", device="/dev/sdb1", user_id=1)
+    sha = storage_import._copy(src, dst, threading.Event(), job)
+    assert sha == hashlib.sha256(data).hexdigest()
+    assert dst.read_bytes() == data and job.done_bytes == len(data)
+    assert len(synced) == 3

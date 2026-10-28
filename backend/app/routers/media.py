@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..db import SessionLocal, get_db
 from ..deps import get_current_user
@@ -17,7 +18,7 @@ from ..schemas import MediaSearchOut, TagsUpdate
 from ..security import decode_access_token
 from ..storage import accessible_folder_ids, user_can_access_folder
 from ..tagging import all_tags, normalise_tags, set_tags, tags_for
-from ..thumbnails import get_or_create_thumb
+from ..thumbnails import get_or_create_thumb, render, thumb_path
 
 router = APIRouter(prefix="/api/media", tags=["media"])
 
@@ -43,7 +44,18 @@ def _user_from_token(db: Session, token: str) -> User:
 
 
 @router.get("/{media_id}/thumbnail")
-def thumbnail(media_id: int, token: str) -> FileResponse:
+async def thumbnail(media_id: int, token: str) -> FileResponse:
+    # async on purpose: see thumbnails._EXECUTOR.
+    media = await run_in_threadpool(_thumbnail_media, media_id, token)
+    thumb = thumb_path(media.id)
+    if not await run_in_threadpool(thumb.exists):
+        thumb = await render(get_or_create_thumb, media.id, media.stored_path, media.filename)
+    if thumb is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
+    return FileResponse(thumb, media_type="image/jpeg")
+
+
+def _thumbnail_media(media_id: int, token: str) -> MediaItem:
     with SessionLocal() as db:
         user = _user_from_token(db, token)
         media = db.get(MediaItem, media_id)
@@ -53,11 +65,8 @@ def thumbnail(media_id: int, token: str) -> FileResponse:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access")
         if media.local_deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local copy removed")
-
-        thumb = get_or_create_thumb(media.id, media.stored_path, media.filename)
-        if thumb is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No thumbnail")
-        return FileResponse(thumb, media_type="image/jpeg")
+        db.expunge(media)
+        return media
 
 
 @router.get("/{media_id}/download")
