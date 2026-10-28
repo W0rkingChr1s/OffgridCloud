@@ -280,6 +280,11 @@ Code über das Web-Portal (*Bluetooth → Gerät koppeln*). Die Box bringt dafü
 eigenen Bluetooth-Dienst mit (im Installer wählbar, im Portal abschaltbar, siehe
 [Betriebshandbuch](docs/BETRIEB.md)); die App selbst ist noch in Entwicklung.
 
+Fotos lädt die App auch hoch, wenn Handy und Box in keinem gemeinsamen Netz sind: Sie
+fordert über Bluetooth ein **Upload-WLAN** an (das Rückfall-WLAN der Box oder ein eigenes
+`OGC-<Box>-up`), lädt darüber per HTTPS hoch, und das WLAN geht danach von selbst wieder
+aus. Details: [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md#upload-wlan-für-die-companion-app).
+
 ## Dokumentation
 
 Die ausführlichen Anleitungen liegen unter [`docs/`](docs/) (und sind für das
