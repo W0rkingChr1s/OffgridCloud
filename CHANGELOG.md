@@ -13,6 +13,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Upload-WLAN der Companion-App nimmt die Box nicht mehr offline:** Hing die Box nur per WLAN am Internet, pausierte sie für den Handover ihre Verbindung. Jetzt läuft das Upload-WLAN auf einem virtuellen Interface `ogcup0` neben der bestehenden WLAN-Verbindung, auf deren Kanal (auch 5 GHz außerhalb der Radar-Kanäle). Geht das nicht, lehnt die Box den Handover mit einer Erklärung ab, statt offline zu gehen. Bricht die WLAN-Verbindung während der Sitzung ab, beendet der Watchdog das Upload-WLAN. Der Admin-Schalter „Benutzer dürfen für Uploads aus der App das WLAN der Box übernehmen“ entfällt; `uplink_pause` ist immer `false`, `confirm_pause` wird ignoriert. Bestehende Boxen bekommen beim nächsten Update `iw` und die NetworkManager-Regel für `ogcup0`.
 - **Safari zeigt statt einer Fehlermeldung eine Hilfeseite, wenn die Box nicht erreichbar ist:** Fand der Service Worker bei einem Seitenaufruf weder die Box noch die App-Seite im Cache, zeigte Safari eine eigene Fehlerseite ohne Ausweg. Jetzt kommt eine Seite „Box nicht erreichbar“ mit Erklärung zum Zertifikat und „Neu verbinden“-Knopf (setzt Service Worker und Cache zurück). Hinweis: Die Meldung „Returned response is null“ stammt von Service-Worker-Versionen vor 0.7.5. Safari kann so einen alten Worker bei abgelaufenem Zertifikat nicht selbst ersetzen, dann einmal die Websitedaten von `<name>.local` in Safari löschen.
 
 ## [0.8.5] – 2026-10-25

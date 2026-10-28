@@ -202,18 +202,28 @@ probe_known_networks() {
   return 1
 }
 
-# While the upload Wi-Fi is up its adapter belongs to hostapd, and on a
-# single-radio box the uplink is paused on purpose — hands off, no fallback AP.
-# Only enforce its deadline, in case the backend that should end it is gone.
+# While the upload Wi-Fi is up its adapter belongs to hostapd — hands off, no
+# fallback AP. Only enforce its deadline, in case the backend that should end
+# it is gone, and drop it when the Wi-Fi uplink it runs beside is lost: the
+# usual rejoin / fallback AP below needs the adapter back.
 # Returns 0 while a handover is running (skip this round).
 handover_running() {
   [[ -f "$HANDOVER_STATE" ]] || return 1
-  local iface deadline managed
-  read -r iface deadline managed < "$HANDOVER_STATE" || true
+  local iface deadline managed parent state
+  read -r iface deadline managed parent < "$HANDOVER_STATE" || true
   if [[ "$deadline" =~ ^[0-9]+$ ]] && (( $(date +%s) >= deadline )); then
     log "upload Wi-Fi on $iface past its maximum duration — dropping it"
     bash "$HERE/handover.sh" down || true
     return 1
+  fi
+  if [[ -n "$parent" && "$parent" != "-" ]]; then
+    state="$(nmcli -t -f DEVICE,STATE device status 2>/dev/null \
+      | awk -F: -v d="$parent" '$1==d {print $2}')"
+    if [[ "$state" != "connected" ]]; then
+      log "Wi-Fi uplink on $parent lost — dropping the upload Wi-Fi beside it"
+      bash "$HERE/handover.sh" down || true
+      return 1
+    fi
   fi
   echo 0 > "$FAIL_FILE"
   return 0

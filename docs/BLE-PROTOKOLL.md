@@ -484,12 +484,12 @@ Die Endpunkte gibt es **nur über die Brücke**: Ihr Token nennt das gekoppelte
 Gerät (Claim `dev`). Aus dem Web-UI antworten sie mit 403.
 
 - **`GET /api/uplink/handover`** — Lagebild, ohne etwas zu starten:
-  `active`, `mine` (läuft für dieses Gerät), `possible`, `uplink_pause` (die Box
-  ginge offline), `allowed`, `reason` (deutsch, für die Anzeige),
+  `active`, `mine` (läuft für dieses Gerät), `possible`, `uplink_pause` und `allowed`
+  (immer `false` bzw. `true`, nur noch für ältere Apps), `reason` (deutsch, für die Anzeige),
   `lan_addresses` (IPs der Box, falls das Handy schon im selben Netz ist) und bei
   `mine` die `connection` wie bei `POST`. Ein `GET` zählt als Lebenszeichen der
   eigenen Sitzung.
-- **`POST /api/uplink/handover`**, Body optional `{"confirm_pause": true}` —
+- **`POST /api/uplink/handover`** (ein `confirm_pause` älterer Apps wird ignoriert) —
   startet die Sitzung oder liefert die laufende des Geräts erneut. Antwort:
 
   | Feld | Bedeutung |
@@ -501,14 +501,14 @@ Gerät (Claim `dev`). Aus dem Web-UI antworten sie mit 403.
   | `ca_sha256`, `ca_der` | Root-CA der Box (SHA-256 hex, DER base64) zum Pinnen; `null` ohne HTTPS. Das Leaf-Zertifikat wechselt etwa alle 12 h, deshalb die CA |
   | `upload_token` | Bearer-Token **nur** für die Chunk-Upload-Endpunkte, an diese Sitzung gebunden |
   | `expires_in`, `idle_timeout` | Sekunden bis zum harten Ende (max. 60 min) bzw. Leerlauf-Grenze (5 min) |
-  | `uplink_pause` | die Box ist während der Sitzung offline |
-  | `band`, `est_mbit` | Funkband und grob erwarteter Durchsatz für die Dauer-Schätzung |
+  | `uplink_pause` | immer `false`: die Box geht für einen Handover nie offline |
+  | `band`, `est_mbit` | Funkband (`2.4GHz`, neben einer 5-GHz-Verbindung `5GHz`) und grob erwarteter Durchsatz für die Dauer-Schätzung |
 
-  Fehler: `403` Gerät nicht gekoppelt oder Benutzer darf die Box nicht offline
-  nehmen (*Admin → Bluetooth*), `409` anderes Gerät ist dran, kein Weg möglich
-  oder `confirm_pause` fehlt, `502` das WLAN ließ sich nicht starten.
+  Fehler: `403` Gerät nicht gekoppelt, `409` anderes Gerät ist dran oder kein
+  Weg möglich, `502` das WLAN ließ sich nicht starten (auch: kein AP neben der
+  WLAN-Verbindung möglich; `detail` sagt, was stattdessen geht).
 - **`DELETE /api/uplink/handover`** — beendet die eigene Sitzung; das Token wird
-  sofort ungültig, das Upload-WLAN geht aus, ein pausierter Uplink kommt zurück.
+  sofort ungültig, das Upload-WLAN geht aus.
 
 Die Box beendet die Sitzung auch selbst: nach 5 min ohne Upload-Anfrage oder
 `GET`, nach 60 min am Stück, beim Widerruf des Geräts und beim Neustart des

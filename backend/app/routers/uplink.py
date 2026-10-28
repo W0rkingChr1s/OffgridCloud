@@ -44,9 +44,8 @@ def start_handover(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    confirm = payload.confirm_pause if payload else False
     try:
-        return handover.start(db, user, device_id, confirm_pause=confirm)
+        return handover.start(db, user, device_id)
     except handover.HandoverError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
 

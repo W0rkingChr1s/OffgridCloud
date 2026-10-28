@@ -843,12 +843,6 @@ def process_one() -> bool:
             # Manual stop — not a bandwidth problem, so no gate announcement.
             logger.debug("Upload gated: manually paused")
             return False
-        from . import handover
-
-        if handover.uplink_paused():
-            # The upload Wi-Fi holds the only uplink; resumes when it goes down.
-            logger.debug("Upload gated: uplink paused for the upload handover")
-            return False
         # Metered uplink first: if it blocks, don't even spend data on a probe.
         ok, reason, max_bytes, metered = _metered_check(db, policy)
         if ok:

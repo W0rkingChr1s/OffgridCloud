@@ -7,7 +7,6 @@ import {
   renameBleDevice,
   revokeBleDevice,
   setBleEnabled,
-  setHandoverUsersMayPause,
   type BleDevice,
   type BlePairing,
   type BleStatus,
@@ -105,14 +104,6 @@ export default function Bluetooth() {
     }
   }
 
-  async function toggleHandoverPause(allowed: boolean) {
-    try {
-      setStatus(await setHandoverUsersMayPause(allowed));
-    } catch {
-      toast.error("Bluetooth", "Einstellung nicht gespeichert");
-    }
-  }
-
   async function rename(d: BleDevice) {
     const name = window.prompt("Neuer Name", d.name);
     if (!name?.trim()) return;
@@ -194,24 +185,6 @@ export default function Bluetooth() {
             <p className="text-xs text-slate-500">
               Sichtbar als <span className="font-mono text-slate-300">OGC-{status.box_name}</span>
             </p>
-          )}
-          {isAdmin && status.enabled && (
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={status.handover_users_may_pause}
-                onChange={(e) => toggleHandoverPause(e.target.checked)}
-              />
-              <span className="text-slate-300">
-                Benutzer dürfen für Uploads aus der App das WLAN der Box übernehmen
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  Hängt die Box nur per WLAN am Internet, geht sie für den Upload aus der App offline: kein
-                  Cloud-Sync, kein VPN, höchstens 60 Minuten. Admins dürfen das immer, Benutzer nur mit diesem
-                  Haken. Mit Kabel, Handy-Tethering oder zweitem WLAN-Stick bleibt die Box online.
-                </span>
-              </span>
-            </label>
           )}
         </div>
       )}

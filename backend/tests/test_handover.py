@@ -1,11 +1,16 @@
 """Upload handover for the companion app (app.handover, Companion PLAN.md §3.6)."""
 
 import hashlib
+import json
+import os
 import stat
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
-from app import handover, https_config, transfers
+from app import handover, https_config
 from app.db import SessionLocal
 from app.models import BleDevice, User
 from app.network import NetworkStatus, Uplink
@@ -42,6 +47,7 @@ class FakeBox:
         self.chosen = chosen
         self.calls: list[tuple[str, ...]] = []
         self.ok = True
+        self.output = ""
         status = NetworkStatus(supported=True, links=list(links))
         monkeypatch.setattr(handover, "_current_plan", lambda: (self.chosen, status))
         monkeypatch.setattr(handover, "_helper_command", lambda: "helper")
@@ -49,7 +55,7 @@ class FakeBox:
 
     def _run(self, *args):
         self.calls.append(args)
-        return self.ok, ""
+        return self.ok, self.output
 
 
 @pytest.fixture(autouse=True)
@@ -60,7 +66,7 @@ def _no_session():
 
 
 AP = handover.Plan(True, "ap", "wlan1")
-PAUSE = handover.Plan(True, "ap", "wlan0", uplink_pause=True)
+BESIDE = handover.Plan(True, "ap", handover.VIRTUAL_IFACE, parent="wlan0")
 
 
 # --- choosing the way ------------------------------------------------------
@@ -72,28 +78,31 @@ def _status(*links: Uplink, ap_active=False) -> NetworkStatus:
 
 def test_plan_prefers_running_fallback_ap():
     chosen = handover.plan(_status(ap_active=True), ["wlan0"], helper=False)
-    assert (chosen.possible, chosen.mode, chosen.uplink_pause) == (True, "fallback", False)
+    assert (chosen.possible, chosen.mode, chosen.parent) == (True, "fallback", None)
 
 
-def test_plan_uses_spare_adapter_without_pause():
+def test_plan_uses_spare_adapter():
     wlan0 = Uplink(device="wlan0", kind="client", label="WLAN")
     chosen = handover.plan(_status(wlan0), ["wlan0", "wlan1"], helper=True)
-    assert (chosen.interface, chosen.uplink_pause) == ("wlan1", False)
+    assert (chosen.interface, chosen.parent) == ("wlan1", None)
 
 
 def test_plan_takes_idle_wlan0_while_on_cable():
     eth = Uplink(device="eth0", kind="ethernet", label="Kabel")
     chosen = handover.plan(_status(eth), ["wlan0"], helper=True)
-    assert (chosen.interface, chosen.uplink_pause) == ("wlan0", False)
+    assert (chosen.interface, chosen.parent) == ("wlan0", None)
 
 
-def test_plan_pauses_only_wifi_uplink():
+def test_plan_never_takes_a_wifi_uplink_away():
     wlan0 = Uplink(device="wlan0", kind="client", label="WLAN")
     chosen = handover.plan(_status(wlan0), ["wlan0"], helper=True)
-    assert (chosen.interface, chosen.uplink_pause) == ("wlan0", True)
-    # Cable in as well: the box stays online without wlan0.
+    assert (chosen.interface, chosen.parent) == (handover.VIRTUAL_IFACE, "wlan0")
+    # Cable in as well: still beside wlan0, it stays a second uplink.
     eth = Uplink(device="eth0", kind="ethernet", label="Kabel")
-    assert not handover.plan(_status(wlan0, eth), ["wlan0"], helper=True).uplink_pause
+    assert handover.plan(_status(wlan0, eth), ["wlan0"], helper=True).parent == "wlan0"
+    # The virtual interface itself (listed by nmcli while up) is no adapter.
+    again = handover.plan(_status(wlan0), ["wlan0", handover.VIRTUAL_IFACE], helper=True)
+    assert again.parent == "wlan0"
 
 
 def test_plan_reasons_when_impossible():
@@ -179,38 +188,29 @@ def test_one_device_at_a_time(client, admin_auth, monkeypatch):
     assert second_key != first_key
 
 
-def test_pausing_the_only_uplink(client, admin_auth, monkeypatch):
-    box = FakeBox(monkeypatch, PAUSE)
-    user_auth = _user_auth(client, admin_auth, "handover-user@test.local")
-    _, admin_ble = _device("admin@test.local", "d")
+def test_upload_wifi_beside_the_wifi_uplink(client, admin_auth, monkeypatch):
+    box = FakeBox(monkeypatch, BESIDE)
+    box.output = "[handover] upload Wi-Fi up on ogcup0 (10.43.0.1/24)\nband=5GHz"
+    _user_auth(client, admin_auth, "handover-user@test.local")
     _, user_ble = _device("handover-user@test.local", "e")
 
+    # Plain users too: the box stays online, nothing to confirm.
     status = client.get("/api/uplink/handover", headers=user_ble).json()
-    assert status["uplink_pause"] and not status["allowed"]
-    assert client.post("/api/uplink/handover", headers=user_ble).status_code == 403
-
-    # Admins must confirm that the box goes offline.
-    assert client.post("/api/uplink/handover", headers=admin_ble).status_code == 409
-    assert box.calls == []
-    resp = client.post("/api/uplink/handover", headers=admin_ble, json={"confirm_pause": True})
-    assert resp.status_code == 200 and resp.json()["uplink_pause"] is True
-    assert handover.uplink_paused()
-    assert transfers.process_one() is False  # cloud transfers wait
-    client.delete("/api/uplink/handover", headers=admin_ble)
-    assert not handover.uplink_paused()
-
-    # An admin can allow it for users.
-    settings = client.put(
-        "/api/ble/settings", headers=admin_auth, json={"handover_users_may_pause": True}
-    ).json()
-    assert settings["handover_users_may_pause"] and settings["enabled"]
-    assert client.put(
-        "/api/ble/settings", headers=user_auth, json={"handover_users_may_pause": False}
-    ).status_code == 403
-    resp = client.post("/api/uplink/handover", headers=user_ble, json={"confirm_pause": True})
-    assert resp.status_code == 200
+    assert status["possible"] and status["allowed"] and not status["uplink_pause"]
+    conn = client.post("/api/uplink/handover", headers=user_ble).json()
+    assert conn["uplink_pause"] is False and conn["band"] == "5GHz"
+    config = json.loads(handover._config_file().read_text())
+    assert (config["interface"], config["parent"]) == (handover.VIRTUAL_IFACE, "wlan0")
     client.delete("/api/uplink/handover", headers=user_ble)
-    client.put("/api/ble/settings", headers=admin_auth, json={"handover_users_may_pause": False})
+
+
+def test_refused_when_the_adapter_cannot_run_an_ap_beside(client, admin_auth, monkeypatch):
+    box = FakeBox(monkeypatch, BESIDE)
+    box.ok = False
+    _, ble = _device("admin@test.local", "p")
+    resp = client.post("/api/uplink/handover", headers=ble)
+    assert resp.status_code == 502 and "selbe Netz" in resp.json()["detail"]
+    assert handover._active is None and box.calls[-1] == ("down",)
 
 
 def test_fallback_ap_is_handed_over_as_is(client, admin_auth, monkeypatch):
@@ -270,14 +270,15 @@ def test_idle_and_maximum_duration(client, admin_auth, monkeypatch):
     with SessionLocal() as db:
         handover.expire(db, now=session.last_activity + handover.IDLE_TIMEOUT - 1)
         assert handover._active is session
-        handover.expire(db, now=session.last_activity + handover.IDLE_TIMEOUT)
+        # +1: started + T - started may round to just below T.
+        handover.expire(db, now=session.last_activity + handover.IDLE_TIMEOUT + 1)
         assert handover._active is None and box.calls[-1] == ("down",)
 
     client.post("/api/uplink/handover", headers=ble)
     session = handover._active
     session.last_activity = session.started + handover.MAX_DURATION
     with SessionLocal() as db:
-        handover.expire(db, now=session.started + handover.MAX_DURATION)
+        handover.expire(db, now=session.started + handover.MAX_DURATION + 1)
     assert handover._active is None
 
 
@@ -319,3 +320,47 @@ def test_ended_fallback_ap_ends_the_session(client, admin_auth, monkeypatch):
     status = client.get("/api/uplink/handover", headers=ble).json()
     assert status["active"] is False and status["possible"] is True
     assert handover._active is None
+
+
+# --- root helper: hostapd config beside a Wi-Fi client ------------------------
+
+HELPER = Path(__file__).resolve().parents[2] / "deploy" / "netfallback" / "_handover.py"
+
+
+def _render(tmp_path, channel_line: str, **cfg):
+    fake_iw = tmp_path / "bin" / "iw"
+    fake_iw.parent.mkdir(exist_ok=True)
+    fake_iw.write_text(f"#!/bin/sh\necho 'Interface wlan0'\necho '\t{channel_line}'\n")
+    fake_iw.chmod(0o755)
+    config = tmp_path / "handover.json"
+    config.write_text(json.dumps({
+        "interface": handover.VIRTUAL_IFACE, "ssid": "OGC-box-up", "passphrase": "x" * 20,
+        "address": "10.43.0.1/24", "channel": 6, "country": "DE", "deadline": 1, **cfg,
+    }))
+    out = tmp_path / "hostapd.conf"
+    env = {**os.environ, "PATH": f"{fake_iw.parent}:{os.environ['PATH']}"}
+    proc = subprocess.run([sys.executable, str(HELPER), str(config), str(out)],
+                          capture_output=True, text=True, env=env, check=False)
+    return proc, out
+
+
+def test_helper_follows_the_client_channel(tmp_path):
+    proc, out = _render(tmp_path, "channel 44 (5220 MHz), width: 80 MHz", parent="wlan0")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.split()[-2:] == ["wlan0", "5GHz"]
+    conf = out.read_text()
+    assert "channel=44\n" in conf and "hw_mode=a\n" in conf
+
+    proc, out = _render(tmp_path, "channel 11 (2462 MHz), width: 20 MHz", parent="wlan0")
+    assert proc.stdout.split()[-2:] == ["wlan0", "2.4GHz"] and "channel=11\n" in out.read_text()
+
+    # Without a parent the configured channel stays, iw is not asked.
+    proc, out = _render(tmp_path, "channel 44 (5220 MHz)", parent="")
+    assert proc.stdout.split()[-2:] == ["-", "2.4GHz"] and "channel=6\n" in out.read_text()
+
+
+def test_helper_refuses_dfs_channels_and_a_disconnected_client(tmp_path):
+    proc, _ = _render(tmp_path, "channel 100 (5500 MHz)", parent="wlan0")
+    assert proc.returncode == 1 and "DFS" in proc.stderr
+    proc, _ = _render(tmp_path, "type managed", parent="wlan0")
+    assert proc.returncode == 1 and "not connected" in proc.stderr

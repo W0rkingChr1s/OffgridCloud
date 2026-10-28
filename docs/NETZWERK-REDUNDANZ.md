@@ -244,38 +244,44 @@ bei (ein Systemdialog beim ersten Mal) und lädt per HTTPS hoch.
 
 Welches WLAN die Box dafür nimmt:
 
-| Lage | Upload-WLAN | Box bleibt online? |
-|---|---|---|
-| Rückfall-WLAN läuft schon | genau dieses | ja (war ohnehin offline) |
-| Zweiter WLAN-Adapter (USB-Stick) | `OGC-<Box>-up` auf dem freien Adapter | ja |
-| Uplink per Kabel oder Handy-Tethering | `OGC-<Box>-up` auf `wlan0` | ja |
-| `wlan0` ist der einzige Uplink | `OGC-<Box>-up` auf `wlan0`, Uplink pausiert | **nein**, bis zum Ende des Uploads |
+| Lage | Upload-WLAN |
+|---|---|
+| Rückfall-WLAN läuft schon | genau dieses |
+| Freier WLAN-Adapter (USB-Stick, oder `wlan0` bei Kabel/Tethering ohne WLAN-Verbindung) | `OGC-<Box>-up` auf dem freien Adapter |
+| `wlan0` hängt an einem WLAN | `OGC-<Box>-up` auf dem virtuellen Interface `ogcup0` **neben** der Verbindung, auf deren Kanal |
 
-Im letzten Fall ist die Box für die Dauer des Uploads offline: Cloud-Transfers
-warten (die Warteschlange läuft danach weiter), VPN und Fernzugriff sind weg.
-Admins dürfen das immer, normale Benutzer nur, wenn ein Admin unter
-*Bluetooth* „Benutzer dürfen für Uploads aus der App das WLAN der Box
-übernehmen“ setzt (Standard: aus). Die App muss die Pause außerdem bestätigen.
+**Die Box geht für einen Upload nie offline.** Der WLAN-Chip des Pi kann einen
+Access Point neben einer Client-Verbindung betreiben, beide auf demselben Kanal.
+Funkt das Heimnetz auf einem 5-GHz-Kanal mit Radarerkennung (DFS, 52–144), oder
+lässt der Chip das virtuelle Interface nicht zu, lehnt die Box den Handover ab.
+Die App sagt das dann: Handy ins selbe Netz wie die Box bringen, oder die Box
+per Kabel bzw. zweitem WLAN-Stick anbinden. Reißt die WLAN-Verbindung während
+der Sitzung ab, beendet der Watchdog das Upload-WLAN, damit Wiederverbinden und
+Rückfall-WLAN wie gewohnt greifen. Wechselt der Router den Kanal, bricht das
+Upload-WLAN ab. Die App kann dann eine neue Sitzung anfordern.
 
 Technik: Das Upload-WLAN betreibt nicht NetworkManager, sondern `hostapd`
 (nur so bekommt jedes gekoppelte Handy einen eigenen Schlüssel auf derselben,
 festen SSID) und ein `dnsmasq` nur für DHCP, ohne Gateway und DNS – das Handy
 behält sein Mobilfunk-Internet. Gestartet und beendet wird es vom Root-Helfer
 `deploy/netfallback/handover.sh` (sudoers-Regel und `OGC_NET_HANDOVER_COMMAND`
-richtet `install.sh` ein, `hostapd` installiert er mit). Der Helfer nimmt den
-Adapter NetworkManager weg und gibt ihn danach zurück; NetworkManager verbindet
-sich dann von selbst wieder mit dem bisherigen Netz, sonst greift wie gewohnt
-der Watchdog.
+richtet `install.sh` ein, `hostapd` und `iw` installiert er mit, `ogcup0` setzt
+er für NetworkManager auf *unmanaged*). Einen freien Adapter nimmt der Helfer
+NetworkManager für die Sitzung weg und gibt ihn danach zurück. Neben einer
+WLAN-Verbindung legt er `ogcup0` per `iw … interface add … type __ap` an und
+löscht es am Ende wieder; die Verbindung selbst fasst er nicht an.
 
 Das Upload-WLAN geht aus, wenn die App fertig ist, nach **5 min ohne Upload**,
 spätestens nach **60 min**, beim Widerruf des Geräts und beim Neustart des
 Dienstes. Die 60 min setzt zusätzlich der Watchdog durch, falls das Backend
 hängt. Start und Ende stehen im Audit-Log (`uplink.handover_start`/`_end`).
 
-**Grenzen:** 2,4 GHz, Kanal 6 (jeder Pi kann das; realistisch 2–4 MB/s). Nicht
-auf der Hardware geprüft ist bisher, wie stabil die Rückgabe an
-NetworkManager auf allen Pi-Modellen und Firmware-Ständen läuft – Rückmeldungen
-dazu bitte als Issue.
+**Grenzen:** Auf einem freien Adapter 2,4 GHz, Kanal 6 (jeder Pi kann das;
+realistisch 2–4 MB/s). Neben einer Verbindung teilen sich Client und AP Funk
+und Kanal, also auch die Bandbreite: Cloud-Upload und Handy-Upload bremsen
+sich gegenseitig. Nicht auf der Hardware geprüft ist bisher, wie stabil der
+AP neben dem Client auf allen Pi-Modellen und Firmware-Ständen läuft.
+Rückmeldungen dazu bitte als Issue.
 
 ## Sicherheit & Grenzen
 

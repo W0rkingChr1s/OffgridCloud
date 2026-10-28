@@ -14,10 +14,12 @@ Ways, first one that fits:
 
 * the **fallback AP** is up anyway → hand over its credentials, nothing to start;
 * a **spare Wi-Fi adapter** (USB stick, or ``wlan0`` while the box is on cable
-  or a tethered phone) → upload Wi-Fi there, the uplink stays untouched;
-* ``wlan0`` is the **only uplink** → it is paused for the upload: the box is
-  offline meanwhile, cloud transfers wait, NetworkManager rejoins afterwards.
-  Admins may always do this, users only if an admin allowed it.
+  or a tethered phone and not on Wi-Fi) → upload Wi-Fi there;
+* every adapter is **on a Wi-Fi uplink** → the upload Wi-Fi runs on a second,
+  virtual interface of that adapter, next to the client and on its channel
+  (the Pi's Wi-Fi chip can do one AP beside one client). The box stays online.
+  If the adapter can't, the handover is refused — it never takes the box
+  offline.
 
 The upload Wi-Fi is hostapd + dnsmasq run by a root helper
 (``deploy/netfallback/handover.sh``), not NetworkManager: only hostapd can give
@@ -45,11 +47,11 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from . import https_config, network
-from .admin_ops import audit, get_system_settings
+from .admin_ops import audit
 from .config import get_settings
 from .crypto import decrypt, encrypt
 from .deps import UPLOAD_SCOPE
-from .models import BleDevice, Role, User
+from .models import BleDevice, User
 from .pool import node_name
 from .security import create_access_token
 
@@ -65,10 +67,13 @@ CHECK_INTERVAL = 15.0
 # Its own subnet, apart from the fallback AP's 10.42.0.1/24.
 AP_ADDRESS = "10.43.0.1/24"
 AP_CHANNEL = 6
+# Virtual AP interface next to a Wi-Fi client (handover.sh creates it).
+VIRTUAL_IFACE = "ogcup0"
 CONFIG_FILENAME = "handover.json"
 # Below the BLE bridge's timeout for this endpoint (ble/bridge.py).
 HELPER_TIMEOUT = 45
 # 2.4 GHz is what every Pi can do; realistic upload rate for the app's estimate.
+# Next to a client the AP takes the client's channel, the helper reports it.
 BAND = "2.4GHz"
 EST_MBIT = 20
 
@@ -85,8 +90,8 @@ class Plan:
     possible: bool
     mode: str = ""  # "fallback" | "ap"
     interface: str | None = None
-    # The upload Wi-Fi takes the box's only uplink offline while it runs.
-    uplink_pause: bool = False
+    # Adapter whose Wi-Fi client the virtual AP ``interface`` runs beside.
+    parent: str | None = None
     reason: str = ""
 
 
@@ -104,15 +109,15 @@ def plan(status: network.NetworkStatus, wifi: list[str], *, helper: bool) -> Pla
                 "(sudo deploy/netfallback/install.sh)."
             ),
         )
+    wifi = [dev for dev in wifi if dev != VIRTUAL_IFACE]
     if not wifi:
         return Plan(False, reason="Die Box hat keinen WLAN-Adapter.")
     clients = {link.device for link in status.links if link.kind == "client"}
     spare = [dev for dev in wifi if dev not in clients]
     if spare:
         return Plan(True, "ap", spare[0])
-    interface = wifi[0]
-    others = [link for link in status.links if link.device != interface]
-    return Plan(True, "ap", interface, uplink_pause=not others)
+    # Never take a Wi-Fi uplink away: run the AP beside it instead.
+    return Plan(True, "ap", VIRTUAL_IFACE, parent=wifi[0])
 
 
 def upload_ssid(name: str) -> str:
@@ -133,7 +138,7 @@ class _Session:
     ssid: str
     passphrase: str
     address: str  # IPv4 of the box in that Wi-Fi
-    uplink_pause: bool
+    band: str
     started: float  # time.monotonic()
     last_activity: float
 
@@ -196,10 +201,6 @@ def _tls(db: Session) -> dict:
     }
 
 
-def _may_pause(db: Session, user: User) -> bool:
-    return user.role == Role.ADMIN or get_system_settings(db).handover_users_may_pause
-
-
 def _current_plan() -> tuple[Plan, network.NetworkStatus]:
     status = network.get_status()
     return plan(status, network.wifi_interfaces(), helper=bool(_helper_command())), status
@@ -222,8 +223,9 @@ def _connection(db: Session, user: User, session: _Session) -> dict:
         "upload_token": token,
         "expires_in": max(ttl, 0),
         "idle_timeout": IDLE_TIMEOUT,
-        "uplink_pause": session.uplink_pause,
-        "band": BAND,
+        # Kept for older apps: the box never goes offline for a handover.
+        "uplink_pause": False,
+        "band": session.band,
         "est_mbit": EST_MBIT,
     }
 
@@ -254,20 +256,19 @@ def status(db: Session, user: User, device_id: int) -> dict:
             "active": True,
             "mine": mine,
             "possible": mine,
-            "uplink_pause": session.uplink_pause,
+            "uplink_pause": False,
             "allowed": True,
             "reason": "" if mine else _BUSY,
             "connection": _connection(db, user, session) if mine else None,
         }
     chosen, net = _current_plan()
-    allowed = not chosen.uplink_pause or _may_pause(db, user)
     return {
         "active": False,
         "mine": False,
         "possible": chosen.possible,
-        "uplink_pause": chosen.uplink_pause,
-        "allowed": allowed,
-        "reason": chosen.reason if not chosen.possible else ("" if allowed else _NOT_ALLOWED),
+        "uplink_pause": False,
+        "allowed": True,
+        "reason": chosen.reason,
         # Same network already? The app can try these first (no handover).
         "lan_addresses": [link.ip for link in net.links if link.ip],
         "connection": None,
@@ -275,19 +276,15 @@ def status(db: Session, user: User, device_id: int) -> dict:
 
 
 _BUSY = "Das Upload-WLAN der Box wird gerade von einem anderen Gerät benutzt."
-_NOT_ALLOWED = (
-    "Upload per WLAN gerade nicht möglich: Die Box müsste dafür offline gehen. "
-    "Admin fragen oder ins selbe Netz wie die Box wechseln."
-)
 
 
-def start(db: Session, user: User, device_id: int, *, confirm_pause: bool) -> dict:
+def start(db: Session, user: User, device_id: int) -> dict:
     """Start (or resume) this phone's handover and return the connection data."""
     with _start_lock:
-        return _start(db, user, device_id, confirm_pause=confirm_pause)
+        return _start(db, user, device_id)
 
 
-def _start(db: Session, user: User, device_id: int, *, confirm_pause: bool) -> dict:
+def _start(db: Session, user: User, device_id: int) -> dict:
     global _active
     device = db.get(BleDevice, device_id)
     if device is None or device.user_id != user.id:
@@ -304,16 +301,8 @@ def _start(db: Session, user: User, device_id: int, *, confirm_pause: bool) -> d
     chosen, _ = _current_plan()
     if not chosen.possible:
         raise HandoverError(409, chosen.reason)
-    if chosen.uplink_pause:
-        if not _may_pause(db, user):
-            raise HandoverError(403, _NOT_ALLOWED)
-        if not confirm_pause:
-            raise HandoverError(
-                409,
-                "Die Box ist während des Uploads offline (kein Cloud-Sync, kein VPN). "
-                "Mit confirm_pause bestätigen.",
-            )
 
+    band = BAND
     if chosen.mode == "fallback":
         ap = network.get_network_settings(db)
         ssid = ap.ap_ssid
@@ -323,13 +312,27 @@ def _start(db: Session, user: User, device_id: int, *, confirm_pause: bool) -> d
         ssid = upload_ssid(node_name())
         passphrase = _device_passphrase(db, device)
         address = AP_ADDRESS.split("/")[0]
-        _write_config(chosen.interface or "", ssid, passphrase, network.get_network_settings(db))
+        _write_config(
+            chosen.interface or "",
+            chosen.parent or "",
+            ssid,
+            passphrase,
+            network.get_network_settings(db),
+        )
         ok, output = _run_helper("up", str(_config_file()))
         if not ok:
             _run_helper("down")
             _config_file().unlink(missing_ok=True)
             logger.warning("Upload Wi-Fi did not come up: %s", output)
+            if chosen.parent:
+                raise HandoverError(
+                    502,
+                    "Die Box kann neben ihrer WLAN-Verbindung kein Upload-WLAN öffnen. "
+                    "Handy ins selbe Netz wie die Box bringen, oder die Box per Kabel "
+                    "bzw. zweitem WLAN-Stick anbinden.",
+                )
             raise HandoverError(502, "Das Upload-WLAN ließ sich nicht starten.")
+        band = _reported_band(output)
 
     now = time.monotonic()
     session = _Session(
@@ -341,19 +344,27 @@ def _start(db: Session, user: User, device_id: int, *, confirm_pause: bool) -> d
         ssid=ssid,
         passphrase=passphrase,
         address=address,
-        uplink_pause=chosen.uplink_pause,
+        band=band,
         started=now,
         last_activity=now,
     )
     with _lock:
         _active = session
     where = chosen.interface or "Rückfall-WLAN"
-    pause = ", Uplink pausiert" if chosen.uplink_pause else ""
-    audit(db, user, "uplink.handover_start", f"{device.name} über {where}{pause}")
+    beside = f" neben {chosen.parent}" if chosen.parent else ""
+    audit(db, user, "uplink.handover_start", f"{device.name} über {where}{beside}")
     return _connection(db, user, session)
 
 
-def _write_config(interface: str, ssid: str, passphrase: str, net) -> None:
+def _reported_band(output: str) -> str:
+    """The helper prints ``band=5GHz`` when the AP had to follow a 5 GHz client."""
+    for line in output.splitlines():
+        if line.startswith("band=") and line[5:] in {"2.4GHz", "5GHz"}:
+            return line[5:]
+    return BAND
+
+
+def _write_config(interface: str, parent: str, ssid: str, passphrase: str, net) -> None:
     path = _config_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
@@ -361,6 +372,9 @@ def _write_config(interface: str, ssid: str, passphrase: str, net) -> None:
         json.dumps(
             {
                 "interface": interface,
+                # Set: create ``interface`` as a virtual AP beside this
+                # adapter's Wi-Fi client, on the client's channel.
+                "parent": parent,
                 "ssid": ssid,
                 "passphrase": passphrase,
                 "address": AP_ADDRESS,
@@ -413,12 +427,6 @@ def token_valid(db: Session, payload: dict) -> bool:
             return False
         session.last_activity = time.monotonic()
     return db.get(BleDevice, session.device_id) is not None
-
-
-def uplink_paused() -> bool:
-    """True while the upload Wi-Fi holds the box's only uplink (transfers wait)."""
-    session = _active
-    return session is not None and session.uplink_pause
 
 
 def expire(db: Session, now: float | None = None) -> None:

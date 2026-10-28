@@ -75,7 +75,6 @@ def _status(db: Session) -> BleStatusOut:
         service_error=error if isinstance(error, str) else None,
         box_name=node_name(),
         box_public_key=pk,
-        handover_users_may_pause=settings.handover_users_may_pause,
     )
 
 
@@ -112,8 +111,6 @@ def update_settings(
     changes = payload.model_dump(exclude_none=True)
     if "enabled" in changes:
         row.ble_enabled = changes["enabled"]
-    if "handover_users_may_pause" in changes:
-        row.handover_users_may_pause = changes["handover_users_may_pause"]
     db.commit()
     audit(db, admin, "ble.settings", ", ".join(f"{k}={v}" for k, v in changes.items()))
     return _status(db)
