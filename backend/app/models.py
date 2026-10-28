@@ -498,9 +498,9 @@ class SystemSettings(Base):
     # docs/BLE-PROTOKOLL.md). On by default: pairing still needs a code from
     # the web portal, and switching it off removes the rescue path.
     ble_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    # Upload handover (app.handover): may a non-admin start the upload Wi-Fi
-    # when that takes the box's only uplink offline for its duration? Off by
-    # default — the pause hits every user (cloud sync, VPN, remote access).
+    # Unused: the upload handover used to take a Wi-Fi-only box offline, this
+    # allowed it for non-admins. The box no longer goes offline for it; the
+    # column stays so existing databases need no migration.
     handover_users_may_pause: Mapped[bool] = mapped_column(Boolean, default=False)
     # Unattended updates (app.autoupdate). Off by default: an update restarts
     # the service, so the operator opts in and picks a quiet time window

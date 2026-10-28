@@ -1257,14 +1257,10 @@ class BleStatusOut(BaseModel):
     box_name: str
     # Static X25519 key of the box, base64url without padding (§3.2).
     box_public_key: str
-    # Users (not only admins) may start the upload Wi-Fi even when that takes
-    # the box offline (app.handover).
-    handover_users_may_pause: bool = False
 
 
 class BleSettingsUpdate(BaseModel):
     enabled: bool | None = None
-    handover_users_may_pause: bool | None = None
 
 
 class BlePairingOut(BaseModel):
@@ -1293,7 +1289,7 @@ class BleDeviceUpdate(BaseModel):
 
 
 class HandoverStart(BaseModel):
-    # Required when the upload Wi-Fi takes the box's only uplink offline.
+    # Sent by older apps; ignored, the box never goes offline for a handover.
     confirm_pause: bool = False
 
 
@@ -1312,7 +1308,7 @@ class HandoverConnectionOut(BaseModel):
     upload_token: str
     expires_in: int
     idle_timeout: int
-    uplink_pause: bool
+    uplink_pause: bool  # always False, kept for older apps
     band: str
     est_mbit: int
 
@@ -1321,8 +1317,8 @@ class HandoverStatusOut(BaseModel):
     active: bool
     mine: bool  # the running session belongs to the calling device
     possible: bool
-    uplink_pause: bool
-    allowed: bool
+    uplink_pause: bool  # always False, kept for older apps
+    allowed: bool  # always True, kept for older apps
     reason: str = ""
     lan_addresses: list[str] = []
     connection: HandoverConnectionOut | None = None

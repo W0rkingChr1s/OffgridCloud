@@ -7,12 +7,18 @@
 #   sudo handover.sh up /opt/offgridcloud/data/handover.json
 #   sudo handover.sh down
 #
-# "up" takes the adapter away from NetworkManager (on a single-radio box that
-# pauses its Wi-Fi uplink), and runs hostapd + a DHCP-only dnsmasq on it. The
-# network has no router and no DNS, so phones keep their mobile data for the
-# internet and reach the box by IP. "down" undoes all of it and hands the
-# adapter back to NetworkManager, which rejoins the previous network by itself;
-# if that fails, the netwatch watchdog takes over as usual. Both are idempotent.
+# "up" runs hostapd + a DHCP-only dnsmasq on the adapter. The network has no
+# router and no DNS, so phones keep their mobile data for the internet and
+# reach the box by IP. Two cases:
+#
+#   * a free adapter: taken away from NetworkManager for the session, handed
+#     back on "down";
+#   * "parent" set (the adapter is the box's Wi-Fi uplink): a second, virtual
+#     interface is added to it and the AP runs there, on the client's channel,
+#     so the uplink stays up. If the chip can't, "up" fails and cleans up — the
+#     box is never taken offline for a handover.
+#
+# "down" undoes all of it. Both are idempotent.
 #
 # Backstop: handover.state carries a deadline; the watchdog runs "down" once
 # it has passed, even if the backend is gone.
@@ -46,13 +52,17 @@ stop_pid() {
 }
 
 down() {
-  local iface="" deadline managed="yes"
+  local iface="" deadline managed="yes" parent="-"
   if [[ -f "$STATE" ]]; then
-    read -r iface deadline managed < "$STATE" || true
+    read -r iface deadline managed parent < "$STATE" || true
   fi
   stop_pid "$DNSMASQ_PID"
   stop_pid "$HOSTAPD_PID"
-  if [[ -n "$iface" ]]; then
+  if [[ -n "$iface" && -n "$parent" && "$parent" != "-" ]]; then
+    # Virtual AP beside the uplink: just remove it, the client is untouched.
+    iw dev "$iface" del 2>/dev/null || true
+    log "upload Wi-Fi $iface beside $parent is down"
+  elif [[ -n "$iface" ]]; then
     ip addr flush dev "$iface" 2>/dev/null || true
     if [[ "$managed" == "yes" ]] && command -v nmcli >/dev/null 2>&1; then
       # NetworkManager autoconnects the best known network again.
@@ -64,7 +74,7 @@ down() {
 }
 
 up() {
-  local config="$1" values iface address start end mask deadline country managed
+  local config="$1" values iface address start end mask deadline country managed parent band
   for bin in hostapd dnsmasq ip; do
     if ! command -v "$bin" >/dev/null 2>&1; then
       echo "$bin not found — run deploy/netfallback/install.sh" >&2
@@ -75,21 +85,58 @@ up() {
   down  # a leftover session never stacks
 
   values="$(python3 "$HERE/_handover.py" "$config" "$HOSTAPD_CONF")" || return 1
-  read -r iface address start end mask deadline country <<<"$values"
+  read -r iface address start end mask deadline country parent band <<<"$values"
 
-  managed="no"
+  if [[ "$parent" != "-" ]]; then
+    up_beside "$iface" "$parent" "$deadline" || return 1
+  else
+    take_adapter "$iface" "$deadline" || return 1
+  fi
+  # Beside a running client the country is already set; changing it now could
+  # move the client off its channel.
+  [[ "$parent" != "-" ]] && country="-"
+  start_ap "$iface" "$address" "$start" "$end" "$mask" "$country" || return 1
+  echo "band=$band"
+}
+
+# Add the virtual AP interface to the uplink adapter (NetworkManager keeps
+# its hands off it: install.sh marks the name unmanaged, and we say so here).
+up_beside() {
+  local iface="$1" parent="$2" deadline="$3"
+  if ! command -v iw >/dev/null 2>&1; then
+    echo "iw not found — run deploy/netfallback/install.sh" >&2
+    return 2
+  fi
+  printf '%s %s %s %s\n' "$iface" "$deadline" "no" "$parent" > "$STATE"
+  iw dev "$iface" del 2>/dev/null || true
+  if ! iw dev "$parent" interface add "$iface" type __ap; then
+    log "$parent cannot host an AP beside its client"
+    down
+    return 1
+  fi
+  command -v nmcli >/dev/null 2>&1 && nmcli device set "$iface" managed no >/dev/null 2>&1
+  return 0
+}
+
+# Take a free adapter away from NetworkManager for the session.
+take_adapter() {
+  local iface="$1" deadline="$2" managed="no"
   if command -v nmcli >/dev/null 2>&1; then
     local state
     state="$(nmcli -t -f DEVICE,STATE device status 2>/dev/null | awk -F: -v d="$iface" '$1==d {print $2}')"
     [[ -n "$state" && "$state" != "unmanaged" ]] && managed="yes"
   fi
   # Written first, so "down" can clean up whatever happens next.
-  printf '%s %s %s\n' "$iface" "$deadline" "$managed" > "$STATE"
+  printf '%s %s %s %s\n' "$iface" "$deadline" "$managed" "-" > "$STATE"
 
   if [[ "$managed" == "yes" ]]; then
     nmcli device set "$iface" managed no >/dev/null 2>&1 || true
     sleep 1
   fi
+}
+
+start_ap() {
+  local iface="$1" address="$2" start="$3" end="$4" mask="$5" country="$6"
   command -v rfkill >/dev/null 2>&1 && rfkill unblock wifi 2>/dev/null || true
   if [[ "$country" != "-" ]] && command -v iw >/dev/null 2>&1; then
     iw reg set "$country" 2>/dev/null || true

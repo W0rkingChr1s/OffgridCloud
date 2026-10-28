@@ -67,6 +67,14 @@ fi
 if command -v systemctl >/dev/null 2>&1 && [[ ! -f /etc/hostapd/hostapd.conf ]]; then
   systemctl disable --now hostapd.service >/dev/null 2>&1 || true
 fi
+# iw adds the upload Wi-Fi as a virtual interface beside a Wi-Fi uplink, which
+# NetworkManager must leave alone (handover.sh, name = app.handover.VIRTUAL_IFACE).
+if command -v apt-get >/dev/null 2>&1 && ! command -v iw >/dev/null 2>&1; then
+  apt-get install -y --no-install-recommends iw || true
+fi
+mkdir -p /etc/NetworkManager/conf.d
+printf '[keyfile]\nunmanaged-devices=interface-name:ogcup0\n' \
+  > /etc/NetworkManager/conf.d/offgridcloud-handover.conf
 if command -v systemctl >/dev/null 2>&1; then
   systemctl enable --now NetworkManager 2>/dev/null || \
     echo "   Could not enable NetworkManager — enable it before relying on the AP fallback." >&2
