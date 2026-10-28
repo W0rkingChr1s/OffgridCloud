@@ -431,7 +431,15 @@ warn() { echo "   $1" >&2; WARNINGS+=("$1"); }
 # --- System dependencies ----------------------------------------------------
 step "Installing system dependencies..."
 if command -v apt-get >/dev/null 2>&1; then
-  apt-get update
+  # net-merge moved its apt repository to pkg.net-merge.org (same signing key);
+  # apt-get update fails on the old URL that older link-bundling installs
+  # wrote (exit 100). netmerge/install.sh writes the new one.
+  sed -i 's#https://rohit267.github.io/net-merge/apt#https://pkg.net-merge.org/apt#' \
+    /etc/apt/sources.list.d/net-merge.list 2>/dev/null || true
+  # One dead third-party repository must not stop an update: carry on with the
+  # package lists apt still has; a really missing package fails below anyway.
+  apt-get update \
+    || warn "apt-get update failed (a package source is unreachable or gone) — using the existing package lists."
   apt-get install -y --no-install-recommends python3-venv curl ca-certificates
   # Speicher page: format/mount USB sticks, SD cards and external disks.
   apt-get install -y --no-install-recommends exfatprogs dosfstools e2fsprogs fdisk \

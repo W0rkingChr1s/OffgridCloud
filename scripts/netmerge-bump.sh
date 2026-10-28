@@ -18,8 +18,8 @@ set -euo pipefail
 
 SCRIPT="deploy/netmerge/install.sh"
 DOC="docs/NETZWERK-REDUNDANZ.md"
-UPSTREAM="rohit267/net-merge"
-APT="https://rohit267.github.io/net-merge/apt/dists/stable/main"
+UPSTREAM="net-merge/net-merge"
+APT="https://pkg.net-merge.org/apt/dists/stable/main"
 
 out() { [[ -n "${GITHUB_OUTPUT:-}" ]] && echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
 

@@ -75,7 +75,7 @@ jobs:
           gh pr create --repo "$REPO" --base "$BASE" --head "$BRANCH" \
             --title "net-merge $OLD → $NEW" \
             --body "$(cat <<EOF
-          Neue net-merge-Version: [v$NEW](https://github.com/rohit267/net-merge/releases/tag/v$NEW) ([Änderungen seit v$OLD](https://github.com/rohit267/net-merge/compare/v$OLD...v$NEW)).
+          Neue net-merge-Version: [v$NEW](https://github.com/net-merge/net-merge/releases/tag/v$NEW) ([Änderungen seit v$OLD](https://github.com/net-merge/net-merge/compare/v$OLD...v$NEW)).
 
           - \`NM_VERSION\` in \`deploy/netmerge/install.sh\` → \`$NEW\`
           - SHA-256 der Release-Tarballs (x86_64, aarch64, armv7l) neu berechnet; das x86_64-Binary meldet \`net-merge $NEW\`

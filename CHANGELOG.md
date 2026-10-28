@@ -6,6 +6,22 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.9.1] – 2026-10-28
+
+Updates laufen auf Boxen mit Leitungsbündelung wieder durch: net-merge ist umgezogen, die Box zieht mit und bekommt net-merge 0.3.6.
+
+### 🐛 Fehlerbehebungen
+
+- **Update bricht mit „Code 100“ ab, wenn Leitungsbündelung installiert ist:** net-merge ist umgezogen, sein apt-Repository liegt jetzt unter `pkg.net-merge.org` (gleicher Signaturschlüssel). Die alte Adresse `rohit267.github.io/net-merge` liefert 404, `apt-get update` scheiterte daran mit „no longer has a Release file“, und damit das ganze Update. Der Installer schreibt den Eintrag jetzt vor `apt-get update` auf die neue Adresse um. Außerdem bricht eine einzelne nicht erreichbare Paketquelle das Update nicht mehr ab (Warnung, weiter mit den vorhandenen Paketlisten). Links zeigen auf das neue GitHub-Repo `net-merge/net-merge`. Für Boxen, die gerade festhängen: `sudo sed -i 's#rohit267.github.io/net-merge#pkg.net-merge.org#' /etc/apt/sources.list.d/net-merge.list`, dann erneut aktualisieren.
+
+### 🔀 net-merge 0.3.6
+
+- **net-merge 0.3.3 → 0.3.6:** Neue Linien wählt net-merge jetzt danach, wie ausgelastet eine Leitung wirklich ist, statt nach der Zahl offener Verbindungen. Eine schnelle Leitung mit vielen untätigen Verbindungen wird also nicht mehr übergangen. Der SOCKS5-Proxy prüft Anfragen strenger. Dazu kommen das neue apt-Repo `pkg.net-merge.org` und die Wahl einer freien Adresse beim Start. Siehe [Changelog von net-merge](https://github.com/net-merge/net-merge/blob/main/CHANGELOG.md).
+
+## [0.9.0] – 2026-10-28
+
+Fotos aus der Companion-App kommen jetzt auch ohne gemeinsames Netz auf die Box: Die App handelt per Bluetooth ein eigenes Upload-WLAN aus. Dazu HTTPS auch per IP und eine Weboberfläche, die beim Kopieren auf den Cache nicht mehr hängt.
+
 ### ✨ Neu
 
 - **Fotos aus der Companion-App per WLAN-Handover:** Die App fordert über Bluetooth ein WLAN zur Box an und lädt darüber hoch, auch wenn Handy und Box in keinem gemeinsamen Netz sind. Neu ist `GET/POST/DELETE /api/uplink/handover`, nur über die Bluetooth-Brücke erreichbar. Die Box nimmt das laufende Rückfall-WLAN, sonst ein eigenes Upload-WLAN `OGC-<Box>-up` auf Abruf: auf einem freien Adapter, oder auf `wlan0`, wobei sie dann für die Dauer des Uploads offline geht. Cloud-Transfers warten in dieser Zeit. Jedes Handy hat seinen eigenen WLAN-Schlüssel. Die App pinnt die Root-CA der Box, die sie über den verschlüsselten Bluetooth-Kanal bekommt. Das Token gilt nur für den Chunk-Upload. Das WLAN geht nach 5 min Leerlauf, spätestens nach 60 min wieder aus. Ob normale Benutzer die Box dafür offline nehmen dürfen, legt der Admin unter *Bluetooth* fest (Standard: nein). Läuft mit `hostapd` und dem Helfer `deploy/netfallback/handover.sh`; bestehende Boxen mit Rückfall-WLAN bekommen beides beim nächsten Update. Siehe [Netzwerk-Redundanz](docs/NETZWERK-REDUNDANZ.md#upload-wlan-für-die-companion-app).
