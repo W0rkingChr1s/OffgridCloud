@@ -41,8 +41,7 @@ Label, Icon, Kurzbeschreibung), dann das Skript ausführen.
 
 `deploy/netmerge/install.sh` installiert eine feste net-merge-Version
 (`NM_VERSION` plus SHA-256 der Release-Tarballs). Das Skript hebt den Pin auf das
-neueste Release an, sobald es im apt-Repository für amd64, arm64 und armhf liegt,
-berechnet die Hashes neu und prüft, dass das x86_64-Binary die Version meldet.
+neueste Release an, berechnet die Hashes neu und prüft, dass das x86_64-Binary die Version meldet.
 Der Workflow **„net-merge update“** führt es montags aus und öffnet dann einen PR.
 
 ```bash

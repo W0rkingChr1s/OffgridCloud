@@ -390,8 +390,8 @@ run systemctl disable --now offgridcloud-ble.service 2>/dev/null || true
 run rm -f /etc/systemd/system/offgridcloud-ble.service
 
 # --- 2b. Link bundling (net-merge) ------------------------------------------
-# Only our service goes; the net-merge package itself stays (apt-mark unhold
-# net-merge && apt remove net-merge, if nothing else uses it).
+# Only our service goes; the net-merge binary itself stays
+# (rm /usr/local/bin/net-merge, if nothing else uses it).
 run systemctl disable --now offgridcloud-netmerge.service 2>/dev/null || true
 run rm -f /etc/systemd/system/offgridcloud-netmerge.service
 

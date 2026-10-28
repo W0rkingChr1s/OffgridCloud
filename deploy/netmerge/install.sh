@@ -6,9 +6,10 @@
 # as a SOCKS5 proxy on 127.0.0.1:1080 and sends only its rclone uploads through
 # it; nothing else about the box's routing changes. Opt-in, root-only. It:
 #
-#   1. installs the pinned net-merge version NM_VERSION (Debian/Raspberry Pi
-#      OS: from its signed apt repository, key fingerprint checked, then held;
-#      elsewhere: the release tarball, SHA-256 checked),
+#   1. installs the pinned net-merge version NM_VERSION from the release
+#      tarball (SHA-256 checked) to /usr/local/bin. net-merge's apt repository
+#      (rohit267.github.io/net-merge) is gone; its leftovers are removed so
+#      they don't break apt-get update,
 #   2. installs + starts the offgridcloud-netmerge service, and
 #   3. wires OGC_NETMERGE_PROXY into .env so the toggle under
 #      Bandbreite → Leitungsbündelung becomes available.
@@ -25,9 +26,6 @@ SERVICE_USER="offgrid"
 DO_START=1
 LISTEN="127.0.0.1:1080"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Signing key of net-merge's package repositories (see its README).
-KEY_FPR="0168C7AB77721656904811AE904F61E7F4F1C2A1"
-REPO="https://rohit267.github.io/net-merge"
 # Pinned release. Bumped by scripts/netmerge-bump.sh (weekly via the
 # "net-merge update" workflow, which opens a PR): version + tarball SHA-256s.
 NM_VERSION="0.3.3"
@@ -56,27 +54,6 @@ step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
 # --- 1. net-merge -------------------------------------------------------------
 step "Installing net-merge $NM_VERSION..."
-install_apt() {
-  command -v gpg >/dev/null 2>&1 || apt-get install -y --no-install-recommends gnupg >/dev/null
-  local tmp; tmp="$(mktemp -d)"
-  curl -fsSL "$REPO/apt/key.gpg" -o "$tmp/key.gpg" || { rm -rf "$tmp"; return 1; }
-  # Only trust the key if it is the one the project publishes.
-  if ! gpg --show-keys --with-colons "$tmp/key.gpg" 2>/dev/null | grep -q "^fpr:*$KEY_FPR:"; then
-    echo "   Signing key fingerprint does not match $KEY_FPR — not adding the repository." >&2
-    rm -rf "$tmp"; return 1
-  fi
-  install -m 644 "$tmp/key.gpg" /usr/share/keyrings/net-merge.gpg
-  rm -rf "$tmp"
-  echo "deb [signed-by=/usr/share/keyrings/net-merge.gpg] $REPO/apt stable main" \
-    > /etc/apt/sources.list.d/net-merge.list
-  apt-get update -o Dir::Etc::sourcelist=sources.list.d/net-merge.list \
-    -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 >/dev/null
-  # Exact version, held so a routine apt upgrade doesn't move it; the next
-  # run of this script with a new NM_VERSION moves it on purpose.
-  apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
-    "net-merge=$NM_VERSION" || return 1
-  apt-mark hold net-merge >/dev/null
-}
 install_tarball() {
   local arch tmp; arch="$(uname -m)"
   if [[ -z "${NM_SHA256[$arch]:-}" ]]; then
@@ -94,10 +71,14 @@ install_tarball() {
     rm -rf "$tmp"; return 1
   fi
 }
-if command -v apt-get >/dev/null 2>&1; then
-  install_apt || { echo "   apt repository failed — falling back to the release tarball." >&2; install_tarball; }
-else
-  install_tarball
+# net-merge's apt repository no longer exists: older installs added it, and
+# apt-get update now fails on it (exit 100). Drop it and the package from it.
+rm -f /etc/apt/sources.list.d/net-merge.list /usr/share/keyrings/net-merge.gpg
+install_tarball || true
+if [[ -x /usr/local/bin/net-merge ]] && dpkg -s net-merge >/dev/null 2>&1; then
+  apt-mark unhold net-merge >/dev/null 2>&1 || true
+  apt-get remove -y net-merge >/dev/null 2>&1 \
+    || echo "   Old net-merge package still installed — /usr/local/bin/net-merge is used." >&2
 fi
 NM_BIN="$(command -v net-merge || true)"
 if [[ -z "$NM_BIN" ]]; then

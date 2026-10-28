@@ -431,7 +431,14 @@ warn() { echo "   $1" >&2; WARNINGS+=("$1"); }
 # --- System dependencies ----------------------------------------------------
 step "Installing system dependencies..."
 if command -v apt-get >/dev/null 2>&1; then
-  apt-get update
+  # net-merge's apt repository is gone; older link-bundling installs still list
+  # it, and apt-get update fails on it (exit 100). netmerge/install.sh now uses
+  # the release tarball.
+  rm -f /etc/apt/sources.list.d/net-merge.list /usr/share/keyrings/net-merge.gpg
+  # One dead third-party repository must not stop an update: carry on with the
+  # package lists apt still has; a really missing package fails below anyway.
+  apt-get update \
+    || warn "apt-get update failed (a package source is unreachable or gone) — using the existing package lists."
   apt-get install -y --no-install-recommends python3-venv curl ca-certificates
   # Speicher page: format/mount USB sticks, SD cards and external disks.
   apt-get install -y --no-install-recommends exfatprogs dosfstools e2fsprogs fdisk \
