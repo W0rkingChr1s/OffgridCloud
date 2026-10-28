@@ -8,6 +8,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).
+
+### 🐛 Fehlerbehebungen
+
 - **Bluetooth-Box verschwindet nach einer Weile und meldet sich nicht mehr:** Lehnte BlueZ das Anmelden der Werbung ein einziges Mal ab (z. B. direkt nach dem Trennen eines Handys), blieb die Werbung halb registriert, und jeder weitere Versuch scheiterte, bis der Dienst von Hand neu gestartet wurde. Der Prozess lief weiter, schrieb aber keinen Herzschlag mehr: Das Portal zeigte „Der Bluetooth-Dienst der Box meldet sich nicht“ ohne Fehlermeldung. Jetzt räumt der Dienst eine gescheiterte Anmeldung auf, zeigt Admins nach 30 Sekunden den Fehler im Portal und startet sich nach einer Minute ohne Erfolg selbst neu. Auch ein Neustart von `bluetoothd` (z. B. durch ein BlueZ-Update), der alle Registrierungen verwirft, führt jetzt zu einem sauberen Neustart statt zu einer unsichtbaren Box.
 
 ## [0.9.1] – 2026-10-28
