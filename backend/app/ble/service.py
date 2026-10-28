@@ -33,6 +33,11 @@ from .session import Guard, Session
 log = logging.getLogger("offgridcloud.ble")
 
 POLL_INTERVAL = 5.0
+# Consecutive failed refreshes (~1 min) before the service exits so systemd
+# restarts it with a fresh BlueZ registration instead of idling invisibly.
+MAX_REFRESH_FAILURES = 12
+# From here on the web UI no longer counts the heartbeat (routers/ble, 30 s).
+STALE_FAILURES = 6
 STATUS_FILE = "service.json"
 
 
@@ -116,18 +121,30 @@ class BleService:
         if wanted == self._advertising:
             return
         if self._advertising is not None:
-            await self.gatt.stop_advertising()
+            # Forget it first: a failed unregister must not be retried forever.
             self._advertising = None
+            await self.gatt.stop_advertising()
         if wanted is not None:
             await self.gatt.start_advertising(*wanted)
             self._advertising = wanted
 
     async def run(self, stop: asyncio.Event) -> None:
+        failures = 0
         while not stop.is_set():
+            if not getattr(self.gatt, "alive", True):
+                write_startup_error("bluetoothd wurde neu gestartet")
+                raise RuntimeError("bluetoothd wurde neu gestartet")
             try:
                 await self.refresh()
-            except Exception:
+                failures = 0
+            except Exception as exc:
                 log.exception("BLE-Statusabgleich fehlgeschlagen")
+                failures += 1
+                if failures >= STALE_FAILURES:
+                    # The heartbeat is stale by now: say why in the web UI.
+                    write_startup_error(f"{type(exc).__name__}: {exc}")
+                if failures >= MAX_REFRESH_FAILURES:
+                    raise
             try:
                 await asyncio.wait_for(stop.wait(), POLL_INTERVAL)
             except TimeoutError:
@@ -151,7 +168,7 @@ def _write_status(enabled: bool, connected: bool) -> None:
 
 
 def write_startup_error(message: str) -> None:
-    """Leave the reason a start failed for the web UI (no ``updated``: not alive)."""
+    """Leave the reason start or refresh failed for the web UI (no ``updated``: not alive)."""
     _write_status_file({"error": message[:300], "error_at": time.time()})
 
 

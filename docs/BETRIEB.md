@@ -801,6 +801,11 @@ Update „Mit Warnungen“ und versucht es beim nächsten Update erneut (Marker
 `data/.ble-setup-pending`). Das Protokoll des letzten Updates liegt in
 `data/update.log`, das vorherige in `data/update.log.1`.
 
+Scheitert der laufende Dienst eine Minute lang (z. B. BlueZ lehnt die Werbung
+ab) oder wird `bluetoothd` neu gestartet, beendet sich `offgridcloud-ble`
+selbst und systemd startet ihn neu. Der letzte Fehler steht dann im gelben
+Hinweis. Von Hand: `sudo systemctl restart offgridcloud-ble`.
+
 Fehlersuche: `journalctl -u offgridcloud-ble -f` · `bluetoothctl show`
 (Adapter an?) · `rfkill list` (Bluetooth nicht blockiert?). Der Box-Schlüssel
 liegt unter `data/ble/box_static.key`; wer ihn löscht, macht alle Kopplungen

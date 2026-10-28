@@ -164,6 +164,8 @@ class BlueZGatt:
         self.tx = _Characteristic(TX_CHAR_UUID, ["notify"])
         self._advert = _Advertisement()
         self._on_disconnect: OnDisconnect | None = None
+        # False once bluetoothd restarted: our GATT app and advert are gone.
+        self.alive = True
 
     def _chars(self) -> dict[str, _Characteristic]:
         return {
@@ -248,6 +250,20 @@ class BlueZGatt:
                 ],
             )
         )
+        await self.bus.call(
+            Message(
+                destination="org.freedesktop.DBus",
+                path="/org/freedesktop/DBus",
+                interface="org.freedesktop.DBus",
+                member="AddMatch",
+                signature="s",
+                body=[
+                    "type='signal',sender='org.freedesktop.DBus',"
+                    "interface='org.freedesktop.DBus',"
+                    "member='NameOwnerChanged',arg0='org.bluez'"
+                ],
+            )
+        )
         await self._call(
             self.adapter_path,
             "org.bluez.GattManager1",
@@ -258,7 +274,14 @@ class BlueZGatt:
         log.info("GATT-Dienst auf %s registriert", self.adapter_path)
 
     def _on_signal(self, msg: Message) -> None:
-        if msg.message_type != MessageType.SIGNAL or msg.member != "PropertiesChanged":
+        if msg.message_type != MessageType.SIGNAL:
+            return
+        if msg.member == "NameOwnerChanged":
+            if msg.body and msg.body[0] == BLUEZ and self.alive:
+                log.warning("bluetoothd wurde neu gestartet")
+                self.alive = False
+            return
+        if msg.member != "PropertiesChanged":
             return
         if not msg.path.startswith(self.adapter_path + "/dev_") or not msg.body:
             return
@@ -279,14 +302,21 @@ class BlueZGatt:
     async def start_advertising(self, name: str, flags: int) -> None:
         self._advert.local_name = name
         self._advert.flags = flags
+        # A failed registration must not leave the export behind: the next
+        # export() would raise forever and the box stays invisible.
+        self.bus.unexport(ADVERT_PATH, self._advert)
         self.bus.export(ADVERT_PATH, self._advert)
-        await self._call(
-            self.adapter_path,
-            "org.bluez.LEAdvertisingManager1",
-            "RegisterAdvertisement",
-            "oa{sv}",
-            [ADVERT_PATH, {}],
-        )
+        try:
+            await self._call(
+                self.adapter_path,
+                "org.bluez.LEAdvertisingManager1",
+                "RegisterAdvertisement",
+                "oa{sv}",
+                [ADVERT_PATH, {}],
+            )
+        except Exception:
+            self.bus.unexport(ADVERT_PATH, self._advert)
+            raise
 
     async def stop_advertising(self) -> None:
         try:

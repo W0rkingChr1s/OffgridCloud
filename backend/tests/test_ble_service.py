@@ -187,3 +187,78 @@ def test_main_starts_gatt_before_first_refresh(monkeypatch):
         assert json.loads(status.read_text("utf-8"))["enabled"]
     finally:
         status.unlink()  # the web UI tests expect no running service
+
+
+def test_failing_refresh_reports_the_error_and_exits(monkeypatch):
+    """Regression: a refresh that kept failing left no heartbeat and no error —
+    the portal said "meldet sich nicht" while the process idled invisibly."""
+
+    class BrokenGatt(FakeGatt):
+        async def start_advertising(self, name, flags):
+            raise RuntimeError("org.bluez.Error.Failed")
+
+    async def scenario():
+        monkeypatch.setattr(service, "POLL_INTERVAL", 0)
+        svc = service.BleService(ServiceHost(), BrokenGatt())
+        try:
+            await asyncio.wait_for(svc.run(asyncio.Event()), 2)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("run() should give up so systemd restarts it")
+
+    status = ble_dir() / service.STATUS_FILE
+    try:
+        run(scenario())
+        data = json.loads(status.read_text("utf-8"))
+        assert "updated" not in data
+        assert data["error"] == "RuntimeError: org.bluez.Error.Failed"
+    finally:
+        status.unlink(missing_ok=True)
+
+
+def test_one_failed_refresh_keeps_running(monkeypatch):
+    class FlakyGatt(FakeGatt):
+        failed = False
+
+        async def start_advertising(self, name, flags):
+            if not self.failed:
+                self.failed = True
+                raise RuntimeError("busy")
+            await super().start_advertising(name, flags)
+
+    async def scenario():
+        monkeypatch.setattr(service, "POLL_INTERVAL", 0.01)
+        gatt = FlakyGatt()
+        svc = service.BleService(ServiceHost(), gatt)
+        stop = asyncio.Event()
+        task = asyncio.create_task(svc.run(stop))
+        await asyncio.sleep(0.1)
+        stop.set()
+        await asyncio.wait_for(task, 2)
+        assert ("OGC-Kiste-1", 0x04) in gatt.adverts
+
+    status = ble_dir() / service.STATUS_FILE
+    try:
+        run(scenario())
+    finally:
+        status.unlink(missing_ok=True)
+
+
+def test_bluetoothd_restart_ends_the_service():
+    async def scenario():
+        gatt = FakeGatt()
+        gatt.alive = False
+        svc = service.BleService(ServiceHost(), gatt)
+        try:
+            await asyncio.wait_for(svc.run(asyncio.Event()), 2)
+        except RuntimeError as exc:
+            assert "bluetoothd" in str(exc)
+        else:
+            raise AssertionError("expected RuntimeError")
+
+    status = ble_dir() / service.STATUS_FILE
+    try:
+        run(scenario())
+    finally:
+        status.unlink(missing_ok=True)
