@@ -17,7 +17,7 @@ dbus_fast = pytest.importorskip("dbus_fast")
 if shutil.which("dbus-daemon") is None:
     pytest.skip("dbus-daemon nicht installiert", allow_module_level=True)
 
-from dbus_fast import Message, MessageType, Variant  # noqa: E402
+from dbus_fast import DBusError, Message, MessageType, Variant  # noqa: E402
 from dbus_fast.aio import MessageBus  # noqa: E402
 from dbus_fast.service import (  # noqa: E402
     PropertyAccess,
@@ -77,9 +77,13 @@ class FakeAdvertisingManager(ServiceInterface):
     def __init__(self, log):
         super().__init__("org.bluez.LEAdvertisingManager1")
         self.log = log
+        self.fail_next = False
 
     @method()
     def RegisterAdvertisement(self, adv: "o", options: "a{sv}"):  # noqa: F722, F821, N802
+        if self.fail_next:
+            self.fail_next = False
+            raise DBusError("org.bluez.Error.Failed", "Failed to register advertisement")
         self.log.append(("register_adv", adv))
 
     @method()
@@ -147,7 +151,8 @@ def test_gatt_layer_on_a_real_bus(bus_address):
         bluez.export("/", FakeObjectManager())
         bluez.export(ADAPTER, FakeAdapter(log))
         bluez.export(ADAPTER, FakeGattManager(log))
-        bluez.export(ADAPTER, FakeAdvertisingManager(log))
+        adv_manager = FakeAdvertisingManager(log)
+        bluez.export(ADAPTER, adv_manager)
         bluez.export(DEVICE, FakeDevice(log))
         await bluez.request_name("org.bluez")
 
@@ -234,6 +239,20 @@ def test_gatt_layer_on_a_real_bus(bus_address):
         await gatt.stop_advertising()
         assert ("unregister_adv", gatt_bluez.ADVERT_PATH) in log
 
+        # Regression: one refused registration used to leave the advert
+        # exported, so every later attempt failed in export() for good.
+        adv_manager.fail_next = True
+        log.clear()
+        try:
+            await gatt.start_advertising("OGC-Kiste-1", 0x04)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("expected the BlueZ error")
+        await gatt.start_advertising("OGC-Kiste-1", 0x04)
+        assert ("register_adv", gatt_bluez.ADVERT_PATH) in log
+        await gatt.stop_advertising()
+
         # a device dropping off is reported; Disconnect reaches BlueZ
         await bluez.send(
             Message.new_signal(
@@ -251,6 +270,15 @@ def test_gatt_layer_on_a_real_bus(bus_address):
         assert disconnects == [DEVICE]
         await gatt.disconnect(DEVICE)
         assert ("disconnect",) in log
+
+        # bluetoothd going away drops our registrations: the service must notice.
+        assert gatt.alive
+        await bluez.release_name("org.bluez")
+        for _ in range(50):
+            if not gatt.alive:
+                break
+            await asyncio.sleep(0.02)
+        assert not gatt.alive
 
         app_bus.disconnect()
         bluez.disconnect()

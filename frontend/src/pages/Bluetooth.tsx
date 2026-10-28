@@ -169,11 +169,11 @@ export default function Bluetooth() {
                   {!status.service_installed ? (
                     <>
                       Nachinstallieren:{" "}
-                      <span className="font-mono">sudo /opt/offgridcloud/src/deploy/ble/install.sh</span>.{" "}
+                      <span className="break-all font-mono">sudo /opt/offgridcloud/src/deploy/ble/install.sh</span>.{" "}
                     </>
                   ) : (
                     <>
-                      Diagnose: <span className="font-mono">journalctl -u offgridcloud-ble -e</span>.{" "}
+                      Diagnose: <span className="whitespace-nowrap font-mono">journalctl -u offgridcloud-ble -e</span>.{" "}
                     </>
                   )}
                   Details: docs/BETRIEB.md, Abschnitt 9d.
