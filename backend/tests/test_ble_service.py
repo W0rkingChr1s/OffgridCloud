@@ -177,7 +177,9 @@ def test_main_starts_gatt_before_first_refresh(monkeypatch):
     async def no_loop(self, stop):
         return None
 
-    monkeypatch.setattr(entry, "BlueZGatt", StrictGatt)
+    from app.ble import gatt_bluez
+
+    monkeypatch.setattr(gatt_bluez, "BlueZGatt", StrictGatt)
     monkeypatch.setattr(entry, "BoxHost", lambda key, url: ServiceHost())
     monkeypatch.setattr(entry, "load_or_create_box_key", lambda: None)
     monkeypatch.setattr(entry.BleService, "run", no_loop)
@@ -260,5 +262,30 @@ def test_bluetoothd_restart_ends_the_service():
     status = ble_dir() / service.STATUS_FILE
     try:
         run(scenario())
+    finally:
+        status.unlink(missing_ok=True)
+
+
+def test_missing_dbus_fast_reaches_the_web_ui(monkeypatch):
+    """Regression: without dbus-fast the import crashed before the error was
+    written, so the portal only said "meldet sich nicht"."""
+    import sys
+
+    from app.ble import __main__ as entry
+
+    monkeypatch.setattr(entry, "BoxHost", lambda key, url: ServiceHost())
+    monkeypatch.setattr(entry, "load_or_create_box_key", lambda: None)
+    monkeypatch.delitem(sys.modules, "app.ble.gatt_bluez", raising=False)
+    monkeypatch.setitem(sys.modules, "dbus_fast", None)  # import → ModuleNotFoundError
+    status = ble_dir() / service.STATUS_FILE
+    try:
+        try:
+            run(entry.main())
+        except ModuleNotFoundError:
+            pass
+        else:
+            raise AssertionError("expected ModuleNotFoundError")
+        error = json.loads(status.read_text("utf-8"))["error"]
+        assert error.startswith("ModuleNotFoundError") and "dbus_fast" in error
     finally:
         status.unlink(missing_ok=True)

@@ -9,7 +9,6 @@ import signal
 from ..config import get_settings
 from ..db import init_db
 from .bridge import BoxHost
-from .gatt_bluez import BlueZGatt
 from .keys import load_or_create_box_key
 from .service import BleService, write_startup_error
 
@@ -20,9 +19,13 @@ async def main() -> None:
     # The backend creates the tables too; harmless if both do it.
     init_db()
     host = BoxHost(load_or_create_box_key(), settings.ble_backend_url)
-    gatt = BlueZGatt(settings.ble_adapter)
-    service = BleService(host, gatt)
     try:
+        # Imported here: without dbus-fast (failed pip on an update) the reason
+        # must reach the web UI too, not only the journal.
+        from .gatt_bluez import BlueZGatt
+
+        gatt = BlueZGatt(settings.ble_adapter)
+        service = BleService(host, gatt)
         # Connect to BlueZ first: refresh() already advertises, which needs the bus.
         await gatt.start(service.on_write, service.on_disconnect)
         await service.refresh()

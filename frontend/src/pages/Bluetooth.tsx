@@ -166,7 +166,7 @@ export default function Bluetooth() {
               )}
               {isAdmin && (
                 <p>
-                  {!status.service_installed ? (
+                  {!status.service_installed || status.service_error?.includes("dbus_fast") ? (
                     <>
                       Nachinstallieren:{" "}
                       <span className="break-all font-mono">sudo /opt/offgridcloud/src/deploy/ble/install.sh</span>.{" "}
