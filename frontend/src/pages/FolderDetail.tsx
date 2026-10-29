@@ -14,7 +14,8 @@ import { copyText } from "../clipboard";
 import { type ContextMenuEntry, useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
-import { SortMenu, SortTh, type SortOption, useSort } from "../components/Sort";
+import FileBrowser from "../components/FileBrowser";
+import { type SortOption } from "../components/Sort";
 import { useToast } from "../toast";
 import { TagEditor } from "../components/Tags";
 import { DescriptionModal, DescriptionsList } from "../components/Descriptions";
@@ -79,25 +80,39 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function Thumb({ id }: { id: number }) {
+function Thumb({ id, big = false }: { id: number; big?: boolean }) {
   const [failed, setFailed] = useState(false);
+  const box = big ? "h-full w-full" : "h-11 w-16 rounded-lg";
   if (failed) {
-    return (
-      <div className="flex h-11 w-16 items-center justify-center rounded-lg bg-slate-700/60 text-slate-400">
-        ▦
-      </div>
-    );
+    return <div className={`flex items-center justify-center bg-slate-700/60 text-slate-400 ${box}`}>▦</div>;
   }
   return (
     <img
       src={`/api/media/${id}/thumbnail?token=${encodeURIComponent(getToken() ?? "")}`}
       alt=""
       loading="lazy"
-      className="h-11 w-16 rounded-lg object-cover ring-1 ring-white/10"
+      decoding="async"
+      className={`object-cover ${box} ${big ? "" : "ring-1 ring-white/10"}`}
       onError={() => setFailed(true)}
     />
   );
 }
+
+/** Placeholder for a file whose local copy is gone (only in the cloud now). */
+function Gone({ big = false }: { big?: boolean }) {
+  return (
+    <div
+      className={`flex items-center justify-center bg-slate-700/60 text-xs text-slate-500 ${big ? "h-full w-full" : "h-11 w-16 rounded-lg"}`}
+      title="Lokale Kopie entfernt"
+    >
+      entf.
+    </div>
+  );
+}
+
+const mediaKey = (m: MediaItem) => String(m.id);
+const mediaName = (m: MediaItem) => m.filename;
+const isAvailable = (m: MediaItem) => !m.local_deleted;
 
 interface UploadRow {
   name: string;
@@ -170,7 +185,6 @@ export default function FolderDetail() {
   // Files whose local copy is still present (downloadable / selectable).
   const available = useMemo(() => media.filter((m) => !m.local_deleted), [media]);
   const availableIds = useMemo(() => available.map((m) => m.id), [available]);
-  const allSelected = availableIds.length > 0 && availableIds.every((id) => selected.has(id));
   const selectedIds = useMemo(
     () => availableIds.filter((id) => selected.has(id)),
     [availableIds, selected],
@@ -184,6 +198,8 @@ export default function FolderDetail() {
     });
   }, [availableIds]);
 
+  const selectedKeys = useMemo(() => new Set([...selected].map(String)), [selected]);
+
   const toggle = useCallback((mid: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -192,10 +208,6 @@ export default function FolderDetail() {
       return next;
     });
   }, []);
-
-  const toggleAll = useCallback(() => {
-    setSelected((prev) => (prev.size >= availableIds.length ? new Set() : new Set(availableIds)));
-  }, [availableIds]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -338,7 +350,6 @@ export default function FolderDetail() {
     triggerDownload(bulkDownloadUrl(folderId));
   }, [folderId, availableIds]);
 
-  const sort = useSort(media, MEDIA_SORT, { key: "created", dir: "desc" });
   const deleteItem = (m: MediaItem) => ({
     label: busyId === m.id ? "Lösche …" : "Löschen …",
     danger: true,
@@ -507,176 +518,89 @@ export default function FolderDetail() {
         onDeleted={() => loadDescriptions()}
       />
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Medien ({media.length})
-        </h3>
-        <div className="flex items-center gap-4">
-          {media.length > 0 && <SortMenu sort={sort} />}
-          {available.length > 0 && (
-            <button
-              onClick={toggleAll}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              {allSelected ? "Auswahl aufheben" : "Alle auswählen"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {media.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
-          Noch keine Dateien in diesem Ordner.
-        </p>
-      ) : (
-        <>
-          {/* Mobile: card list */}
-          <div className="space-y-2 md:hidden">
-            {sort.sorted.map((m) => {
-              const isSel = selected.has(m.id);
-              return (
-                <div
-                  key={m.id}
-                  onContextMenu={ctx.bind(() => rowMenu(m))}
-                  className={`flex items-start gap-3 rounded-xl p-3 ring-1 transition ${
-                    isSel ? "bg-ogc-teal/10 ring-ogc-teal/40" : "bg-slate-800/60 ring-white/5"
-                  }`}
-                >
-                  {!m.local_deleted && (
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={() => toggle(m.id)}
-                      aria-label={`${m.filename} auswählen`}
-                      className="mt-1 h-4 w-4 shrink-0 accent-ogc-teal"
-                    />
-                  )}
-                  <div className="shrink-0">
-                    {m.local_deleted ? (
-                      <div className="flex h-11 w-16 items-center justify-center rounded-lg bg-slate-700/60 text-xs text-slate-500">
-                        entf.
-                      </div>
-                    ) : (
-                      <Thumb id={m.id} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-white">{m.filename}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-                      <span>{formatBytes(m.size)}</span>
-                      <span aria-hidden>·</span>
-                      <span>{dateFmt.format(new Date(m.created_at))}</span>
-                      <span aria-hidden>·</span>
-                      <StatusPill status={m.status} />
-                    </div>
-                    <div className="mt-1.5">
-                      <TagEditor mediaId={m.id} tags={m.tags} onChange={(t) => patchTags(m.id, t)} />
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-2">
-                    {!m.local_deleted && (
-                      <a
-                        href={downloadUrl(m.id)}
-                        download
-                        aria-label={`${m.filename} herunterladen`}
-                        className="rounded-lg border border-white/10 px-2.5 py-1 text-sm leading-none text-slate-300 hover:bg-white/5"
-                      >
-                        ↓
-                      </a>
-                    )}
-                    <MoreMenu items={[deleteItem(m)]} />
-                  </div>
-                </div>
-              );
-            })}
+      <FileBrowser
+        items={media}
+        getKey={mediaKey}
+        getName={mediaName}
+        isSelectable={isAvailable}
+        selected={selectedKeys}
+        onSelectedChange={(next) => setSelected(new Set([...next].map(Number)))}
+        onOpen={(m) => !m.local_deleted && triggerDownload(downloadUrl(m.id))}
+        onContextMenu={(m, e) => ctx.bind(() => rowMenu(m))(e)}
+        sortOptions={MEDIA_SORT}
+        initialSort={{ key: "created", dir: "desc" }}
+        storageKey="folder-media"
+        resetKey={folderId}
+        header={
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Medien ({media.length})</h3>
+        }
+        emptyText="Noch keine Dateien in diesem Ordner."
+        renderIcon={(m) => (m.local_deleted ? <Gone /> : <Thumb id={m.id} />)}
+        renderTile={(m) => (m.local_deleted ? <Gone big /> : <Thumb id={m.id} big />)}
+        renderTileBadge={(m) => <StatusPill status={m.status} />}
+        renderSubtitle={(m) => (
+          <>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400 lg:hidden">
+              <span>{formatBytes(m.size)}</span>
+              <span aria-hidden>·</span>
+              <span>{dateFmt.format(new Date(m.created_at))}</span>
+              <span className="md:hidden">
+                <StatusPill status={m.status} />
+              </span>
+            </div>
+            <div className="mt-1" data-no-row-click>
+              <TagEditor mediaId={m.id} tags={m.tags} quietAdd onChange={(t) => patchTags(m.id, t)} />
+            </div>
+          </>
+        )}
+        columns={[
+          {
+            key: "size",
+            label: "Größe",
+            sortKey: "size",
+            align: "right",
+            className: "hidden w-20 text-slate-300 lg:block",
+            render: (m) => formatBytes(m.size),
+          },
+          {
+            key: "status",
+            label: "Status",
+            sortKey: "status",
+            className: "hidden w-32 md:block",
+            render: (m) => <StatusPill status={m.status} />,
+          },
+          {
+            key: "created",
+            label: "Hochgeladen",
+            sortKey: "created",
+            align: "right",
+            className: "hidden w-32 text-slate-400 lg:block",
+            render: (m) => dateTimeFmt.format(new Date(m.created_at)),
+          },
+        ]}
+        renderActions={(m) => (
+          <div className="flex items-center gap-2">
+            {!m.local_deleted && (
+              <a
+                href={downloadUrl(m.id)}
+                download
+                aria-label={`${m.filename} herunterladen`}
+                className="hidden rounded-lg border border-white/10 px-2.5 py-1.5 text-xs leading-none text-slate-300 hover:bg-white/5 sm:inline-block"
+              >
+                ↓
+              </a>
+            )}
+            <MoreMenu
+              items={[
+                ...(m.local_deleted
+                  ? []
+                  : [{ label: "Herunterladen", onClick: () => triggerDownload(downloadUrl(m.id)) }]),
+                deleteItem(m),
+              ]}
+            />
           </div>
-
-          {/* Desktop: table */}
-          <div className="hidden overflow-hidden rounded-2xl ring-1 ring-white/10 md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-800/80 text-slate-400">
-                <tr>
-                  <th className="w-10 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="Alle auswählen"
-                      disabled={available.length === 0}
-                      className="h-4 w-4 accent-ogc-teal"
-                    />
-                  </th>
-                  <th className="px-4 py-3">Vorschau</th>
-                  <SortTh sort={sort} field="name">Datei</SortTh>
-                  <SortTh sort={sort} field="size">Größe</SortTh>
-                  <SortTh sort={sort} field="status">Status</SortTh>
-                  <th className="px-4 py-3">Tags</th>
-                  <SortTh sort={sort} field="created">Hochgeladen</SortTh>
-                  <th className="px-4 py-3" aria-label="Aktionen" />
-                </tr>
-              </thead>
-              <tbody>
-                {sort.sorted.map((m) => {
-                  const isSel = selected.has(m.id);
-                  return (
-                    <tr
-                      key={m.id}
-                      onContextMenu={ctx.bind(() => rowMenu(m))}
-                      className={`group border-t border-white/5 transition ${
-                        isSel ? "bg-ogc-teal/10" : "bg-slate-900/40 hover:bg-slate-800/40"
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        {!m.local_deleted && (
-                          <input
-                            type="checkbox"
-                            checked={isSel}
-                            onChange={() => toggle(m.id)}
-                            aria-label={`${m.filename} auswählen`}
-                            className="h-4 w-4 accent-ogc-teal"
-                          />
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {m.local_deleted ? (
-                          <span className="text-xs text-slate-500">entfernt</span>
-                        ) : (
-                          <Thumb id={m.id} />
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-white">{m.filename}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-300">{formatBytes(m.size)}</td>
-                      <td className="px-4 py-3">
-                        <StatusPill status={m.status} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <TagEditor mediaId={m.id} tags={m.tags} quietAdd onChange={(t) => patchTags(m.id, t)} />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-400">
-                        {dateTimeFmt.format(new Date(m.created_at))}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {!m.local_deleted && (
-                            <a
-                              href={downloadUrl(m.id)}
-                              download
-                              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs leading-none hover:bg-white/5"
-                            >
-                              Download
-                            </a>
-                          )}
-                          <MoreMenu items={[deleteItem(m)]} />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+        )}
+      />
 
       {/* Sticky bulk-action bar — appears while items are selected. */}
       {selectedIds.length > 0 && (
