@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -8,6 +9,7 @@ import {
   type Provider,
   type User,
 } from "../api";
+import { useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
 import { SortMenu, type SortOption, useSort } from "../components/Sort";
@@ -122,6 +124,8 @@ export default function Folders() {
   const field = "rounded-lg border border-white/10 bg-slate-900/60 px-3 py-2 outline-hidden focus:border-ogc-teal";
 
   const sort = useSort(folders, FOLDER_SORT, { key: "name" });
+  const navigate = useNavigate();
+  const ctx = useContextMenu();
 
   return (
     <Layout>
@@ -148,7 +152,15 @@ export default function Folders() {
 
       <div className="space-y-4">
         {sort.sorted.map((f) => (
-          <div key={f.id} className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10">
+          <div
+            key={f.id}
+            onContextMenu={ctx.bind(() => [
+              { label: "Dateien öffnen", onClick: () => navigate(`/folders/${f.id}`) },
+              "separator",
+              { label: "Ordner löschen …", danger: true, onClick: () => removeFolder(f) },
+            ])}
+            className="rounded-2xl bg-slate-800/60 p-5 ring-1 ring-white/10"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-lg font-semibold text-white">{f.name}</div>
@@ -214,6 +226,7 @@ export default function Folders() {
           </div>
         ))}
       </div>
+      {ctx.menu}
     </Layout>
   );
 }

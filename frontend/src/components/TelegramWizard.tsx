@@ -8,6 +8,7 @@ import {
   type TelegramNames,
   type TelegramTokenCheck,
 } from "../api";
+import { copyText } from "../clipboard";
 import { useToast } from "../toast";
 
 /**
@@ -24,33 +25,6 @@ const btnCls =
   "rounded-lg bg-linear-to-r from-ogc-teal to-ogc-blue px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const ghostCls =
   "rounded-lg px-3 py-2 text-sm text-slate-300 ring-1 ring-white/10 hover:bg-white/5 disabled:opacity-40";
-
-/** navigator.clipboard only exists on HTTPS/localhost; the box is often plain HTTP. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to the legacy path */
-  }
-  const area = document.createElement("textarea");
-  area.value = text;
-  area.setAttribute("readonly", "");
-  area.style.position = "fixed";
-  area.style.opacity = "0";
-  document.body.appendChild(area);
-  area.select();
-  let ok = false;
-  try {
-    ok = document.execCommand("copy");
-  } catch {
-    ok = false;
-  }
-  area.remove();
-  return ok;
-}
 
 function CopyButton({ text, label = "Kopieren" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
