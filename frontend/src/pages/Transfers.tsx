@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, ApiError, type TransferAction, type TransferControl, type TransferJob } from "../api";
+import { copyText } from "../clipboard";
+import { type ContextMenuEntry, useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import { SortTh, type SortOption, useSort } from "../components/Sort";
 import { useEvents } from "../events";
+import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
 const TRANSFER_SORT: SortOption<TransferJob>[] = [
@@ -67,6 +71,24 @@ export default function Transfers() {
   }
 
   const sort = useSort(jobs, TRANSFER_SORT, { key: "created", dir: "desc" });
+
+  const navigate = useNavigate();
+  const toast = useToast();
+  const ctx = useContextMenu();
+  const copy = async (text: string, what: string) => {
+    if (await copyText(text)) toast.success("Kopiert", `${what} liegt in der Zwischenablage.`);
+    else toast.error("Kopieren fehlgeschlagen", "Der Browser hat den Zugriff verweigert.");
+  };
+  const rowMenu = (j: TransferJob): ContextMenuEntry[] => [
+    (j.status === "failed" || j.status === "queued") && { label: "Erneut versuchen", onClick: () => retry(j.id) },
+    j.folder_id !== null && { label: "Zum Ordner", onClick: () => navigate(`/folders/${j.folder_id}`) },
+    "separator",
+    { label: "Dateinamen kopieren", onClick: () => copy(j.media_filename, "Der Dateiname") },
+    j.status === "failed" && !!j.last_error && {
+      label: "Fehlermeldung kopieren",
+      onClick: () => copy(`${j.media_filename} → ${j.provider_name}: ${j.last_error}`, "Die Fehlermeldung"),
+    },
+  ];
 
   const active = Object.fromEntries((snapshot?.transfers?.active ?? []).map((a) => [a.id, a]));
   const counts = snapshot?.transfers?.counts ??
@@ -136,7 +158,7 @@ export default function Transfers() {
               {sort.sorted.map((j) => {
                 const s = STATUS[j.status] ?? STATUS.queued;
                 return (
-                  <tr key={j.id} className="border-t border-white/5 bg-slate-900/40">
+                  <tr key={j.id} onContextMenu={ctx.bind(() => rowMenu(j))} className="border-t border-white/5 bg-slate-900/40">
                     <td className="px-4 py-3">
                       <div className="font-medium text-white">{j.media_filename}</div>
                       {/* Target and attempts move under the file name on phones. */}
@@ -184,6 +206,7 @@ export default function Transfers() {
           </table>
         </div>
       )}
+      {ctx.menu}
     </Layout>
   );
 }

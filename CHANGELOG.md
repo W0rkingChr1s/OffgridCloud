@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
+
 ### 🐛 Fehlerbehebungen
 
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).

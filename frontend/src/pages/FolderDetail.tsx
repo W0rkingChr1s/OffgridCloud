@@ -10,6 +10,8 @@ import {
   type MediaDescription,
   type MediaItem,
 } from "../api";
+import { copyText } from "../clipboard";
+import { type ContextMenuEntry, useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
 import { SortMenu, SortTh, type SortOption, useSort } from "../components/Sort";
@@ -344,6 +346,41 @@ export default function FolderDetail() {
     onClick: () => remove(m),
   });
 
+  const ctx = useContextMenu();
+  const copyName = async (name: string) => {
+    if (await copyText(name)) toast.success("Kopiert", `„${name}" liegt in der Zwischenablage.`);
+    else toast.error("Kopieren fehlgeschlagen", "Der Browser hat den Zugriff verweigert.");
+  };
+  // Right-click on a row that's part of a multi-selection acts on the whole
+  // selection (like a file manager); otherwise just on that one file.
+  const rowMenu = (m: MediaItem): ContextMenuEntry[] => {
+    const n = selectedIds.length;
+    if (n > 1 && selected.has(m.id)) {
+      return [
+        { label: `${n} Dateien herunterladen (.zip)`, disabled: bulkBusy, onClick: downloadSelected },
+        {
+          label: `${n} Dateien beschreiben …`,
+          disabled: bulkBusy,
+          onClick: () => setDescModal({ mode: "create", mediaIds: selectedIds }),
+        },
+        { label: "Auswahl aufheben", onClick: () => setSelected(new Set()) },
+        "separator",
+        { label: `${n} Dateien löschen …`, danger: true, disabled: bulkBusy, onClick: removeSelected },
+      ];
+    }
+    return [
+      !m.local_deleted && { label: "Herunterladen", onClick: () => triggerDownload(downloadUrl(m.id)) },
+      !m.local_deleted && {
+        label: "Beschreiben …",
+        onClick: () => setDescModal({ mode: "create", mediaIds: [m.id] }),
+      },
+      !m.local_deleted && { label: selected.has(m.id) ? "Abwählen" : "Auswählen", onClick: () => toggle(m.id) },
+      { label: "Dateinamen kopieren", onClick: () => copyName(m.filename) },
+      "separator",
+      deleteItem(m),
+    ];
+  };
+
   return (
     <Layout>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -500,6 +537,7 @@ export default function FolderDetail() {
               return (
                 <div
                   key={m.id}
+                  onContextMenu={ctx.bind(() => rowMenu(m))}
                   className={`flex items-start gap-3 rounded-xl p-3 ring-1 transition ${
                     isSel ? "bg-ogc-teal/10 ring-ogc-teal/40" : "bg-slate-800/60 ring-white/5"
                   }`}
@@ -583,6 +621,7 @@ export default function FolderDetail() {
                   return (
                     <tr
                       key={m.id}
+                      onContextMenu={ctx.bind(() => rowMenu(m))}
                       className={`group border-t border-white/5 transition ${
                         isSel ? "bg-ogc-teal/10" : "bg-slate-900/40 hover:bg-slate-800/40"
                       }`}
@@ -677,6 +716,8 @@ export default function FolderDetail() {
           </div>
         </div>
       )}
+
+      {ctx.menu}
 
       {descModal && (
         <DescriptionModal
