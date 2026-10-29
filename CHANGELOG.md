@@ -8,6 +8,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### ✨ Neu
 
+- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch ownCloud und Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht. Große Dateien gehen ohne Chunking in einem Stück hoch, denn öffentliche Freigaben bieten keinen Chunked-Upload.
 - **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
 
 ### 🐛 Fehlerbehebungen

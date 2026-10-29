@@ -11,8 +11,10 @@ is just ``{"type": backend, **fixed, **config}``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
+from .nextcloud_share import share_rclone_options, share_write_problem
 from .rclone_obscure import obscure
 
 
@@ -44,9 +46,17 @@ class ProviderType:
     category: str = "object"
     description: str = ""
     popular: bool = False
+    # Types whose form fields don't map 1:1 to rclone options (e.g. a pasted
+    # share link) build the options themselves. Raises ValueError on bad input.
+    derive: Callable[[dict[str, str]], dict[str, str]] | None = None
+    # Best-effort check after a successful connection test: returns why the
+    # target can't take uploads (e.g. a read-only share), or None.
+    write_check: Callable[[dict[str, str]], str | None] | None = None
 
     def to_rclone_options(self, config: dict[str, str]) -> dict[str, str]:
         opts: dict[str, str] = {"type": self.backend, **self.fixed}
+        if self.derive is not None:
+            return {**opts, **self.derive(config)}
         for f in self.fields:
             value = config.get(f.key, "")
             if value == "" or value is None:
@@ -372,6 +382,23 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
         ),
     ),
     ProviderType(
+        key="nextcloud_share",
+        label="Nextcloud-Freigabelink",
+        backend="webdav",
+        category="selfhosted",
+        description="Öffentliche Nextcloud-/ownCloud-Freigabe – nur den Link einfügen.",
+        help="Die Freigabe braucht „Hochladen und Bearbeiten erlauben“. "
+             "„Dateiablage“ (nur hochladen) reicht nicht.",
+        derive=share_rclone_options,
+        write_check=share_write_problem,
+        fields=(
+            Field("link", "Freigabelink",
+                  help="z. B. https://cloud.example.com/s/AbC123xyz"),
+            Field("pass", "Freigabe-Passwort", type="password", required=False,
+                  secret=True, help="Nur wenn die Freigabe passwortgeschützt ist"),
+        ),
+    ),
+    ProviderType(
         key="owncloud",
         label="ownCloud",
         backend="webdav",
@@ -492,3 +519,14 @@ def validate_config(pt: ProviderType, config: dict[str, str]) -> list[str]:
         if f.required and not str(config.get(f.key, "")).strip():
             missing.append(f.label)
     return missing
+
+
+def config_error(pt: ProviderType, config: dict[str, str]) -> str | None:
+    """Return why a (complete) config is unusable, e.g. an unparsable share link."""
+    if pt.derive is None:
+        return None
+    try:
+        pt.derive(config)
+    except ValueError as exc:
+        return str(exc)
+    return None
