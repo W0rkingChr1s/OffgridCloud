@@ -9,7 +9,8 @@ import {
   type MediaStatus,
 } from "../api";
 import Layout from "../components/Layout";
-import { SortMenu, type SortOption, useSort } from "../components/Sort";
+import FileBrowser from "../components/FileBrowser";
+import { type SortOption } from "../components/Sort";
 import { TagEditor } from "../components/Tags";
 import { formatBytes } from "../upload";
 
@@ -41,6 +42,27 @@ const STATUSES: MediaStatus[] = [
 
 function downloadUrl(id: number): string {
   return `/api/media/${id}/download?token=${encodeURIComponent(getToken() ?? "")}`;
+}
+
+const resultKey = (m: MediaSearchResult) => String(m.id);
+const resultName = (m: MediaSearchResult) => m.filename;
+
+function Thumb({ m, big = false }: { m: MediaSearchResult; big?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const box = big ? "h-full w-full" : "h-11 w-16 rounded-lg";
+  if (m.local_deleted || failed) {
+    return <div className={`flex items-center justify-center bg-slate-700/60 text-slate-400 ${box}`}>▦</div>;
+  }
+  return (
+    <img
+      src={`/api/media/${m.id}/thumbnail?token=${encodeURIComponent(getToken() ?? "")}`}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      className={`object-cover ${box}`}
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export default function Search() {
@@ -85,8 +107,6 @@ export default function Search() {
 
   const field =
     "rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2 text-sm text-white outline-hidden focus:border-ogc-teal/50";
-
-  const sort = useSort(results, RESULT_SORT, { key: "name" });
 
   return (
     <Layout>
@@ -134,50 +154,53 @@ export default function Search() {
         <div className="mb-4 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{error}</div>
       )}
 
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm text-slate-400">
-          {loading ? "Suche…" : `${results.length} Treffer`}
-        </div>
-        {results.length > 0 && <SortMenu sort={sort} />}
-      </div>
-
-      {results.length === 0 && !loading ? (
-        <p className="text-sm text-slate-500">Keine Medien passen zu den Filtern.</p>
-      ) : (
-        <div className="space-y-2">
-          {sort.sorted.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-start gap-3 rounded-xl bg-slate-800/60 p-3 ring-1 ring-white/5 sm:items-center"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-white">{m.filename}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
-                  <Link to={`/folders/${m.folder_id}`} className="text-ogc-teal hover:underline">
-                    {m.folder_name}
-                  </Link>
-                  <span aria-hidden>·</span>
-                  <span>{formatBytes(m.size)}</span>
-                  <span aria-hidden>·</span>
-                  <span>{STATUS_LABELS[m.status] ?? m.status}</span>
-                </div>
-                <div className="mt-1.5">
-                  <TagEditor mediaId={m.id} tags={m.tags} />
-                </div>
-              </div>
-              {!m.local_deleted && (
-                <a
-                  href={downloadUrl(m.id)}
-                  download
-                  className="shrink-0 rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5"
-                >
-                  Download
-                </a>
-              )}
+      <FileBrowser
+        items={results}
+        getKey={resultKey}
+        getName={resultName}
+        sortOptions={RESULT_SORT}
+        initialSort={{ key: "name" }}
+        filterable={false}
+        storageKey="search"
+        resetKey={query}
+        loading={loading}
+        emptyText="Keine Medien passen zu den Filtern."
+        header={<div className="text-sm text-slate-400">{loading ? "Suche…" : `${results.length} Treffer`}</div>}
+        renderIcon={(m) => <Thumb m={m} />}
+        renderTile={(m) => <Thumb m={m} big />}
+        renderSubtitle={(m) => (
+          <>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+              <Link to={`/folders/${m.folder_id}`} className="text-ogc-teal hover:underline">
+                {m.folder_name}
+              </Link>
+              <span aria-hidden>·</span>
+              <span>{formatBytes(m.size)}</span>
+              <span aria-hidden>·</span>
+              <span>{STATUS_LABELS[m.status] ?? m.status}</span>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="mt-1.5" data-no-row-click>
+              <TagEditor mediaId={m.id} tags={m.tags} />
+            </div>
+          </>
+        )}
+        renderTileBadge={(m) => (
+          <span className="truncate rounded-sm bg-black/60 px-1 py-0.5 text-[9px] font-semibold text-white">{m.folder_name}</span>
+        )}
+        renderActions={(m) =>
+          m.local_deleted ? null : (
+            <a
+              href={downloadUrl(m.id)}
+              download
+              aria-label={`${m.filename} herunterladen`}
+              className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-xs hover:bg-white/5"
+            >
+              <span className="sm:hidden">↓</span>
+              <span className="hidden sm:inline">Download</span>
+            </a>
+          )
+        }
+      />
     </Layout>
   );
 }

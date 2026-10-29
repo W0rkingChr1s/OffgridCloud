@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Einheitlicher Datei-Browser:** Medien eines Ordners, die Ordner-Ansicht von Karten und USB-Laufwerken sowie die Suche nutzen jetzt denselben Browser. Er bietet Liste oder Kacheln mit Vorschaubildern (die Wahl wird je Ansicht gemerkt), einen Namensfilter, Sortierung per Spaltenkopf und Mehrfachauswahl: Shift-Klick für einen Bereich, Strg/⌘+A für alle, Esc hebt sie auf. Bedienbar ist er auch per Tastatur (Pfeiltasten, Leertaste, Enter öffnet). Lange Listen werden virtualisiert: Eine Karte mit Tausenden Dateien rendert nur, was gerade zu sehen ist, und fragt nur dafür Vorschaubilder an. Die Ordner-Ansicht auf der Speicher-Seite zeigt jetzt Vorschaubilder; sie teilt sich den Thumbnail-Cache mit der Galerie.
+
 ### 🐛 Fehlerbehebungen
 
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).

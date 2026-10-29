@@ -5,6 +5,7 @@ import {
   getToken,
   type Folder,
   type StorageBrowse,
+  type StorageEntry,
   type StorageGallery,
   type StorageGalleryItem,
   type StorageImportJob,
@@ -12,6 +13,8 @@ import {
   type StorageMediaKind,
 } from "../api";
 import { useToast } from "../toast";
+import FileBrowser, { FileGlyph } from "./FileBrowser";
+import { type SortOption } from "./Sort";
 import { formatBytes } from "../upload";
 
 /**
@@ -544,122 +547,154 @@ function FolderView({
       .catch((e) => setErr(e instanceof ApiError ? e.message : "Fehler"));
   }, [device, path]);
 
-  const entries = (listing?.entries ?? []).filter((e) => e.is_dir || !mediaOnly || e.is_media);
-  const allHere = entries.length > 0 && entries.every((e) => selected.has(e.path));
+  const entries = useMemo(
+    () => (listing?.entries ?? []).filter((e) => e.is_dir || !mediaOnly || e.is_media),
+    [listing, mediaOnly],
+  );
   const rel = basePath ? path.slice(basePath.length).replace(/^\//, "") : path;
   const crumbs = rel ? rel.split("/") : [];
   const join = (n: number) => [basePath, ...crumbs.slice(0, n)].filter(Boolean).join("/");
+  const keys = useMemo(() => new Set(selected.keys()), [selected]);
 
-  function toggle(p: string, isDir: boolean) {
+  // The browser hands back plain keys; remember for each whether it's a folder.
+  function onSelectedChange(next: Set<string>) {
     setSelected((prev) => {
-      const next = new Map(prev);
-      if (next.has(p)) next.delete(p);
-      else next.set(p, isDir);
-      return next;
+      const isDir = new Map(entries.map((e) => [e.path, e.is_dir]));
+      const out = new Map<string, boolean>();
+      for (const [p, d] of prev) if (next.has(p)) out.set(p, d);
+      for (const p of next) if (!out.has(p)) out.set(p, isDir.get(p) ?? false);
+      return out;
     });
   }
 
   return (
-    <div className="px-5 pb-2 pt-4">
-      <div className="mb-3 flex flex-wrap items-center gap-1 text-sm">
-        <button className="text-ogc-teal hover:underline" onClick={() => setPath(basePath)}>
-          Start
-        </button>
-        {crumbs.map((c, i) => (
-          <span key={i} className="flex items-center gap-1">
-            <span className="text-slate-600">/</span>
-            <button className="text-ogc-teal hover:underline" onClick={() => setPath(join(i + 1))}>
-              {c}
-            </button>
-          </span>
-        ))}
-        <label className="ml-auto flex items-center gap-2 text-xs text-slate-300">
-          <input type="checkbox" checked={mediaOnly} onChange={(e) => setMediaOnly(e.target.checked)} />
-          Nur Fotos/Videos/Audio
-        </label>
-      </div>
+    <div className="px-5 pb-4 pt-4">
       {err && <div className="mb-3 rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{err}</div>}
-      <div className="max-h-112 overflow-y-auto rounded-lg ring-1 ring-white/5">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-slate-900 text-left text-xs text-slate-400">
-            <tr>
-              <th className="w-8 px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={allHere}
-                  aria-label="Alle markieren"
-                  onChange={() =>
-                    setSelected((prev) => {
-                      const next = new Map(prev);
-                      for (const e of entries) {
-                        if (allHere) next.delete(e.path);
-                        else next.set(e.path, e.is_dir);
-                      }
-                      return next;
-                    })
-                  }
-                />
-              </th>
-              <th className="px-2 py-2">Name</th>
-              <th className="hidden px-2 py-2 sm:table-cell">Status</th>
-              <th className="hidden px-2 py-2 text-right sm:table-cell">Größe</th>
-              <th className="hidden px-3 py-2 text-right md:table-cell">Geändert</th>
-            </tr>
-          </thead>
-          <tbody>
+      <FileBrowser
+        items={entries}
+        getKey={entryKey}
+        getName={entryName}
+        isDir={entryIsDir}
+        selected={keys}
+        onSelectedChange={onSelectedChange}
+        onOpen={(e) => e.is_dir && setPath(e.path)}
+        sortOptions={ENTRY_SORT}
+        storageKey="storage-folders"
+        resetKey={`${device}:${path}`}
+        loading={!listing && !err}
+        emptyText="Ordner ist leer."
+        header={
+          <div className="flex flex-wrap items-center gap-1 text-sm">
             {path !== basePath && listing && (
-              <tr className="border-t border-white/5">
-                <td />
-                <td colSpan={4} className="px-2 py-1.5">
-                  <button className="text-slate-300 hover:text-white" onClick={() => setPath(listing.parent ?? basePath)}>
-                    ↑ ..
-                  </button>
-                </td>
-              </tr>
+              <button
+                className="mr-1 rounded-md px-1.5 text-slate-300 hover:bg-white/5 hover:text-white"
+                onClick={() => setPath(listing.parent ?? basePath)}
+                aria-label="Eine Ebene höher"
+                title="Eine Ebene höher"
+              >
+                ↑
+              </button>
             )}
-            {entries.map((e) => {
-              const badge = e.known ? knownLabel(e.known) : null;
-              return (
-                <tr key={e.path} className={`border-t border-white/5 ${selected.has(e.path) ? "bg-ogc-teal/10" : ""}`}>
-                  <td className="px-3 py-1.5">
-                    <input type="checkbox" checked={selected.has(e.path)} onChange={() => toggle(e.path, e.is_dir)} />
-                  </td>
-                  <td className="max-w-0 truncate px-2 py-1.5">
-                    {e.is_dir ? (
-                      <button className="text-white hover:text-ogc-teal" onClick={() => setPath(e.path)}>
-                        📁 {e.name}
-                      </button>
-                    ) : (
-                      <span className={e.is_media ? "text-slate-200" : "text-slate-400"}>{e.name}</span>
-                    )}
-                  </td>
-                  <td className="hidden px-2 py-1.5 sm:table-cell">
-                    {badge && (
-                      <span title={badge.title} className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${badge.tone}`}>
-                        {badge.text}
-                      </span>
-                    )}
-                  </td>
-                  <td className="hidden whitespace-nowrap px-2 py-1.5 text-right text-slate-400 sm:table-cell">
-                    {e.is_dir ? "" : formatBytes(e.size)}
-                  </td>
-                  <td className="hidden whitespace-nowrap px-3 py-1.5 text-right text-slate-500 md:table-cell">
-                    {e.modified ? fullFmt.format(new Date(e.modified)) : ""}
-                  </td>
-                </tr>
-              );
-            })}
-            {listing && entries.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
-                  Ordner ist leer.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {listing?.truncated && <div className="px-3 py-2 text-xs text-amber-200">Nur die ersten 2000 Einträge angezeigt.</div>}
-      </div>
+            <button className="text-ogc-teal hover:underline" onClick={() => setPath(basePath)}>
+              Start
+            </button>
+            {crumbs.map((c, i) => (
+              <span key={i} className="flex items-center gap-1">
+                <span className="text-slate-600">/</span>
+                <button className="text-ogc-teal hover:underline" onClick={() => setPath(join(i + 1))}>
+                  {c}
+                </button>
+              </span>
+            ))}
+          </div>
+        }
+        toolbar={
+          <label className="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" checked={mediaOnly} onChange={(e) => setMediaOnly(e.target.checked)} />
+            Nur Medien
+          </label>
+        }
+        renderIcon={(e) => <EntryIcon device={device} entry={e} />}
+        renderTile={(e) => <EntryIcon device={device} entry={e} big />}
+        renderTileBadge={(e) => {
+          const b = e.known ? knownLabel(e.known) : null;
+          return b ? (
+            <span title={b.title} className={`rounded-sm px-1 py-0.5 text-[9px] font-semibold ${b.tone}`}>
+              {b.text}
+            </span>
+          ) : null;
+        }}
+        renderSubtitle={(e) => (
+          <div className="text-xs text-slate-500 sm:hidden">{e.is_dir ? "Ordner" : formatBytes(e.size)}</div>
+        )}
+        columns={[
+          {
+            key: "status",
+            label: "Status",
+            className: "hidden w-32 sm:block",
+            render: (e) => {
+              const b = e.known ? knownLabel(e.known) : null;
+              return b ? (
+                <span title={b.title} className={`rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${b.tone}`}>
+                  {b.text}
+                </span>
+              ) : null;
+            },
+          },
+          {
+            key: "size",
+            label: "Größe",
+            sortKey: "size",
+            align: "right",
+            className: "hidden w-20 text-slate-400 sm:block",
+            render: (e) => (e.is_dir ? "" : formatBytes(e.size)),
+          },
+          {
+            key: "modified",
+            label: "Geändert",
+            sortKey: "modified",
+            align: "right",
+            className: "hidden w-36 text-slate-500 md:block",
+            render: (e) => (e.modified ? fullFmt.format(new Date(e.modified)) : ""),
+          },
+        ]}
+      />
+      {listing?.truncated && <div className="mt-2 text-xs text-amber-200">Nur die ersten 2000 Einträge angezeigt.</div>}
+    </div>
+  );
+}
+
+const ENTRY_SORT: SortOption<StorageEntry>[] = [
+  { key: "name", label: "Name", get: (e) => e.name },
+  { key: "size", label: "Größe", get: (e) => (e.is_dir ? null : e.size) },
+  { key: "modified", label: "Geändert", get: (e) => e.modified },
+];
+const entryKey = (e: StorageEntry) => e.path;
+const entryName = (e: StorageEntry) => e.name;
+const entryIsDir = (e: StorageEntry) => e.is_dir;
+
+// Audio has no picture to show; everything else "is_media" renders a thumbnail.
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|flac|ogg|opus|wma|aiff?)$/i;
+
+function EntryIcon({ device, entry, big = false }: { device: string; entry: StorageEntry; big?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const box = big ? "h-full w-full" : "h-9 w-9 rounded-md";
+  if (!entry.is_dir && entry.is_media && !AUDIO_EXT.test(entry.name) && !failed) {
+    return (
+      <img
+        // Same size as the gallery so both share one cached render on the box.
+        src={thumbUrl(device, entry.path)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+        className={`object-cover ${box} ${entry.known ? "opacity-60" : ""}`}
+      />
+    );
+  }
+  return (
+    <div className={`flex items-center justify-center bg-slate-800/60 ${box}`}>
+      <FileGlyph dir={entry.is_dir} className={big ? "h-10 w-10" : "h-5 w-5"} />
     </div>
   );
 }
