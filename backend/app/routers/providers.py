@@ -14,8 +14,15 @@ from ..crypto import decrypt, encrypt
 from ..db import get_db
 from ..deps import require_admin
 from ..models import CloudProvider, ProviderStatus, User
-from ..providers_registry import categories_json, get_type, registry_json, validate_config
-from ..rclone import test_remote
+from ..providers_registry import (
+    ProviderType,
+    categories_json,
+    config_error,
+    get_type,
+    registry_json,
+    validate_config,
+)
+from ..rclone import TestResult, test_remote
 from ..schemas import (
     ProviderCreate,
     ProviderOut,
@@ -117,6 +124,9 @@ def create_provider(
     missing = validate_config(pt, payload.config)
     if missing:
         raise HTTPException(status_code=400, detail=f"Pflichtfelder fehlen: {', '.join(missing)}")
+    error = config_error(pt, payload.config)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
     provider = CloudProvider(
         name=payload.name,
@@ -147,6 +157,10 @@ def update_provider(
         provider.name = payload.name
     if payload.config is not None:
         merged = _merge_config(provider.type, _load_config(provider), payload.config)
+        pt = get_type(provider.type)
+        error = config_error(pt, merged) if pt else None
+        if error:
+            raise HTTPException(status_code=400, detail=error)
         provider.config_encrypted = encrypt(json.dumps(merged))
         provider.status = ProviderStatus.UNKNOWN  # re-test after edits
     db.commit()
@@ -171,6 +185,19 @@ def delete_provider(
 # --- Connection test ------------------------------------------------------
 
 
+def _run_test(pt: ProviderType, config: dict[str, str], subpath: str = "") -> TestResult:
+    """rclone listing test, followed by the type's write check if it has one."""
+    error = config_error(pt, config)
+    if error:
+        return TestResult(False, error)
+    result = test_remote(pt.to_rclone_options(config), subpath)
+    if result.ok and pt.write_check is not None:
+        problem = pt.write_check(config)
+        if problem:
+            return TestResult(False, problem)
+    return result
+
+
 @router.post("/test", response_model=ProviderTestResult)
 def test_draft(payload: ProviderTestRequest) -> ProviderTestResult:
     """Test an unsaved draft (config must contain real secrets)."""
@@ -180,7 +207,7 @@ def test_draft(payload: ProviderTestRequest) -> ProviderTestResult:
     missing = validate_config(pt, payload.config)
     if missing:
         return ProviderTestResult(ok=False, message=f"Pflichtfelder fehlen: {', '.join(missing)}")
-    result = test_remote(pt.to_rclone_options(payload.config), payload.subpath)
+    result = _run_test(pt, payload.config, payload.subpath)
     return ProviderTestResult(ok=result.ok, message=result.message)
 
 
@@ -191,7 +218,7 @@ def test_saved(provider_id: int, db: Session = Depends(get_db)) -> ProviderOut:
     pt = get_type(provider.type)
     if pt is None:
         raise HTTPException(status_code=400, detail="Unknown provider type")
-    result = test_remote(pt.to_rclone_options(_load_config(provider)))
+    result = _run_test(pt, _load_config(provider))
     provider.status = ProviderStatus.OK if result.ok else ProviderStatus.ERROR
     provider.last_error = "" if result.ok else result.message
     provider.last_tested_at = datetime.now(UTC)

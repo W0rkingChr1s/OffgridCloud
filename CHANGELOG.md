@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch ownCloud und Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht. Große Dateien gehen ohne Chunking in einem Stück hoch, denn öffentliche Freigaben bieten keinen Chunked-Upload.
+
 ### 🐛 Fehlerbehebungen
 
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).
