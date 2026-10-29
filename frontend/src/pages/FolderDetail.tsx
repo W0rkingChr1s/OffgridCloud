@@ -10,6 +10,8 @@ import {
   type MediaDescription,
   type MediaItem,
 } from "../api";
+import { copyText } from "../clipboard";
+import { type ContextMenuEntry, useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import MoreMenu from "../components/MoreMenu";
 import FileBrowser from "../components/FileBrowser";
@@ -198,6 +200,15 @@ export default function FolderDetail() {
 
   const selectedKeys = useMemo(() => new Set([...selected].map(String)), [selected]);
 
+  const toggle = useCallback((mid: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(mid)) next.delete(mid);
+      else next.add(mid);
+      return next;
+    });
+  }, []);
+
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const list = Array.from(files);
@@ -346,6 +357,41 @@ export default function FolderDetail() {
     onClick: () => remove(m),
   });
 
+  const ctx = useContextMenu();
+  const copyName = async (name: string) => {
+    if (await copyText(name)) toast.success("Kopiert", `„${name}" liegt in der Zwischenablage.`);
+    else toast.error("Kopieren fehlgeschlagen", "Der Browser hat den Zugriff verweigert.");
+  };
+  // Right-click on a row that's part of a multi-selection acts on the whole
+  // selection (like a file manager); otherwise just on that one file.
+  const rowMenu = (m: MediaItem): ContextMenuEntry[] => {
+    const n = selectedIds.length;
+    if (n > 1 && selected.has(m.id)) {
+      return [
+        { label: `${n} Dateien herunterladen (.zip)`, disabled: bulkBusy, onClick: downloadSelected },
+        {
+          label: `${n} Dateien beschreiben …`,
+          disabled: bulkBusy,
+          onClick: () => setDescModal({ mode: "create", mediaIds: selectedIds }),
+        },
+        { label: "Auswahl aufheben", onClick: () => setSelected(new Set()) },
+        "separator",
+        { label: `${n} Dateien löschen …`, danger: true, disabled: bulkBusy, onClick: removeSelected },
+      ];
+    }
+    return [
+      !m.local_deleted && { label: "Herunterladen", onClick: () => triggerDownload(downloadUrl(m.id)) },
+      !m.local_deleted && {
+        label: "Beschreiben …",
+        onClick: () => setDescModal({ mode: "create", mediaIds: [m.id] }),
+      },
+      !m.local_deleted && { label: selected.has(m.id) ? "Abwählen" : "Auswählen", onClick: () => toggle(m.id) },
+      { label: "Dateinamen kopieren", onClick: () => copyName(m.filename) },
+      "separator",
+      deleteItem(m),
+    ];
+  };
+
   return (
     <Layout>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -480,6 +526,7 @@ export default function FolderDetail() {
         selected={selectedKeys}
         onSelectedChange={(next) => setSelected(new Set([...next].map(Number)))}
         onOpen={(m) => !m.local_deleted && triggerDownload(downloadUrl(m.id))}
+        onContextMenu={(m, e) => ctx.bind(() => rowMenu(m))(e)}
         sortOptions={MEDIA_SORT}
         initialSort={{ key: "created", dir: "desc" }}
         storageKey="folder-media"
@@ -593,6 +640,8 @@ export default function FolderDetail() {
           </div>
         </div>
       )}
+
+      {ctx.menu}
 
       {descModal && (
         <DescriptionModal

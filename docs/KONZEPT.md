@@ -91,7 +91,7 @@ Geforderte Anbindungen — gebündelt nach technischem Protokoll:
 |----------------------|----------|
 | **S3-kompatibel**    | Amazon S3, MinIO, (Hetzner Object Storage), QNAP/TrueNAS S3-Gateways |
 | **Microsoft**        | Azure Blob Storage, OneDrive / SharePoint |
-| **WebDAV-basiert**   | Nextcloud, ownCloud, generisches WebDAV, Hetzner Storage Box (WebDAV) |
+| **WebDAV-basiert**   | Nextcloud, Nextcloud-Freigabelink, ownCloud, generisches WebDAV, Hetzner Storage Box (WebDAV) |
 | **SSH/Datei**        | SFTP, SCP/SSH, Hetzner Storage Box (SFTP), Synology/QNAP/TrueNAS via SFTP |
 | **FTP**              | FTP, FTPS |
 | **NAS**              | Synology, QNAP, TrueNAS (über SMB/WebDAV/SFTP/S3 je nach Gerät) |

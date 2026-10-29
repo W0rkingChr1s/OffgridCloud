@@ -188,3 +188,91 @@ def test_non_admin_cannot_list_providers(client, admin_auth):
     ).json()["access_token"]
     resp = client.get("/api/providers", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
+
+
+# --- Nextcloud share link -------------------------------------------------
+
+
+def test_share_link_parsing_variants():
+    from app.nextcloud_share import parse_share_link
+
+    assert parse_share_link("https://cloud.example.com/s/AbC123") == (
+        "https://cloud.example.com/public.php/webdav/", "AbC123")
+    # index.php variant, sub-path install, trailing slash, query/fragment.
+    assert parse_share_link("https://example.com/nc/index.php/s/Tok9/?dir=/x#y") == (
+        "https://example.com/nc/public.php/webdav/", "Tok9")
+    for bad in ("", "cloud.example.com/s/AbC", "https://cloud.example.com/f/123",
+                "ftp://cloud.example.com/s/AbC"):
+        try:
+            parse_share_link(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {bad!r}")
+
+
+def test_share_link_rclone_options():
+    from app.providers_registry import get_type
+    from app.rclone_obscure import reveal
+
+    pt = get_type("nextcloud_share")
+    opts = pt.to_rclone_options({"link": "https://nx.example.de/s/8PAD7zy"})
+    # Public shares have no chunked-upload endpoint -> vendor must not be nextcloud.
+    assert opts == {
+        "type": "webdav",
+        "url": "https://nx.example.de/public.php/webdav/",
+        "vendor": "other",
+        "user": "8PAD7zy",
+    }
+    opts = pt.to_rclone_options({"link": "https://nx.example.de/s/8PAD7zy", "pass": "geheim"})
+    assert reveal(opts["pass"]) == "geheim"
+
+
+def test_create_share_without_password_and_reject_bad_link(client, admin_auth):
+    ok = client.post(
+        "/api/providers",
+        headers=admin_auth,
+        json={"name": "Share", "type": "nextcloud_share",
+              "config": {"link": "https://cloud.example.com/s/AbC123"}},
+    )
+    assert ok.status_code == 201, ok.text
+    bad = client.post(
+        "/api/providers",
+        headers=admin_auth,
+        json={"name": "Kaputt", "type": "nextcloud_share",
+              "config": {"link": "https://cloud.example.com/apps/files"}},
+    )
+    assert bad.status_code == 400
+    assert "Freigabelink" in bad.json()["detail"]
+    patched = client.patch(
+        f"/api/providers/{ok.json()['id']}",
+        headers=admin_auth,
+        json={"config": {"link": "nonsense"}},
+    )
+    assert patched.status_code == 400
+
+
+def _share_test(client, admin_auth, monkeypatch, perms):
+    from app import nextcloud_share
+    from app.rclone import TestResult
+    from app.routers import providers
+
+    monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
+    monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: perms)
+    return client.post(
+        "/api/providers/test",
+        headers=admin_auth,
+        json={"type": "nextcloud_share",
+              "config": {"link": "https://cloud.example.com/s/AbC123"}},
+    ).json()
+
+
+def test_share_test_flags_read_only_link(client, admin_auth, monkeypatch):
+    res = _share_test(client, admin_auth, monkeypatch, "RG")
+    assert res["ok"] is False
+    assert "schreibgeschützt" in res["message"]
+
+
+def test_share_test_passes_writable_link(client, admin_auth, monkeypatch):
+    assert _share_test(client, admin_auth, monkeypatch, "RGDNVCK")["ok"] is True
+    # Permissions unknown (network hiccup) -> don't block a working connection.
+    assert _share_test(client, admin_auth, monkeypatch, None)["ok"] is True

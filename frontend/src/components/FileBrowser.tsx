@@ -49,6 +49,8 @@ export interface FileBrowserProps<T> {
   renderSubtitle?: (item: T) => ReactNode;
   /** Overlay in the lower-left of a tile (status badge). */
   renderTileBadge?: (item: T) => ReactNode;
+  /** Right-click (or menu key on the focused entry) on a row or tile. */
+  onContextMenu?: (item: T, e: React.MouseEvent) => void;
   /** Trailing per-row actions (download, menu). */
   renderActions?: (item: T) => ReactNode;
   columns?: FileColumn<T>[];
@@ -106,6 +108,7 @@ export default function FileBrowser<T>({
   renderSubtitle,
   renderTileBadge,
   renderActions,
+  onContextMenu,
   columns = [],
   header,
   toolbar,
@@ -401,6 +404,10 @@ export default function FileBrowser<T>({
         aria-activedescendant={active >= 0 ? optionId(active) : undefined}
         aria-label="Dateien"
         onKeyDown={onKeyDown}
+        onContextMenu={(e) => {
+          // Menu key / Shift+F10 on the list itself: act on the entry under the cursor.
+          if (e.target === e.currentTarget && active >= 0 && visible[active]) onContextMenu?.(visible[active], e);
+        }}
         onFocus={(e) => {
           if (e.target === e.currentTarget && active < 0 && visible.length) setActive(0);
         }}
@@ -438,6 +445,7 @@ export default function FileBrowser<T>({
                     onActivate={activate}
                     onPick={pick}
                     onOpen={onOpen}
+                    onContextMenu={onContextMenu}
                   />
                 );
               }
@@ -468,6 +476,7 @@ export default function FileBrowser<T>({
                         onActivate={activate}
                         onPick={pick}
                         onOpen={onOpen}
+                        onContextMenu={onContextMenu}
                       />
                     );
                   })}
@@ -501,6 +510,7 @@ interface ItemProps<T> {
   onActivate: (index: number, e: { shiftKey: boolean; target: EventTarget }) => void;
   onPick: (index: number, shift: boolean) => void;
   onOpen?: (item: T) => void;
+  onContextMenu?: (item: T, e: React.MouseEvent) => void;
 }
 
 function Check({ index, checked, canSelect, name, onPick }: Pick<ItemProps<unknown>, "index" | "checked" | "canSelect" | "name" | "onPick">) {
@@ -546,6 +556,7 @@ function ListRow<T>({
       onDoubleClick={(e) => {
         if (!p.dir && p.onOpen && !(e.target as HTMLElement).closest(INTERACTIVE)) p.onOpen(p.item);
       }}
+      onContextMenu={p.onContextMenu && ((e) => p.onContextMenu!(p.item, e))}
       className={`absolute inset-x-0 flex cursor-pointer select-none items-center gap-3 border-t border-white/5 px-3 py-1.5 text-sm first:border-t-0 ${
         p.checked ? "bg-ogc-teal/10" : "hover:bg-slate-800/40"
       } ${p.active ? "outline-1 -outline-offset-1 outline-ogc-teal/60" : ""}`}
@@ -583,6 +594,7 @@ function Tile<T>({
       onDoubleClick={(e) => {
         if (!p.dir && p.onOpen && !(e.target as HTMLElement).closest(INTERACTIVE)) p.onOpen(p.item);
       }}
+      onContextMenu={p.onContextMenu && ((e) => p.onContextMenu!(p.item, e))}
       className="group min-w-0 cursor-pointer select-none"
       title={p.name}
     >
