@@ -13,6 +13,8 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### 🐛 Fehlerbehebungen
 
+- **Monitoring-Token ließ sich über HTTP nicht kopieren:** Der „Kopieren“-Button unter Zustand → Zugriff für Monitoring-Systeme nutzte nur die Clipboard-API des Browsers, die es ausschließlich über HTTPS gibt. Auf einer Box, die per `http://` erreicht wird, passierte beim Klick nichts. Jetzt greift derselbe Fallback wie im Telegram-Assistenten. Klappt auch der nicht, erscheint ein Hinweis, das Token von Hand zu kopieren.
+
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).
 
 ### 🐛 Fehlerbehebungen

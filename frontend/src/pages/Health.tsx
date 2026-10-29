@@ -10,6 +10,7 @@ import {
   type MonitorToken,
   type MonitorTokenCreated,
 } from "../api";
+import { copyText } from "../clipboard";
 import Layout from "../components/Layout";
 
 const LIVE_EVERY_MS = 5000;
@@ -692,12 +693,9 @@ function TokensCard() {
   }
 
   async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+    const ok = await copyText(text);
+    setCopied(ok);
+    if (!ok) setError("Kopieren nicht möglich – Token bitte von Hand markieren und kopieren.");
   }
 
   const shownToken = revealed?.token ?? "<TOKEN>";
