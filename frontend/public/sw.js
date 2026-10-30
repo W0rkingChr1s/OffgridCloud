@@ -1,6 +1,6 @@
 // Minimal service worker: makes OffgridCloud installable and serves a cached
 // app shell when offline. API and SSE requests are never cached.
-const CACHE = "ogc-shell-v3";
+const CACHE = "ogc-shell-v4";
 
 // Precache the app shell. This doubles as a probe: if the worker itself can't
 // reach the box — e.g. Safari doesn't apply the user's exception for the
@@ -73,7 +73,27 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api")) return; // live data + uploads: always network
 
-  // Network-first, fall back to cache (or the cached shell for navigations).
+  // Build assets carry a content hash in their name and never change: answer
+  // from the cache without touching the network. On a weak uplink that turns a
+  // repeat visit into a single small index.html request.
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(
+      caches.match(event.request).then(
+        (cached) =>
+          cached ||
+          fetch(event.request).then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE).then((c) => c.put(event.request, copy));
+            }
+            return response;
+          }),
+      ),
+    );
+    return;
+  }
+
+  // Everything else: network-first, fall back to cache (or the cached shell for navigations).
   // Never resolve with undefined: Safari then shows "Returned response is null"
   // instead of the page.
   event.respondWith(
