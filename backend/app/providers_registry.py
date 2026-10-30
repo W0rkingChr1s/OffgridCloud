@@ -386,7 +386,7 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
         label="Nextcloud-Freigabelink",
         backend="webdav",
         category="selfhosted",
-        description="Öffentliche Nextcloud-/ownCloud-Freigabe – nur den Link einfügen.",
+        description="Öffentliche Nextcloud-Freigabe – nur den Link einfügen.",
         help="Die Freigabe braucht „Hochladen und Bearbeiten erlauben“. "
              "„Dateiablage“ (nur hochladen) reicht nicht.",
         derive=share_rclone_options,

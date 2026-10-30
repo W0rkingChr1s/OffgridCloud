@@ -197,10 +197,10 @@ def test_share_link_parsing_variants():
     from app.nextcloud_share import parse_share_link
 
     assert parse_share_link("https://cloud.example.com/s/AbC123") == (
-        "https://cloud.example.com/public.php/webdav/", "AbC123")
+        "https://cloud.example.com/public.php/dav/files/AbC123/", "AbC123")
     # index.php variant, sub-path install, trailing slash, query/fragment.
     assert parse_share_link("https://example.com/nc/index.php/s/Tok9/?dir=/x#y") == (
-        "https://example.com/nc/public.php/webdav/", "Tok9")
+        "https://example.com/nc/public.php/dav/files/Tok9/", "Tok9")
     for bad in ("", "cloud.example.com/s/AbC", "https://cloud.example.com/f/123",
                 "ftp://cloud.example.com/s/AbC"):
         try:
@@ -216,11 +216,12 @@ def test_share_link_rclone_options():
 
     pt = get_type("nextcloud_share")
     opts = pt.to_rclone_options({"link": "https://nx.example.de/s/8PAD7zy"})
-    # Public shares have no chunked-upload endpoint -> vendor must not be nextcloud.
+    # vendor=nextcloud + /dav/files/<token> makes rclone upload in chunks via
+    # /public.php/dav/uploads/<token>/ (one big PUT hits proxy limits -> 413).
     assert opts == {
         "type": "webdav",
-        "url": "https://nx.example.de/public.php/webdav/",
-        "vendor": "other",
+        "url": "https://nx.example.de/public.php/dav/files/8PAD7zy/",
+        "vendor": "nextcloud",
         "user": "8PAD7zy",
     }
     opts = pt.to_rclone_options({"link": "https://nx.example.de/s/8PAD7zy", "pass": "geheim"})
@@ -251,13 +252,14 @@ def test_create_share_without_password_and_reject_bad_link(client, admin_auth):
     assert patched.status_code == 400
 
 
-def _share_test(client, admin_auth, monkeypatch, perms):
+def _share_test(client, admin_auth, monkeypatch, perms, chunking=True):
     from app import nextcloud_share
     from app.rclone import TestResult
     from app.routers import providers
 
     monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
     monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: perms)
+    monkeypatch.setattr(nextcloud_share, "_has_chunk_endpoint", lambda *a: chunking)
     return client.post(
         "/api/providers/test",
         headers=admin_auth,
@@ -276,3 +278,9 @@ def test_share_test_passes_writable_link(client, admin_auth, monkeypatch):
     assert _share_test(client, admin_auth, monkeypatch, "RGDNVCK")["ok"] is True
     # Permissions unknown (network hiccup) -> don't block a working connection.
     assert _share_test(client, admin_auth, monkeypatch, None)["ok"] is True
+
+
+def test_share_test_flags_server_without_chunk_endpoint(client, admin_auth, monkeypatch):
+    res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", chunking=False)
+    assert res["ok"] is False
+    assert "Chunked-Upload" in res["message"]
