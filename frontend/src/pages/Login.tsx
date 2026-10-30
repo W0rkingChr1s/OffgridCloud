@@ -8,6 +8,18 @@ import { useAuth } from "../auth";
 const UNREACHABLE_HINT =
   "Box nicht erreichbar – die Anmeldedaten wurden gar nicht geprüft. Hinweis oben beachten.";
 
+// Anything that isn't an ApiError/NetworkError comes from the browser itself
+// (WebAuthn DOMException, bad JSON, …). Show its name instead of a bare
+// "fehlgeschlagen" — otherwise there is nothing to diagnose from a screenshot.
+function describe(prefix: string, err: unknown): string {
+  if (err instanceof ApiError) return err.message || `${prefix} (HTTP ${err.status})`;
+  if (err instanceof Error) return `${prefix}: ${err.name} – ${err.message}`;
+  return prefix;
+}
+
+// Passkeys are bound to the exact host name they were created on.
+const PASSKEY_HOST_HINT = `Passkeys gelten nur für die Adresse, unter der sie angelegt wurden (hier: ${window.location.hostname}).`;
+
 export default function Login() {
   const { login, loginPasskey } = useAuth();
   const navigate = useNavigate();
@@ -25,11 +37,7 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       setError(
-        err instanceof NetworkError
-          ? UNREACHABLE_HINT
-          : err instanceof ApiError
-            ? err.message
-            : "Anmeldung fehlgeschlagen",
+        err instanceof NetworkError ? UNREACHABLE_HINT : describe("Anmeldung fehlgeschlagen", err),
       );
     } finally {
       setBusy(false);
@@ -44,11 +52,15 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
-        setError("Passkey-Anmeldung abgebrochen.");
+        setError(`Passkey-Anmeldung abgebrochen oder kein passender Passkey. ${PASSKEY_HOST_HINT}`);
+      } else if (err instanceof DOMException && err.name === "SecurityError") {
+        setError(
+          "Der Browser erlaubt hier keine Passkeys – meist ist das Zertifikat nicht vertrauenswürdig. Root-Zertifikat installieren oder mit Passwort anmelden.",
+        );
       } else if (err instanceof NetworkError) {
         setError(UNREACHABLE_HINT);
       } else {
-        setError(err instanceof ApiError ? err.message : "Passkey-Anmeldung fehlgeschlagen");
+        setError(describe("Passkey-Anmeldung fehlgeschlagen", err));
       }
     } finally {
       setBusy(false);
