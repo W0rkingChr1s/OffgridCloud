@@ -6,6 +6,15 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ⚡ Performance
+
+- **Web-Oberfläche lädt auf dem Handy deutlich schneller:** Bisher kam die ganze App als ein unkomprimiertes 660-KB-Skript, bei jedem Aufruf neu über das Netz, auch wenn der Service Worker es schon hatte. Jetzt:
+  - Das Frontend wird beim Bauen vorkomprimiert (Brotli/gzip), die Box liefert diese Dateien direkt aus, ohne eigene CPU-Last. Der erste Aufruf überträgt rund 90 KB statt rund 750 KB.
+  - Jede Seite ist ein eigenes Paket. Die Admin-Seiten werden erst geladen, wenn man sie öffnet.
+  - Dateien unter `/assets/` (mit Hash im Namen) sind dauerhaft cachebar, und der Service Worker beantwortet sie aus dem Cache. Ein erneuter Aufruf lädt nur noch `index.html`.
+  - Gemessen mit gedrosseltem Handy-Profil (6× langsamere CPU, 1,6 Mbit/s, 150 ms Latenz): Login-Seite 5,2 s → 1,4 s.
+  - Öffnet ein Tab nach einem Update eine noch nicht geladene Seite, deren Paket es nicht mehr gibt, lädt die App einmal neu statt weiß zu bleiben.
+
 ## [0.10.0] – 2026-10-30
 
 Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü. Dazu klarere Fehlermeldungen beim Login.
