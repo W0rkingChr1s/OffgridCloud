@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { getToken, type ServerNotice } from "./api";
+import { subscribeEvents } from "./events";
 import { useAuth } from "./auth";
 import { useToast, type ToastVariant } from "./toast";
 
@@ -25,17 +26,7 @@ export default function TransferToaster() {
     if (!token || !user) return;
     prev.current = null; // fresh baseline per session — never toast the first frame
     lastNotice.current = -1;
-    const es = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
-    es.onmessage = (e) => {
-      let snap: {
-        transfers?: { counts?: Record<string, number> };
-        notices?: ServerNotice[];
-      };
-      try {
-        snap = JSON.parse(e.data);
-      } catch {
-        return;
-      }
+    return subscribeEvents((snap) => {
       raiseNotices(snap?.notices, lastNotice, toast);
       const counts = snap?.transfers?.counts;
       if (!counts) return;
@@ -62,8 +53,7 @@ export default function TransferToaster() {
         }
       }
       prev.current = { done, failed };
-    };
-    return () => es.close();
+    });
   }, [user, toast]);
 
   return null;
