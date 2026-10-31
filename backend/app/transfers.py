@@ -327,6 +327,8 @@ def process_job(
     except json.JSONDecodeError:
         config = {}
     options = pt.to_rclone_options(config)
+    if pt.upload_options is not None:
+        options = pt.upload_options(config, options)
     if bonding:
         proxy = _bonding_proxy(db, options)
         if proxy:
@@ -366,7 +368,9 @@ def process_job(
         job.last_error = ""
         job.next_attempt_at = None
     else:
-        job.last_error = result.message
+        job.last_error = (
+            pt.explain_error(result.message) if pt.explain_error else result.message
+        )
         if job.attempts >= settings.worker_max_attempts:
             job.status = TransferStatus.FAILED
             job.next_attempt_at = None
