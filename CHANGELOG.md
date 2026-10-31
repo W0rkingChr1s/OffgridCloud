@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Freigabelinks auf Nextcloud < 32: Dateien über 10 MiB scheiterten mit „Parent node does not exist“ (409):** Seit dem Chunked-Upload (0.10.2) zerlegt rclone größere Dateien in Stücke. Ältere Nextcloud-Versionen haben für Freigaben aber keinen Chunk-Endpunkt. OffgridCloud prüft das jetzt vor dem Upload und schickt die Datei auf solchen Servern wieder am Stück, wie vor 0.10.2. Dateien bis zum Limit des Proxys vor dem Server (bei Hetzner Storage Share rund 100 MB) gehen dann wieder durch. Was größer ist, scheitert mit 413, und die Fehlermeldung sagt dazu, was hilft: Nextcloud 32 oder der Provider „Nextcloud“ mit Konto und App-Passwort.
+
 ## [0.10.2] – 2026-10-31
 
 Große Videos auf Nextcloud-Freigabelinks laden in Chunks hoch (rclone ≥ 1.63), und wartende Transfers zeigen ihren Fehlergrund.

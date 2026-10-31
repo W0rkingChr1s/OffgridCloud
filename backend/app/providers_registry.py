@@ -14,7 +14,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
-from .nextcloud_share import share_rclone_options, share_write_problem
+from .nextcloud_share import (
+    explain_upload_error,
+    share_rclone_options,
+    share_upload_options,
+    share_write_problem,
+)
 from .rclone_obscure import obscure
 
 
@@ -52,6 +57,11 @@ class ProviderType:
     # Best-effort check after a successful connection test: returns why the
     # target can't take uploads (e.g. a read-only share), or None.
     write_check: Callable[[dict[str, str]], str | None] | None = None
+    # Upload-time adjustments: may probe the server, so kept out of
+    # to_rclone_options (which also runs when a provider is saved).
+    upload_options: Callable[[dict[str, str], dict[str, str]], dict[str, str]] | None = None
+    # Adds a hint to a failed upload's error message.
+    explain_error: Callable[[str], str] | None = None
 
     def to_rclone_options(self, config: dict[str, str]) -> dict[str, str]:
         opts: dict[str, str] = {"type": self.backend, **self.fixed}
@@ -391,6 +401,8 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
              "„Dateiablage“ (nur hochladen) reicht nicht.",
         derive=share_rclone_options,
         write_check=share_write_problem,
+        upload_options=share_upload_options,
+        explain_error=explain_upload_error,
         fields=(
             Field("link", "Freigabelink",
                   help="z. B. https://cloud.example.com/s/AbC123xyz"),

@@ -21,6 +21,8 @@ from __future__ import annotations
 import base64
 import json
 import re
+import threading
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -98,10 +100,81 @@ def _fetch_permissions(url: str, token: str, password: str) -> str | None:
     return (node.text or "") if node is not None else None
 
 
-def _has_chunk_endpoint(url: str, token: str, password: str) -> bool:
-    """Whether the server offers chunked uploads into public shares."""
+def _probe_chunk_endpoint(url: str, token: str, password: str) -> bool | None:
+    """Whether ``/public.php/dav/uploads/<token>/`` exists (``None``: couldn't tell).
+
+    Nextcloud < 32 has no such collection and answers 404; anything that
+    isn't a clear "not there" (timeouts, 5xx) stays unknown.
+    """
     uploads = url.replace("/public.php/dav/files/", "/public.php/dav/uploads/", 1)
-    return _propfind(uploads, token, password) is not None
+    auth = base64.b64encode(f"{token}:{password}".encode()).decode()
+    req = urllib.request.Request(
+        uploads, method="PROPFIND",
+        headers={"Depth": "0", "Authorization": f"Basic {auth}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15):
+            return True
+    except urllib.error.HTTPError as exc:
+        return False if exc.code in (404, 405, 409, 501) else None
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
+def _has_chunk_endpoint(url: str, token: str, password: str) -> bool:
+    """Whether the server offers chunked uploads into public shares (unknown: yes)."""
+    return _probe_chunk_endpoint(url, token, password) is not False
+
+
+# Upload-time probe results per share URL, so each transfer doesn't re-ask.
+_CHUNK_TTL = 3600.0
+_chunk_cache: dict[str, tuple[bool, float]] = {}
+_chunk_lock = threading.Lock()
+
+
+def _chunking_supported(url: str, token: str, password: str) -> bool | None:
+    now = time.monotonic()
+    with _chunk_lock:
+        hit = _chunk_cache.get(url)
+        if hit is not None and now - hit[1] < _CHUNK_TTL:
+            return hit[0]
+    result = _probe_chunk_endpoint(url, token, password)
+    if result is not None:
+        with _chunk_lock:
+            _chunk_cache[url] = (result, now)
+    return result
+
+
+def share_upload_options(config: dict[str, str], options: dict[str, str]) -> dict[str, str]:
+    """Turn chunking off for servers without the public chunk endpoint.
+
+    rclone would otherwise fail every file above one chunk (10 MiB) with
+    "Parent node does not exist" (409). A single PUT still works up to
+    whatever the proxy in front of the server allows.
+    """
+    try:
+        url, token = parse_share_link(config.get("link", ""))
+    except ValueError:
+        return options
+    if _chunking_supported(url, token, config.get("pass", "")) is False:
+        return {**options, "nextcloud_chunk_size": "0"}
+    return options
+
+
+_TOO_LARGE_MARKERS = ("413", "payload too large", "request entity too large")
+
+
+def explain_upload_error(message: str) -> str:
+    """Add what to do when a big file can't get through a share link."""
+    lower = message.lower()
+    if any(m in lower for m in _TOO_LARGE_MARKERS) or "parent node does not exist" in lower:
+        return (
+            f"{message} — Datei zu groß für einen Upload am Stück, und diese "
+            "Nextcloud nimmt über Freigabelinks keine Chunks an (erst ab "
+            "Nextcloud 32). Abhilfe: Nextcloud aktualisieren oder den Provider "
+            "„Nextcloud“ mit Konto und App-Passwort nutzen"
+        )
+    return message
 
 
 def _server_version(url: str) -> str | None:
