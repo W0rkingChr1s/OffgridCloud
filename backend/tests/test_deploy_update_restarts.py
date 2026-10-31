@@ -21,7 +21,9 @@ SUB_INSTALLERS = ["netfallback/install.sh", "vpn/install.sh", "netmerge/install.
 
 def _web_restarts(text: str) -> list[int]:
     """Line indexes that restart the web unit (not -ble, -netwatch, …)."""
-    pattern = re.compile(r"systemctl (try-)?restart \"?(offgridcloud|\$\{SERVICE_NAME\})(\.service)?\b(?!-)")
+    pattern = re.compile(
+        r"systemctl (try-)?restart \"?(offgridcloud|\$\{SERVICE_NAME\})(\.service)?\b(?!-)"
+    )
     return [i for i, line in enumerate(text.splitlines()) if pattern.search(line)]
 
 
