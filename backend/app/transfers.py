@@ -241,13 +241,41 @@ def _build_dest(dest_path: str, filename: str) -> str:
     return posixpath.join(dest_path.strip("/"), filename) if dest_path.strip("/") else filename
 
 
+JOIN_FILE = "ZUSAMMENFUEGEN.txt"
+
+# Upload errors that a retry can't fix: resending the same bytes to the same
+# target fails the same way, and for a 3.5 GB video five automatic attempts
+# would burn 17 GB. These go straight to FAILED and the reconciler leaves
+# them alone; "Erneut" in the UI still retries them on purpose.
+_PERMANENT_MARKERS = (
+    "payload too large",
+    "request entity too large",
+    "insufficient storage",
+    video_split.MSG_NO_FFMPEG.lower(),
+    video_split.MSG_KEYFRAMES.lower(),
+)
+
+
+def is_permanent_error(message: str) -> bool:
+    lower = (message or "").lower()
+    return any(marker in lower for marker in _PERMANENT_MARKERS)
+
+
 def _split_dests(dest_path: str, filename: str, parts: int) -> list[str]:
-    """Remote paths of a video uploaded as ``parts`` pieces (sub folder per video)."""
+    """Remote paths of a file uploaded as ``parts`` pieces, plus its extra files.
+
+    Everything goes to a sub folder named after the file. Videos get playable
+    ``name_teilNN.ext`` parts and maybe a ``name.srt``; other files get
+    ``name.ext.NNN`` byte ranges and a ``ZUSAMMENFUEGEN.txt``.
+    """
     folder = _build_dest(dest_path, video_split.part_folder(filename))
-    return [
-        posixpath.join(folder, video_split.part_name(filename, i, parts))
-        for i in range(1, parts + 1)
-    ]
+    if video_split.is_splittable(filename):
+        names = [video_split.part_name(filename, i, parts) for i in range(1, parts + 1)]
+        extras = [f"{Path(filename).stem}.srt"]
+    else:
+        names = [video_split.binary_part_name(filename, i, parts) for i in range(1, parts + 1)]
+        extras = [JOIN_FILE]
+    return [posixpath.join(folder, name) for name in names + extras]
 
 
 def _upload_split(
@@ -259,40 +287,78 @@ def _upload_split(
     upload_fn: UploadFn,
     bwlimit_kbps: int,
     on_progress: ProgressCb,
+    resume: tuple[int, int, int] = (0, 0, 0),
+    on_part: Callable[[int, int], None] | None = None,
 ) -> tuple[UploadResult, int]:
-    """Cut a too-big video into playable parts and upload them one by one.
+    """Cut a too-big file into parts and upload them one by one.
 
-    Returns the combined result and the number of parts (0 on failure). The
-    parts live next to the original on the same buffer drive, in a hidden
-    work folder that is removed afterwards. A retry cuts and uploads again;
-    parts already on the remote are simply overwritten.
+    ``resume`` is ``(parts, done, limit)`` from an earlier attempt: when the
+    new cut has the same number of parts for the same limit (the cut is
+    deterministic), the first ``done`` parts are already on the remote and are
+    skipped. ``on_part(done, total)`` is called after the cut and after each
+    part so the caller can persist that state.
+
+    Returns the result (``bytes_transferred`` = bytes actually sent) and the
+    number of parts (0 on failure). The parts live next to the original on the
+    same buffer drive in a hidden work folder that is removed afterwards.
     """
     src = Path(local_path)
     work = src.parent / f".split-{src.name}"
+    video = video_split.is_splittable(filename)
     try:
-        split = video_split.split_video(src, work, limit)
+        cut = video_split.split_video if video else video_split.split_binary
+        split = cut(src, work, limit)
         if not split.ok:
-            return UploadResult(False, 0, f"Video teilen fehlgeschlagen: {split.message}"), 0
+            what = "Video" if video else "Datei"
+            return UploadResult(False, 0, f"{what} teilen fehlgeschlagen: {split.message}"), 0
+        count = len(split.parts)
+        dests = _split_dests(dest_path, filename, count)
+        part_dests, extra_dests = dests[:count], dests[count:]
+        prev_parts, prev_done, prev_limit = resume
+        start = prev_done if (prev_parts == count and prev_limit == limit) else 0
+        start = min(start, count)
+        if on_part is not None:
+            on_part(start, count)
+
         sizes = [p.stat().st_size for p in split.parts]
         total = sum(sizes)
-        dests = _split_dests(dest_path, filename, len(split.parts))
-        done = 0
+        base = sum(sizes[:start])  # already on the remote from an earlier attempt
+        sent = 0
         rates: list[float] = []
-        for index, (part, size, dest) in enumerate(zip(split.parts, sizes, dests, strict=True), 1):
-            def _progress(sent: int, _total: int, kbps: float, base: int = done) -> None:
-                on_progress(base + sent, total, kbps)
+        for index in range(start, count):
+            def _progress(now: int, _total: int, kbps: float, offset: int = base + sent) -> None:
+                on_progress(offset + now, total, kbps)
 
-            result = upload_fn(str(part), options, dest, bwlimit_kbps, _progress)
+            result = upload_fn(
+                str(split.parts[index]), options, part_dests[index], bwlimit_kbps, _progress
+            )
             if not result.ok:
                 return UploadResult(
-                    False, done + result.bytes_transferred,
-                    f"Teil {index}/{len(dests)}: {result.message}", result.kbps,
+                    False, sent + result.bytes_transferred,
+                    f"Teil {index + 1}/{count}: {result.message}", result.kbps,
                 ), 0
-            done += result.bytes_transferred or size
+            sent += result.bytes_transferred or sizes[index]
             if result.kbps > 0:
                 rates.append(result.kbps)
+            if on_part is not None:
+                on_part(index + 1, count)
+
+        # Small companions: the flight data of a video, or how to rejoin parts.
+        extras = [(path, posixpath.join(posixpath.dirname(part_dests[0]), name))
+                  for path, name in split.extras]
+        if not video:
+            note = work / JOIN_FILE
+            note.write_text(video_split.join_instructions(filename, count), encoding="utf-8")
+            extras.append((note, extra_dests[0]))
+        for path, dest in extras:
+            extra = upload_fn(str(path), options, dest, bwlimit_kbps, None)
+            if not extra.ok:  # the parts are up; a missing companion isn't fatal
+                logger.warning("Zusatzdatei %s nicht hochgeladen: %s", dest, extra.message)
+            else:
+                sent += extra.bytes_transferred
+
         kbps = sum(rates) / len(rates) if rates else 0.0
-        return UploadResult(True, done, "", kbps), len(dests)
+        return UploadResult(True, sent, "", kbps), count
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -401,16 +467,20 @@ def process_job(
         set_live(job_id, bytes_done, total, kbps)
 
     split_limit = pt.split_limit(config) if pt.split_limit is not None else None
+    split = bool(split_limit and media.size > split_limit)
     split_parts = 0
+
+    def _on_part(done: int, total: int) -> None:
+        job.split_parts, job.split_done, job.split_limit = total, done, split_limit or 0
+        db.commit()
+
     try:
-        if (
-            split_limit
-            and media.size > split_limit
-            and video_split.is_splittable(media.filename)
-        ):
+        if split:
             result, split_parts = _upload_split(
-                media.stored_path, media.filename, dest_path, split_limit,
+                media.stored_path, media.filename, dest_path, split_limit or 0,
                 options, upload_fn, bwlimit_kbps, _on_progress,
+                resume=(job.split_parts or 0, job.split_done or 0, job.split_limit or 0),
+                on_part=_on_part,
             )
         else:
             result = upload_fn(media.stored_path, options, dest, bwlimit_kbps, _on_progress)
@@ -418,7 +488,9 @@ def process_job(
         clear_live(job_id)
 
     if metered:
-        used = max(sent[0], result.bytes_transferred)
+        # A resumed split reports progress including the parts sent earlier;
+        # only what went over the line this time counts.
+        used = result.bytes_transferred if split else max(sent[0], result.bytes_transferred)
         if result.ok and used <= 0:
             used = media.size
         bandwidth.add_metered_usage(db, used, date.today().isoformat())
@@ -434,15 +506,17 @@ def process_job(
     if result.ok:
         job.status = TransferStatus.DONE
         job.progress = 1.0
-        job.bytes_transferred = result.bytes_transferred or media.size
+        job.bytes_transferred = media.size if split else (result.bytes_transferred or media.size)
         job.split_parts = split_parts
+        job.split_done = split_parts
+        job.split_limit = (split_limit or 0) if split_parts else 0
         job.last_error = ""
         job.next_attempt_at = None
     else:
         job.last_error = (
             pt.explain_error(result.message) if pt.explain_error else result.message
         )
-        if job.attempts >= settings.worker_max_attempts:
+        if is_permanent_error(result.message) or job.attempts >= settings.worker_max_attempts:
             job.status = TransferStatus.FAILED
             job.next_attempt_at = None
         else:
@@ -755,6 +829,8 @@ def reconcile_once(db: Session) -> dict:
         media = db.get(MediaItem, job.media_id)
         if media is None or media.local_deleted:
             continue  # a deleted source can't be re-uploaded
+        if is_permanent_error(job.last_error):
+            continue  # would fail the same way; only a deliberate "Erneut" retries
         job.status = TransferStatus.QUEUED
         job.attempts = 0
         job.last_error = ""

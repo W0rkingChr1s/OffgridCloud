@@ -193,6 +193,7 @@ export default function Transfers() {
                             />
                           </div>
                           <div className="mt-0.5 text-xs text-slate-500">
+                            {(j.split_parts ?? 0) > 0 && `Teil ${Math.min((j.split_done ?? 0) + 1, j.split_parts ?? 0)}/${j.split_parts} · `}
                             {active[j.id].total > 0 && `${formatBytes(active[j.id].bytes)} / ${formatBytes(active[j.id].total)}`}
                             {active[j.id].kbps > 0 && ` · ${active[j.id].kbps.toFixed(0)} KB/s`}
                           </div>

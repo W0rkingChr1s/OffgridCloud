@@ -68,7 +68,7 @@ class ProviderType:
     # Adds a hint to a failed upload's error message.
     explain_error: Callable[[str], str] | None = None
     # Largest file the target takes in one piece (bytes), or None. Bigger
-    # videos are cut into playable parts before upload (app.video_split).
+    # files are cut into parts before upload (app.video_split).
     split_limit: Callable[[dict[str, str]], int | None] | None = None
 
     def to_rclone_options(self, config: dict[str, str]) -> dict[str, str]:
@@ -421,8 +421,9 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
             Field("split_mb", "Max. Größe am Stück (MB)", type="number", required=False,
                   default=str(DEFAULT_SPLIT_MB),
                   help="Nur für Server ohne Chunked-Upload (Nextcloud < 32): "
-                       "größere Videos werden verlustfrei in Teile geschnitten "
-                       "und in einem Unterordner abgelegt"),
+                       "größere Dateien kommen in Teilen in einen Unterordner – "
+                       "Videos als abspielbare Clips, alles andere als "
+                       "Stücke zum Zusammenfügen"),
         ),
     ),
     ProviderType(

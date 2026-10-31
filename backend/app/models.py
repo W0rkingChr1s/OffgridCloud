@@ -376,8 +376,12 @@ class TransferJob(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     last_error: Mapped[str] = mapped_column(Text, default="")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # >0: the video went up as this many parts in a sub folder (app.video_split).
+    # >0: the file went up (or is going up) as this many parts in a sub folder
+    # (app.video_split); split_done of them are on the remote, cut for a limit
+    # of split_limit bytes. Lets a retry skip the parts already uploaded.
     split_parts: Mapped[int] = mapped_column(default=0)
+    split_done: Mapped[int] = mapped_column(default=0)
+    split_limit: Mapped[int] = mapped_column(BigInteger, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
