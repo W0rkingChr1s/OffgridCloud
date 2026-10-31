@@ -10,6 +10,9 @@ name: Release
 # Terminal alternative (still supported): push a semver tag
 #   git tag v0.2.0 && git push origin v0.2.0
 #
+# Either way, CHANGELOG.md on that commit must already have a "## [0.2.0]"
+# section (rename [Unreleased] first), otherwise the release stops.
+#
 # Instances check the published release (GET /api/updates) and update via
 # deploy/update.sh.
 
@@ -60,6 +63,14 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Releasing $TAG (version $VERSION)"
+
+      - name: Require a CHANGELOG section for this version
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          if ! grep -q "^## \[${VERSION//./\\.}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [${VERSION}]' section. Move the [Unreleased] entries under it, merge, then release." >&2
+            exit 1
+          fi
 
       - uses: actions/setup-node@v7
         with:
