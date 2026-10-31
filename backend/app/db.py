@@ -125,6 +125,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("ble_devices", "wifi_psk_encrypted", "TEXT NOT NULL DEFAULT ''"),
     # Videos uploaded as parts (app.video_split).
     ("transfer_jobs", "split_parts", "INTEGER NOT NULL DEFAULT 0"),
+    ("transfer_jobs", "split_done", "INTEGER NOT NULL DEFAULT 0"),
+    ("transfer_jobs", "split_limit", "BIGINT NOT NULL DEFAULT 0"),
 ]
 
 

@@ -748,6 +748,7 @@ class TransferJobOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     split_parts: int = 0
+    split_done: int = 0
     # Enriched for the admin view:
     media_filename: str = ""
     provider_name: str = ""

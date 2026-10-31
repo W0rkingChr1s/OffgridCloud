@@ -143,6 +143,7 @@ export interface TransferJob {
   created_at: string;
   updated_at: string;
   split_parts?: number;
+  split_done?: number;
   media_filename: string;
   provider_name: string;
   folder_id: number | null;

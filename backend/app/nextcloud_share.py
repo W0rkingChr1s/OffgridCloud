@@ -167,7 +167,7 @@ DEFAULT_SPLIT_MB = 90
 def share_split_limit(config: dict[str, str]) -> int | None:
     """Largest single upload in bytes when the server can't take chunks, else ``None``.
 
-    Videos above it are cut into parts (app.video_split). The default keeps
+    Files above it are cut into parts (app.video_split). The default keeps
     clear of Cloudflare's 100 MB request limit in front of Hetzner Storage
     Share; the admin can set another value per share.
     """
@@ -194,10 +194,10 @@ def explain_upload_error(message: str) -> str:
         return (
             f"{message} — Datei zu groß für einen Upload am Stück, und diese "
             "Nextcloud nimmt über Freigabelinks keine Chunks an (erst ab "
-            "Nextcloud 32). Videos werden automatisch geteilt; bei anderen "
-            "Dateien oder zu hoch eingestelltem Limit hilft: „Max. Größe am "
-            "Stück“ senken, Nextcloud aktualisieren oder den Provider "
-            "„Nextcloud“ mit Konto und App-Passwort nutzen"
+            "Nextcloud 32). Größere Dateien werden automatisch geteilt; "
+            "scheitert es trotzdem, „Max. Größe am Stück“ senken, Nextcloud "
+            "aktualisieren oder den Provider „Nextcloud“ mit Konto und "
+            "App-Passwort nutzen"
         )
     return message
 
@@ -264,7 +264,7 @@ def share_test_note(config: dict[str, str]) -> str | None:
     which = f"Nextcloud {version}" if version else "Diese Nextcloud"
     return (
         f"{which} bietet keinen Chunked-Upload für Freigaben (erst ab "
-        "Nextcloud 32). Dateien gehen am Stück hoch; Videos über "
-        "„Max. Größe am Stück“ werden in Teile geschnitten, andere große "
-        "Dateien scheitern"
+        "Nextcloud 32). Dateien über „Max. Größe am Stück“ werden in Teile "
+        "geschnitten: Videos in abspielbare Clips, andere Dateien in "
+        "Stücke zum Zusammenfügen"
     )

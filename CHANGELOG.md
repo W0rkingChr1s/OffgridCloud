@@ -8,13 +8,16 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### ✨ Neu
 
-- **Große Videos werden für Freigabelinks automatisch geteilt:** Auf Nextcloud-Servern vor Version 32 nimmt ein Freigabelink nur Uploads am Stück an, und der Proxy davor (bei Hetzner Storage Share: Cloudflare) lehnt alles über rund 100 MB ab. Videos über der neuen Einstellung „Max. Größe am Stück“ (Standard 90 MB) schneidet OffgridCloud jetzt vor dem Upload mit ffmpeg in Teile:
-  - verlustfrei, ohne Neukodierung, also auch auf dem Pi schnell;
-  - jeder Teil ist ein eigenes, abspielbares Video;
-  - die Teile landen im Zielordner in einem Unterordner mit dem Namen des Videos, z. B. `DJI_0005_W/DJI_0005_W_teil01.MP4`;
-  - in der Transferliste steht „in N Teilen“, und das Löschen in der Cloud entfernt alle Teile.
+- **Große Dateien werden für Freigabelinks automatisch geteilt:** Auf Nextcloud-Servern vor Version 32 nimmt ein Freigabelink nur Uploads am Stück an, und der Proxy davor (bei Hetzner Storage Share: Cloudflare) lehnt alles über rund 100 MB ab. Dateien über der neuen Einstellung „Max. Größe am Stück“ (Standard 90 MB) teilt OffgridCloud jetzt vor dem Upload und legt die Teile im Zielordner in einem Unterordner mit dem Namen der Datei ab.
+  - **Videos** werden mit ffmpeg verlustfrei und ohne Neukodierung in abspielbare Clips geschnitten, z. B. `DJI_0005_W/DJI_0005_W_teil01.MP4`. Das geht auch auf dem Pi schnell.
+  - **Flugdaten** in einer Untertitelspur (z. B. bei manchen DJI-Modellen) bleiben in den Clips erhalten und kommen zusätzlich als `DJI_0005_W.srt` daneben. Reine Datenspuren wie die DJI-Telemetrie `djmd` lassen sich nicht schneiden und fehlen in den Clips.
+  - **Andere Dateien** werden in Stücke `name.ext.001`, `.002` … zerlegt, mit einer `ZUSAMMENFUEGEN.txt`, die das Zusammenfügen erklärt (7-Zip, `copy /b`, `cat`).
+  - **Abgebrochene Uploads machen beim nächsten Versuch beim ersten fehlenden Teil weiter**, statt alles erneut zu senden.
+  - **Vor dem Teilen wird der freie Platz im Puffer geprüft.** Es braucht kurz noch einmal so viel Platz, wie die Datei groß ist.
+  - In der Transferliste steht „Teil x/n“ und am Ende „in N Teilen“. Das Löschen in der Cloud entfernt alle Teile.
 
-  Nicht übernommen werden Daten-Spuren wie die DJI-Telemetrie. Andere große Dateien (keine Videos) scheitern weiterhin, mit Hinweis. Während des Teilens braucht der Puffer kurz noch einmal so viel freien Platz wie das Video groß ist. ffmpeg ist im Pi-Image enthalten und jetzt auch im Docker-Image.
+  ffmpeg ist im Pi-Image enthalten und jetzt auch im Docker-Image.
+- **Uploads, die an der Dateigröße scheitern, werden nicht mehr automatisch wiederholt:** Ein „413 Payload Too Large“ (oder 507, fehlendes ffmpeg) kommt beim nächsten Versuch genauso. Bisher lief eine 3,5-GB-Datei so bis zu fünfmal plus bei jedem Selbstheilungslauf erneut. Solche Jobs gehen sofort auf „fehlgeschlagen“, „Erneut“ startet sie bei Bedarf von Hand.
 - **Verbindungstest einer Freigabe ohne Chunked-Upload** gilt jetzt als bestanden, mit Hinweis auf das Limit, statt als Fehler.
 - **Rechtsklick-Menü auch auf der Speicher-Seite und in der Suche:** In der Galerie und der Ordner-Ansicht von Karten und USB-Laufwerken gibt es *Vorschau*, *Öffnen*, *Auswählen*, *Ganzen Tag auswählen*, *Nur diese Datei hochladen nach „…“* (die übrige Auswahl bleibt dabei stehen), *Auf Cache sichern*, *In „Ordner“ anzeigen* für Dateien, die schon auf der Box liegen, sowie *Dateinamen/Pfad kopieren*. Ein Rechtsklick in eine Mehrfachauswahl lädt die ganze Auswahl hoch oder sichert sie. Das Ziel ist der unten in der Leiste gewählte Ordner. In der Suche gibt es *Herunterladen*, *Ordner öffnen* und *Dateinamen kopieren*.
 
