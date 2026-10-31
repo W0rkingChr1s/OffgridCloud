@@ -18,11 +18,15 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
   ffmpeg ist im Pi-Image enthalten und jetzt auch im Docker-Image.
 - **Uploads, die an der Dateigröße scheitern, werden nicht mehr automatisch wiederholt:** Ein „413 Payload Too Large“ (oder 507, fehlendes ffmpeg) kommt beim nächsten Versuch genauso. Bisher lief eine 3,5-GB-Datei so bis zu fünfmal plus bei jedem Selbstheilungslauf erneut. Solche Jobs gehen sofort auf „fehlgeschlagen“, „Erneut“ startet sie bei Bedarf von Hand.
+- **Kleine Dateien zuerst:** Bei gleicher Priorität starten Dateien bis 50 MB vor größeren. Ein Lagefoto wartet nicht mehr eine Stunde hinter einem 3,5-GB-Video, das eine Minute früher kam. Ein laufender Upload wird dafür nicht abgebrochen.
+- **Hinweise am Provider:** Einschränkungen eines funktionierenden Ziels (z. B. „kein Chunked-Upload, Dateien über 90 MB werden geteilt“) stehen jetzt dauerhaft in der Provider-Liste. Sie werden beim Testen gesetzt und alle 6 Stunden im Hintergrund nachgeprüft. Ist der Server gerade nicht erreichbar, bleibt der alte Hinweis stehen. Aktualisiert Hetzner auf Nextcloud 32, verschwindet der Hinweis von selbst.
 - **Verbindungstest einer Freigabe ohne Chunked-Upload** gilt jetzt als bestanden, mit Hinweis auf das Limit, statt als Fehler.
 - **Rechtsklick-Menü auch auf der Speicher-Seite und in der Suche:** In der Galerie und der Ordner-Ansicht von Karten und USB-Laufwerken gibt es *Vorschau*, *Öffnen*, *Auswählen*, *Ganzen Tag auswählen*, *Nur diese Datei hochladen nach „…“* (die übrige Auswahl bleibt dabei stehen), *Auf Cache sichern*, *In „Ordner“ anzeigen* für Dateien, die schon auf der Box liegen, sowie *Dateinamen/Pfad kopieren*. Ein Rechtsklick in eine Mehrfachauswahl lädt die ganze Auswahl hoch oder sichert sie. Das Ziel ist der unten in der Leiste gewählte Ordner. In der Suche gibt es *Herunterladen*, *Ordner öffnen* und *Dateinamen kopieren*.
 
 ### 🐛 Fehlerbehebungen
 
+- **Transferliste auf dem Handy:** Lange Kameradateinamen haben die Tabelle über den Bildschirmrand geschoben, Status und Größe waren abgeschnitten. Die Namen brechen jetzt um, die Größe steht unter dem Status und „Erneut“ darunter.
+- **Fehlermeldungen ohne HTML:** Die HTML-Fehlerseite, die ein Proxy wie Cloudflare mitschickt, wird aus der Meldung entfernt.
 - **Weboberfläche wird nach längerer Laufzeit langsam bis unerreichbar (möglicher Auslöser):** Jeder offene Tab hielt zwei Live-Verbindungen, und jede baute alle 2 Sekunden einen eigenen Zustandsbericht. Für Admins las dieser jedes Mal die Dateinamen aller Medien. Schlief ein iPad hinter Caddy ein, blieben seine Verbindungen oft stundenlang offen, und die Box rechnete für niemanden weiter. Jetzt hat jeder Tab nur noch eine Verbindung, die er schließt, solange er im Hintergrund ist. Der Bericht entsteht pro Nutzer höchstens einmal je Intervall und liest nur die Namen der laufenden Transfers. Außerdem beendet der Server jede Verbindung nach 5 Minuten, der Browser verbindet sich von selbst neu.
 
 ## [0.10.3] – 2026-10-31

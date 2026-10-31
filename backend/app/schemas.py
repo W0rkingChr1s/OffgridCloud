@@ -262,6 +262,8 @@ class ProviderOut(BaseModel):
     status: ProviderStatus
     last_error: str
     last_tested_at: datetime | None
+    # Limits of a working target, e.g. "no chunked upload, files get split".
+    note: str = ""
     created_at: datetime
     config: dict[str, str]  # secrets masked
 

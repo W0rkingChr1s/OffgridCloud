@@ -151,7 +151,7 @@ export default function Transfers() {
                 <SortTh sort={sort} field="provider" className="hidden sm:table-cell">Ziel</SortTh>
                 <SortTh sort={sort} field="status">Status</SortTh>
                 <SortTh sort={sort} field="attempts" className="hidden sm:table-cell">Versuche</SortTh>
-                <th className="px-4 py-3" aria-label="Aktion" />
+                <th className="hidden px-4 py-3 sm:table-cell" aria-label="Aktion" />
               </tr>
             </thead>
             <tbody>
@@ -159,8 +159,10 @@ export default function Transfers() {
                 const s = STATUS[j.status] ?? STATUS.queued;
                 return (
                   <tr key={j.id} onContextMenu={ctx.bind(() => rowMenu(j))} className="border-t border-white/5 bg-slate-900/40">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-white">{j.media_filename}</div>
+                    <td className="px-3 py-3 sm:px-4">
+                      {/* break-all: camera names like DJI_20260927140847_0005_Z.MP4 have no
+                          break points and would push the status column off a phone screen. */}
+                      <div className="font-medium break-all text-white sm:break-normal">{j.media_filename}</div>
                       {/* Target and attempts move under the file name on phones. */}
                       <div className="text-xs text-slate-400 sm:hidden">
                         → {j.provider_name}
@@ -176,10 +178,12 @@ export default function Transfers() {
                       )}
                     </td>
                     <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{j.provider_name}</td>
-                    <td className="px-4 py-3">
+                    <td className="w-28 px-3 py-3 align-top sm:w-auto sm:px-4 sm:align-middle">
                       <span className={`whitespace-nowrap rounded-sm px-2 py-0.5 text-xs ${s.cls}`}>{s.label}</span>
                       {j.status === "done" && j.bytes_transferred > 0 && (
-                        <span className="ml-2 text-xs text-slate-500">{formatBytes(j.bytes_transferred)}</span>
+                        <div className="mt-1 whitespace-nowrap text-xs text-slate-500 sm:mt-0 sm:ml-2 sm:inline">
+                          {formatBytes(j.bytes_transferred)}
+                        </div>
                       )}
                       {j.status === "done" && (j.split_parts ?? 0) > 0 && (
                         <div className="mt-0.5 text-xs text-slate-500">in {j.split_parts} Teilen</div>
@@ -193,15 +197,26 @@ export default function Transfers() {
                             />
                           </div>
                           <div className="mt-0.5 text-xs text-slate-500">
-                            {(j.split_parts ?? 0) > 0 && `Teil ${Math.min((j.split_done ?? 0) + 1, j.split_parts ?? 0)}/${j.split_parts} · `}
-                            {active[j.id].total > 0 && `${formatBytes(active[j.id].bytes)} / ${formatBytes(active[j.id].total)}`}
-                            {active[j.id].kbps > 0 && ` · ${active[j.id].kbps.toFixed(0)} KB/s`}
+                            {[
+                              (j.split_parts ?? 0) > 0 &&
+                                `Teil ${Math.min((j.split_done ?? 0) + 1, j.split_parts ?? 0)}/${j.split_parts}`,
+                              active[j.id].total > 0 &&
+                                `${formatBytes(active[j.id].bytes)} / ${formatBytes(active[j.id].total)}`,
+                              active[j.id].kbps > 0 && `${active[j.id].kbps.toFixed(0)} KB/s`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </div>
                         </div>
                       )}
+                      {(j.status === "failed" || j.status === "queued") && (
+                        <button onClick={() => retry(j.id)} className="mt-2 whitespace-nowrap rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5 sm:hidden">
+                          Erneut
+                        </button>
+                      )}
                     </td>
                     <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">{j.attempts}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="hidden px-4 py-3 text-right sm:table-cell">
                       {(j.status === "failed" || j.status === "queued") && (
                         <button onClick={() => retry(j.id)} className="whitespace-nowrap rounded-lg border border-white/10 px-3 py-1 text-xs hover:bg-white/5">
                           Erneut

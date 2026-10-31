@@ -127,6 +127,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("transfer_jobs", "split_parts", "INTEGER NOT NULL DEFAULT 0"),
     ("transfer_jobs", "split_done", "INTEGER NOT NULL DEFAULT 0"),
     ("transfer_jobs", "split_limit", "BIGINT NOT NULL DEFAULT 0"),
+    # Provider limits shown in the list (app.provider_health).
+    ("cloud_providers", "note", "TEXT NOT NULL DEFAULT ''"),
+    ("cloud_providers", "note_checked_at", "DATETIME"),
 ]
 
 

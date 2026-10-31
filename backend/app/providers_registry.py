@@ -60,8 +60,9 @@ class ProviderType:
     # Best-effort check after a successful connection test: returns why the
     # target can't take uploads (e.g. a read-only share), or None.
     write_check: Callable[[dict[str, str]], str | None] | None = None
-    # Note appended to a passing connection test (limits worth knowing).
-    test_note: Callable[[dict[str, str]], str | None] | None = None
+    # Limits worth knowing about a working target: (known, note). Shown after
+    # a passing test and kept on the provider (app.provider_health).
+    test_note: Callable[[dict[str, str]], tuple[bool, str]] | None = None
     # Upload-time adjustments: may probe the server, so kept out of
     # to_rclone_options (which also runs when a provider is saved).
     upload_options: Callable[[dict[str, str], dict[str, str]], dict[str, str]] | None = None

@@ -336,6 +336,9 @@ class CloudProvider(Base):
     )
     last_error: Mapped[str] = mapped_column(Text, default="")
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Limits of a working target, refreshed by tests and app.provider_health.
+    note: Mapped[str] = mapped_column(Text, default="")
+    note_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

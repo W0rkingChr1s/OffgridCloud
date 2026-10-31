@@ -301,3 +301,36 @@ def test_split_keeps_subtitle_telemetry(tmp_path):
         capture_output=True, text=True, check=True,
     ).stdout.split()
     assert "subtitle" in types
+
+
+
+def test_clean_error_drops_proxy_html():
+    msg = ("unchunked simple update failed: <html> <head><title>413 Payload Too Large"
+           "</title></head> <body><center><h1>413 Payload Too Large</h1></center>"
+           "<hr><center>cloudflare</center></body></html>: 413 Request Entity Too Large")
+    out = transfers.clean_error(msg)
+    assert "<" not in out and "413 Request Entity Too Large" in out
+    assert transfers.clean_error("plain") == "plain"
+
+
+def test_small_files_go_first(client, admin_auth, monkeypatch):
+    from tests.test_transfers import _folder, _provider, _upload
+
+    monkeypatch.setattr(transfers, "SMALL_FILE_BYTES", 50)
+    prov = _provider(client, admin_auth, name="Order")
+    folder = _folder(client, admin_auth, name="Order")
+    client.post(
+        f"/api/folders/{folder['id']}/providers", headers=admin_auth,
+        json={"provider_id": prov["id"]},
+    )
+    big = _upload(client, admin_auth, folder["id"], "big.mp4", b"b" * 500)
+    small = _upload(client, admin_auth, folder["id"], "foto.jpg", b"s" * 10)
+    with SessionLocal() as db:
+        # Other tests share the database: look only at this test's two jobs.
+        others = set(db.scalars(select(TransferJob.id).where(
+            TransferJob.media_id.not_in([big["id"], small["id"]])
+        )))
+        first = transfers._pick_eligible(db, exclude=others)
+        assert first.media_id == small["id"]
+        second = transfers._pick_eligible(db, exclude=others | {first.id})
+        assert second.media_id == big["id"]

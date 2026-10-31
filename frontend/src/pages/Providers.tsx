@@ -150,6 +150,9 @@ export default function Providers() {
                     {p.status === "error" && p.last_error && (
                       <div className="mt-1 wrap-break-word text-xs text-red-300">{p.last_error}</div>
                     )}
+                    {p.status !== "error" && p.note && (
+                      <div className="mt-1 wrap-break-word text-xs text-amber-300/90">Hinweis: {p.note}</div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
