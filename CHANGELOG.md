@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.11.0] – 2026-10-31
+
+Große Dateien kommen jetzt auch über Nextcloud-Freigabelinks ohne Chunked-Upload in die Cloud: Videos als abspielbare Clips, alles andere in Stücken. Dazu: kein sinnloses Wiederholen bei „zu groß“, kleine Dateien zuerst, eine Transferliste, die aufs Handy passt, und Hinweise direkt am Provider.
+
 ### ✨ Neu
 
 - **Große Dateien werden für Freigabelinks automatisch geteilt:** Auf Nextcloud-Servern vor Version 32 nimmt ein Freigabelink nur Uploads am Stück an, und der Proxy davor (bei Hetzner Storage Share: Cloudflare) lehnt alles über rund 100 MB ab. Dateien über der neuen Einstellung „Max. Größe am Stück“ (Standard 90 MB) teilt OffgridCloud jetzt vor dem Upload und legt die Teile im Zielordner in einem Unterordner mit dem Namen der Datei ab.
