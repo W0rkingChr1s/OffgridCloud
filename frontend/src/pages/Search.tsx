@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -8,10 +8,13 @@ import {
   type MediaSearchResult,
   type MediaStatus,
 } from "../api";
+import { copyText } from "../clipboard";
+import { useContextMenu } from "../components/ContextMenu";
 import Layout from "../components/Layout";
 import FileBrowser from "../components/FileBrowser";
 import { type SortOption } from "../components/Sort";
 import { TagEditor } from "../components/Tags";
+import { useToast } from "../toast";
 import { formatBytes } from "../upload";
 
 const RESULT_SORT: SortOption<MediaSearchResult>[] = [
@@ -66,6 +69,13 @@ function Thumb({ m, big = false }: { m: MediaSearchResult; big?: boolean }) {
 }
 
 export default function Search() {
+  const ctx = useContextMenu();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const copyName = async (name: string) => {
+    if (await copyText(name)) toast.success("Kopiert", `„${name}“ liegt in der Zwischenablage.`);
+    else toast.error("Kopieren fehlgeschlagen", "Der Browser hat den Zugriff verweigert.");
+  };
   const [q, setQ] = useState("");
   const [tag, setTag] = useState("");
   const [status, setStatus] = useState("");
@@ -158,6 +168,24 @@ export default function Search() {
         items={results}
         getKey={resultKey}
         getName={resultName}
+        onContextMenu={(m, e) =>
+          ctx.bind(() => [
+            !m.local_deleted && {
+              label: "Herunterladen",
+              onClick: () => {
+                const a = document.createElement("a");
+                a.href = downloadUrl(m.id);
+                a.rel = "noopener";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+              },
+            },
+            { label: `Ordner „${m.folder_name}“ öffnen`, onClick: () => navigate(`/folders/${m.folder_id}`) },
+            "separator",
+            { label: "Dateinamen kopieren", onClick: () => copyName(m.filename) },
+          ])(e)
+        }
         sortOptions={RESULT_SORT}
         initialSort={{ key: "name" }}
         filterable={false}
@@ -201,6 +229,7 @@ export default function Search() {
           )
         }
       />
+      {ctx.menu}
     </Layout>
   );
 }
