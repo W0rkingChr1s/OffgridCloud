@@ -8,7 +8,7 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [0.10.2] – 2026-10-31
 
-Große Videos auf Nextcloud-Freigabelinks gehen wieder durch, und wartende Transfers zeigen ihren Fehlergrund.
+Große Videos auf Nextcloud-Freigabelinks laden in Chunks hoch (rclone ≥ 1.63), und wartende Transfers zeigen ihren Fehlergrund.
 
 ### 🐛 Fehlerbehebungen
 
