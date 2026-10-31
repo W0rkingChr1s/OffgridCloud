@@ -158,6 +158,8 @@ export interface Provider {
   status: ProviderStatus;
   last_error: string;
   last_tested_at: string | null;
+  /** Limits of a working target, e.g. "no chunked upload, files get split". */
+  note?: string;
   created_at: string;
   config: Record<string, string>;
 }

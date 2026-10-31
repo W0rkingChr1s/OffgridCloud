@@ -260,6 +260,7 @@ def _share_test(client, admin_auth, monkeypatch, perms, chunking=True, rclone=(1
     monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
     monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: perms)
     monkeypatch.setattr(nextcloud_share, "_has_chunk_endpoint", lambda *a: chunking)
+    monkeypatch.setattr(nextcloud_share, "_probe_chunk_endpoint", lambda *a: chunking)
     monkeypatch.setattr(nextcloud_share, "_server_version", lambda *a: "31.0.9")
     monkeypatch.setattr(nextcloud_share.rclone, "rclone_version", lambda: rclone)
     return client.post(
@@ -404,3 +405,47 @@ def test_process_job_applies_upload_options_and_error_hint(client, admin_auth, m
         transfers.process_job(db, job, upload)
         assert job.last_error == "413 Payload Too Large | Hinweis"
     assert seen == ["0"]
+
+
+
+def test_saved_share_test_keeps_note_and_refresh_updates_it(client, admin_auth, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from app import nextcloud_share, provider_health
+    from app.db import SessionLocal
+    from app.models import CloudProvider
+    from app.rclone import TestResult
+    from app.routers import providers
+
+    monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
+    monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: "RGDNVCK")
+    monkeypatch.setattr(nextcloud_share, "_server_version", lambda *a: "31.0.9")
+    monkeypatch.setattr(nextcloud_share.rclone, "rclone_version", lambda: (1, 75, 2))
+    probe = {"v": False}
+    monkeypatch.setattr(nextcloud_share, "_probe_chunk_endpoint", lambda *a: probe["v"])
+    prov = client.post(
+        "/api/providers", headers=admin_auth,
+        json={"name": "FFW", "type": "nextcloud_share",
+              "config": {"link": "https://cloud.example.com/s/AbC123", "split_mb": "80"}},
+    ).json()
+    out = client.post(f"/api/providers/{prov['id']}/test", headers=admin_auth).json()
+    assert out["status"] == "ok"
+    assert "Nextcloud 31.0.9" in out["note"] and "80 MB" in out["note"]
+
+    # Server offline: the note stays.
+    probe["v"] = None
+    with SessionLocal() as db:
+        db.get(CloudProvider, prov["id"]).note_checked_at = None
+        db.commit()
+        assert provider_health.refresh_notes(db) == 0
+        assert db.get(CloudProvider, prov["id"]).note
+
+    # Hetzner updated to Nextcloud 32: the note goes away, but not before it's due.
+    probe["v"] = True
+    with SessionLocal() as db:
+        now = datetime(2030, 1, 1)
+        db.get(CloudProvider, prov["id"]).note_checked_at = now - timedelta(hours=1)
+        db.commit()
+        assert provider_health.refresh_notes(db, now) == 0
+        assert provider_health.refresh_notes(db, now + timedelta(hours=6)) == 1
+        assert db.get(CloudProvider, prov["id"]).note == ""

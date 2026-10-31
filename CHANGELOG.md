@@ -18,6 +18,13 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
   ffmpeg ist im Pi-Image enthalten und jetzt auch im Docker-Image.
 - **Uploads, die an der Dateigröße scheitern, werden nicht mehr automatisch wiederholt:** Ein „413 Payload Too Large“ (oder 507, fehlendes ffmpeg) kommt beim nächsten Versuch genauso. Bisher lief eine 3,5-GB-Datei so bis zu fünfmal plus bei jedem Selbstheilungslauf erneut. Solche Jobs gehen sofort auf „fehlgeschlagen“, „Erneut“ startet sie bei Bedarf von Hand.
+- **Kleine Dateien zuerst:** Bei gleicher Priorität starten Dateien bis 50 MB vor größeren. Ein Lagefoto wartet nicht mehr eine Stunde hinter einem 3,5-GB-Video, das eine Minute früher kam. Ein laufender Upload wird dafür nicht abgebrochen.
+- **Hinweise am Provider:** Einschränkungen eines funktionierenden Ziels (z. B. „kein Chunked-Upload, Dateien über 90 MB werden geteilt“) stehen jetzt dauerhaft in der Provider-Liste. Sie werden beim Testen gesetzt und alle 6 Stunden im Hintergrund nachgeprüft. Ist der Server gerade nicht erreichbar, bleibt der alte Hinweis stehen. Aktualisiert Hetzner auf Nextcloud 32, verschwindet der Hinweis von selbst.
+
+### 🐛 Fehlerbehebungen
+
+- **Transferliste auf dem Handy:** Lange Kameradateinamen haben die Tabelle über den Bildschirmrand geschoben, Status und Größe waren abgeschnitten. Die Namen brechen jetzt um, die Größe steht unter dem Status und „Erneut“ darunter.
+- **Fehlermeldungen ohne HTML:** Die HTML-Fehlerseite, die ein Proxy wie Cloudflare mitschickt, wird aus der Meldung entfernt.
 - **Verbindungstest einer Freigabe ohne Chunked-Upload** gilt jetzt als bestanden, mit Hinweis auf das Limit, statt als Fehler.
 
 ## [0.10.3] – 2026-10-31

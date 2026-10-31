@@ -177,11 +177,15 @@ def share_split_limit(config: dict[str, str]) -> int | None:
         return None
     if _chunking_supported(url, token, config.get("pass", "")) is not False:
         return None
+    return share_split_limit_mb(config) * 1_000_000
+
+
+def share_split_limit_mb(config: dict[str, str]) -> int:
     try:
         mb = int(str(config.get("split_mb", "")).strip() or DEFAULT_SPLIT_MB)
     except ValueError:
         mb = DEFAULT_SPLIT_MB
-    return max(5, mb) * 1_000_000
+    return max(5, mb)
 
 
 _TOO_LARGE_MARKERS = ("413", "payload too large", "request entity too large")
@@ -252,19 +256,26 @@ def share_write_problem(config: dict[str, str]) -> str | None:
     return rclone_problem()
 
 
-def share_test_note(config: dict[str, str]) -> str | None:
-    """What a passing test should still mention: no chunked upload on this server."""
+def share_test_note(config: dict[str, str]) -> tuple[bool, str]:
+    """``(known, note)``: what a working share should still mention.
+
+    ``known`` is False when the server couldn't be asked (offline, timeout);
+    callers then keep whatever they knew before.
+    """
     try:
         url, token = parse_share_link(config.get("link", ""))
     except ValueError:
-        return None
-    if _has_chunk_endpoint(url, token, config.get("pass", "")):
-        return None
+        return False, ""
+    supported = _probe_chunk_endpoint(url, token, config.get("pass", ""))
+    if supported is None:
+        return False, ""
+    if supported:
+        return True, ""
     version = _server_version(url)
     which = f"Nextcloud {version}" if version else "Diese Nextcloud"
-    return (
+    limit = share_split_limit_mb(config)
+    return True, (
         f"{which} bietet keinen Chunked-Upload für Freigaben (erst ab "
-        "Nextcloud 32). Dateien über „Max. Größe am Stück“ werden in Teile "
-        "geschnitten: Videos in abspielbare Clips, andere Dateien in "
-        "Stücke zum Zusammenfügen"
+        f"Nextcloud 32). Dateien über {limit} MB werden in Teile geschnitten: "
+        "Videos in abspielbare Clips, andere Dateien in Stücke zum Zusammenfügen"
     )

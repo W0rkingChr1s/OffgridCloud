@@ -12,13 +12,14 @@ import json
 import logging
 import os
 import posixpath
+import re
 import shutil
 import threading
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from . import bandwidth, buffers, network, video_split
@@ -242,6 +243,8 @@ def _build_dest(dest_path: str, filename: str) -> str:
 
 
 JOIN_FILE = "ZUSAMMENFUEGEN.txt"
+# Files up to this size jump ahead of bigger ones of the same priority.
+SMALL_FILE_BYTES = 50 * 1_000_000
 
 # Upload errors that a retry can't fix: resending the same bytes to the same
 # target fails the same way, and for a 3.5 GB video five automatic attempts
@@ -254,6 +257,16 @@ _PERMANENT_MARKERS = (
     video_split.MSG_NO_FFMPEG.lower(),
     video_split.MSG_KEYFRAMES.lower(),
 )
+
+
+_TAG = re.compile(r"<[^>]+>")
+
+
+def clean_error(message: str) -> str:
+    """Drop the HTML error page a proxy sends back (Cloudflare 413), keep the text."""
+    if "<" not in message or ">" not in message:
+        return message
+    return re.sub(r"\s+", " ", _TAG.sub(" ", message)).strip()
 
 
 def is_permanent_error(message: str) -> bool:
@@ -513,9 +526,8 @@ def process_job(
         job.last_error = ""
         job.next_attempt_at = None
     else:
-        job.last_error = (
-            pt.explain_error(result.message) if pt.explain_error else result.message
-        )
+        message = clean_error(result.message)
+        job.last_error = pt.explain_error(message) if pt.explain_error else message
         if is_permanent_error(result.message) or job.attempts >= settings.worker_max_attempts:
             job.status = TransferStatus.FAILED
             job.next_attempt_at = None
@@ -882,6 +894,12 @@ def _reconcile_tick() -> None:
             check_low_space(db)
         except Exception:  # pragma: no cover - alerting must never break reconcile
             logger.debug("Low-space check skipped", exc_info=True)
+        try:
+            from .provider_health import refresh_notes
+
+            refresh_notes(db)
+        except Exception:  # pragma: no cover - notes must never break reconcile
+            logger.debug("Provider-Hinweise nicht aktualisiert", exc_info=True)
         if not get_system_settings(db).auto_resync:
             return
         result = reconcile_once(db)
@@ -950,8 +968,16 @@ def _pick_eligible(
         query = query.join(MediaItem, MediaItem.id == TransferJob.media_id).where(
             MediaItem.size <= max_bytes
         )
+    # Within a priority, small files go first: a photo shouldn't wait an hour
+    # behind a 3.5 GB video that happened to arrive a minute earlier. Files of
+    # the same size class keep their arrival order.
+    small_first = case((MediaItem.size <= SMALL_FILE_BYTES, 0), else_=1)
+    if max_bytes is None:
+        query = query.join(MediaItem, MediaItem.id == TransferJob.media_id)
     return db.scalar(
-        query.order_by(TransferJob.priority.desc(), TransferJob.created_at).limit(1)
+        query.order_by(
+            TransferJob.priority.desc(), small_first, TransferJob.created_at
+        ).limit(1)
     )
 
 

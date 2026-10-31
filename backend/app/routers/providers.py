@@ -67,6 +67,7 @@ def _to_out(provider: CloudProvider) -> ProviderOut:
         status=provider.status,
         last_error=provider.last_error,
         last_tested_at=provider.last_tested_at,
+        note=provider.note or "",
         created_at=provider.created_at,
         config=_mask_config(provider.type, _load_config(provider)),
     )
@@ -185,21 +186,28 @@ def delete_provider(
 # --- Connection test ------------------------------------------------------
 
 
-def _run_test(pt: ProviderType, config: dict[str, str], subpath: str = "") -> TestResult:
-    """rclone listing test, followed by the type's write check if it has one."""
+def _run_test(
+    pt: ProviderType, config: dict[str, str], subpath: str = ""
+) -> tuple[TestResult, str | None]:
+    """rclone listing test, then the type's write check and note.
+
+    Returns the result and the provider note (``None``: couldn't tell, keep
+    the old one).
+    """
     error = config_error(pt, config)
     if error:
-        return TestResult(False, error)
+        return TestResult(False, error), None
     result = test_remote(pt.to_rclone_options(config), subpath)
     if result.ok and pt.write_check is not None:
         problem = pt.write_check(config)
         if problem:
-            return TestResult(False, problem)
+            return TestResult(False, problem), None
     if result.ok and pt.test_note is not None:
-        note = pt.test_note(config)
+        known, note = pt.test_note(config)
         if note:
-            return TestResult(True, f"{result.message} — Hinweis: {note}")
-    return result
+            return TestResult(True, f"{result.message} — Hinweis: {note}"), note
+        return result, ("" if known else None)
+    return result, ("" if result.ok else None)
 
 
 @router.post("/test", response_model=ProviderTestResult)
@@ -211,7 +219,7 @@ def test_draft(payload: ProviderTestRequest) -> ProviderTestResult:
     missing = validate_config(pt, payload.config)
     if missing:
         return ProviderTestResult(ok=False, message=f"Pflichtfelder fehlen: {', '.join(missing)}")
-    result = _run_test(pt, payload.config, payload.subpath)
+    result, _note = _run_test(pt, payload.config, payload.subpath)
     return ProviderTestResult(ok=result.ok, message=result.message)
 
 
@@ -222,9 +230,12 @@ def test_saved(provider_id: int, db: Session = Depends(get_db)) -> ProviderOut:
     pt = get_type(provider.type)
     if pt is None:
         raise HTTPException(status_code=400, detail="Unknown provider type")
-    result = _run_test(pt, _load_config(provider))
+    result, note = _run_test(pt, _load_config(provider))
     provider.status = ProviderStatus.OK if result.ok else ProviderStatus.ERROR
     provider.last_error = "" if result.ok else result.message
+    if note is not None:
+        provider.note = note
+        provider.note_checked_at = datetime.now(UTC)
     provider.last_tested_at = datetime.now(UTC)
     db.commit()
     db.refresh(provider)
