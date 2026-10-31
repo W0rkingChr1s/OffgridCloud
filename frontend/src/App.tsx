@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { api, type SetupStatus } from "./api";
 import { AuthProvider } from "./auth";
@@ -7,26 +7,37 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { RetroEasterEgg } from "./retro";
 import { ToastProvider } from "./toast";
 import TransferToaster from "./TransferToaster";
-import Bandwidth from "./pages/Bandwidth";
-import Bluetooth from "./pages/Bluetooth";
-import Dashboard from "./pages/Dashboard";
-import FolderDetail from "./pages/FolderDetail";
-import Folders from "./pages/Folders";
-import Groups from "./pages/Groups";
-import Health from "./pages/Health";
 import Login from "./pages/Login";
-import Network from "./pages/Network";
-import Overview from "./pages/Overview";
-import Passkeys from "./pages/Passkeys";
-import Pool from "./pages/Pool";
-import Providers from "./pages/Providers";
-import Search from "./pages/Search";
-import Setup from "./pages/Setup";
-import Storage from "./pages/Storage";
-import System from "./pages/System";
-import Transfers from "./pages/Transfers";
-import Users from "./pages/Users";
-import Vpn from "./pages/Vpn";
+
+// Every page except the login is its own chunk: the first visit (often over a
+// weak field uplink) only fetches the shell, admin pages load when opened.
+const Bandwidth = lazy(() => import("./pages/Bandwidth"));
+const Bluetooth = lazy(() => import("./pages/Bluetooth"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const FolderDetail = lazy(() => import("./pages/FolderDetail"));
+const Folders = lazy(() => import("./pages/Folders"));
+const Groups = lazy(() => import("./pages/Groups"));
+const Health = lazy(() => import("./pages/Health"));
+const Network = lazy(() => import("./pages/Network"));
+const Overview = lazy(() => import("./pages/Overview"));
+const Passkeys = lazy(() => import("./pages/Passkeys"));
+const Pool = lazy(() => import("./pages/Pool"));
+const Providers = lazy(() => import("./pages/Providers"));
+const Search = lazy(() => import("./pages/Search"));
+const Setup = lazy(() => import("./pages/Setup"));
+const Storage = lazy(() => import("./pages/Storage"));
+const System = lazy(() => import("./pages/System"));
+const Transfers = lazy(() => import("./pages/Transfers"));
+const Users = lazy(() => import("./pages/Users"));
+const Vpn = lazy(() => import("./pages/Vpn"));
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-900 text-slate-400">
+      Lädt…
+    </div>
+  );
+}
 
 // A box flashed from the prebuilt image starts without any account: until the
 // setup wizard has run, it replaces the whole app (every other API answers 503).
@@ -38,7 +49,12 @@ function SetupGate({ children }: { children: ReactNode }) {
       .catch(() => setStatus({ required: false, code_required: false, suggested_hostname: "", country: "" }));
   }, []);
   if (!status) return null;
-  if (status.required) return <Setup status={status} />;
+  if (status.required)
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <Setup status={status} />
+      </Suspense>
+    );
   return <>{children}</>;
 }
 
@@ -50,6 +66,7 @@ function AppRoutes() {
         <AuthProvider>
           <ToastProvider>
             <TransferToaster />
+            <Suspense fallback={<PageFallback />}>
             <Routes>
             <Route path="/login" element={<Login />} />
             <Route
@@ -198,6 +215,7 @@ function AppRoutes() {
             />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

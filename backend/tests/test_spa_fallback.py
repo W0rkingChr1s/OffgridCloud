@@ -5,6 +5,8 @@ The UI uses HTML5 history routing, so a browser refresh on a deep link such as
 the user sees ``{"detail":"Not Found"}``.
 """
 
+import gzip
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -59,3 +61,37 @@ def test_unknown_api_path_does_not_serve_html(tmp_path):
     resp = _client(tmp_path).get("/api/does-not-exist")
     assert resp.status_code == 404
     assert not resp.text.lstrip().lower().startswith("<!doctype html")
+
+
+def _precompressed_client(tmp_path):
+    client = _client(tmp_path)
+    static = tmp_path / "static"
+    (static / "assets" / "app.js.gz").write_bytes(gzip.compress(b"console.log('ok')"))
+    return client
+
+
+def test_precompressed_asset_is_served_when_accepted(tmp_path):
+    resp = _precompressed_client(tmp_path).get(
+        "/assets/app.js", headers={"Accept-Encoding": "gzip"}
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-encoding"] == "gzip"
+    assert resp.headers["content-type"].startswith("text/javascript")
+    assert resp.headers["vary"] == "Accept-Encoding"
+    assert "console.log" in resp.text  # the client decodes it
+
+
+def test_plain_asset_without_accept_encoding(tmp_path):
+    resp = _precompressed_client(tmp_path).get(
+        "/assets/app.js", headers={"Accept-Encoding": "identity"}
+    )
+    assert resp.status_code == 200
+    assert "content-encoding" not in resp.headers
+    assert resp.text == "console.log('ok')"
+
+
+def test_hashed_assets_are_immutable_but_index_is_revalidated(tmp_path):
+    client = _client(tmp_path)
+    assert "immutable" in client.get("/assets/app.js").headers["cache-control"]
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/admin/system").headers["cache-control"] == "no-cache"

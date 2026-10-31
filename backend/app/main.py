@@ -8,14 +8,19 @@ runtime (key for the 1 GB Raspberry Pi target).
 from __future__ import annotations
 
 import asyncio
+import mimetypes
+import os
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
+from starlette.staticfiles import NotModifiedResponse
 
 from . import (
     __version__,
@@ -253,14 +258,55 @@ class SPAStaticFiles(StaticFiles):
     assets (e.g. ``/assets/foo.js``) still 404 so broken references stay visible.
     """
 
+    # The frontend build writes .br/.gz next to every text asset. Serving those
+    # costs the Pi nothing and cuts the download for phones on a weak uplink to
+    # roughly a quarter.
+    _ENCODINGS = (("br", ".br"), ("gzip", ".gz"))
+
+    def file_response(self, full_path, stat_result, scope, status_code: int = 200) -> Response:
+        path = str(full_path)
+        request_headers = Headers(scope=scope)
+        accepted = request_headers.get("accept-encoding", "")
+        accepted = {part.split(";")[0].strip() for part in accepted.split(",")}
+        headers = {
+            # Vite puts a content hash into every name under assets/, so those
+            # never change. Everything else (index.html, sw.js, manifest, icons)
+            # must be revalidated, or a box update would leave the old app in
+            # the browser.
+            "Cache-Control": "public, max-age=31536000, immutable"
+            if Path(path).parent.name == "assets"
+            else "no-cache",
+            "Vary": "Accept-Encoding",
+        }
+        for encoding, suffix in self._ENCODINGS:
+            if encoding not in accepted:
+                continue
+            try:
+                compressed = os.stat(path + suffix)
+            except OSError:
+                continue
+            response: Response = FileResponse(
+                path + suffix,
+                status_code=status_code,
+                stat_result=compressed,
+                media_type=mimetypes.guess_type(path)[0] or "application/octet-stream",
+                headers={**headers, "Content-Encoding": encoding},
+            )
+            break
+        else:
+            response = FileResponse(
+                path, status_code=status_code, stat_result=stat_result, headers=headers
+            )
+        if self.is_not_modified(response.headers, request_headers):
+            return NotModifiedResponse(response.headers)
+        return response
+
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
         except StarletteHTTPException as exc:
             unknown_route = (
-                exc.status_code == 404
-                and not path.startswith("api/")
-                and not Path(path).suffix
+                exc.status_code == 404 and not path.startswith("api/") and not Path(path).suffix
             )
             if unknown_route:
                 return await super().get_response("index.html", scope)

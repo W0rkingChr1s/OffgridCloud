@@ -10,21 +10,77 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 - **Weboberfläche wird nach längerer Laufzeit langsam bis unerreichbar (möglicher Auslöser):** Jeder offene Tab hielt zwei Live-Verbindungen, und jede baute alle 2 Sekunden einen eigenen Zustandsbericht. Für Admins las dieser jedes Mal die Dateinamen aller Medien. Schlief ein iPad hinter Caddy ein, blieben seine Verbindungen oft stundenlang offen, und die Box rechnete für niemanden weiter. Jetzt hat jeder Tab nur noch eine Verbindung, die er schließt, solange er im Hintergrund ist. Der Bericht entsteht pro Nutzer höchstens einmal je Intervall und liest nur die Namen der laufenden Transfers. Außerdem beendet der Server jede Verbindung nach 5 Minuten, der Browser verbindet sich von selbst neu.
 
+## [0.10.3] – 2026-10-31
+
+Nextcloud-Freigabelinks auf Servern vor Nextcloud 32 nehmen Dateien über 10 MiB wieder an, und zu große Dateien melden, was hilft.
+
+### 🐛 Fehlerbehebungen
+
+- **Freigabelinks auf Nextcloud < 32: Dateien über 10 MiB scheiterten mit „Parent node does not exist“ (409):** Seit dem Chunked-Upload (0.10.2) zerlegt rclone größere Dateien in Stücke. Ältere Nextcloud-Versionen haben für Freigaben aber keinen Chunk-Endpunkt. OffgridCloud prüft das jetzt vor dem Upload und schickt die Datei auf solchen Servern wieder am Stück, wie vor 0.10.2. Dateien bis zum Limit des Proxys vor dem Server (bei Hetzner Storage Share rund 100 MB) gehen dann wieder durch. Was größer ist, scheitert mit 413, und die Fehlermeldung sagt dazu, was hilft: Nextcloud 32 oder der Provider „Nextcloud“ mit Konto und App-Passwort.
+
+## [0.10.2] – 2026-10-31
+
+Große Videos auf Nextcloud-Freigabelinks laden in Chunks hoch (rclone ≥ 1.63), und wartende Transfers zeigen ihren Fehlergrund.
+
+### 🐛 Fehlerbehebungen
+
+- **Große Videos auf Nextcloud-Freigabelinks blieben bei „wartet“ hängen:** Der Chunked-Upload aus #247 greift erst ab rclone 1.63. Das Docker-Image installierte rclone aus Debian (1.60.1), und `install.sh` behielt ein vorhandenes altes rclone. Dann gingen große Dateien weiter als ein einziger Request raus und scheiterten mit „413 Payload Too Large“.
+  - Das Docker-Image bringt jetzt das offizielle rclone-Release mit.
+  - `install.sh` ersetzt ein rclone älter als 1.63.
+  - Der Verbindungstest einer Freigabe meldet ein zu altes rclone. Fehlt der Chunk-Endpunkt auf dem Server, nennt er die Nextcloud-Version (Chunked-Upload für Freigaben gibt es erst ab Nextcloud 32).
+- **Transfers zeigten bei „wartet“ keinen Grund:** Die letzte Fehlermeldung steht jetzt auch bei Jobs, die auf den nächsten Versuch warten, unter dem Dateinamen, also auch auf dem Handy sichtbar.
+
+## [0.10.1] – 2026-10-31
+
+Die Web-Oberfläche lädt auf dem Handy deutlich schneller.
+
+### ⚡ Performance
+
+- **Web-Oberfläche lädt auf dem Handy deutlich schneller:** Bisher kam die ganze App als ein unkomprimiertes 660-KB-Skript, bei jedem Aufruf neu über das Netz, auch wenn der Service Worker es schon hatte. Jetzt:
+  - Das Frontend wird beim Bauen vorkomprimiert (Brotli/gzip), die Box liefert diese Dateien direkt aus, ohne eigene CPU-Last. Der erste Aufruf überträgt rund 90 KB statt rund 750 KB.
+  - Jede Seite ist ein eigenes Paket. Die Admin-Seiten werden erst geladen, wenn man sie öffnet.
+  - Dateien unter `/assets/` (mit Hash im Namen) sind dauerhaft cachebar, und der Service Worker beantwortet sie aus dem Cache. Ein erneuter Aufruf lädt nur noch `index.html`.
+  - Gemessen mit gedrosseltem Handy-Profil (6× langsamere CPU, 1,6 Mbit/s, 150 ms Latenz): Login-Seite 5,2 s → 1,4 s.
+  - Öffnet ein Tab nach einem Update eine noch nicht geladene Seite, deren Paket es nicht mehr gibt, lädt die App einmal neu statt weiß zu bleiben.
+
 ## [0.10.0] – 2026-10-30
 
-Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü. Dazu klarere Fehlermeldungen beim Login.
-
-### ✨ Neu
-
-- **Einheitlicher Datei-Browser:** Medien eines Ordners, die Ordner-Ansicht von Karten und USB-Laufwerken sowie die Suche nutzen jetzt denselben Browser. Er bietet Liste oder Kacheln mit Vorschaubildern (die Wahl wird je Ansicht gemerkt), einen Namensfilter, Sortierung per Spaltenkopf und Mehrfachauswahl: Shift-Klick für einen Bereich, Strg/⌘+A für alle, Esc hebt sie auf. Bedienbar ist er auch per Tastatur (Pfeiltasten, Leertaste, Enter öffnet). Lange Listen werden virtualisiert: Eine Karte mit Tausenden Dateien rendert nur, was gerade zu sehen ist, und fragt nur dafür Vorschaubilder an. Die Ordner-Ansicht auf der Speicher-Seite zeigt jetzt Vorschaubilder; sie teilt sich den Thumbnail-Cache mit der Galerie.
-- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht. Hochgeladen wird in 10-MB-Stücken über den Chunked-Upload, den Nextcloud für Freigaben anbietet. Dateien über 100 MB scheitern deshalb nicht mehr an Proxys wie Cloudflare (413 „Payload Too Large“). Fehlt dieser Endpunkt bei älteren Nextcloud-Versionen, meldet das der Verbindungstest.
-- **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
+Klarere Fehlermeldungen beim Login.
 
 ### 🐛 Fehlerbehebungen
 
 - **Login meldete nur „Passkey-Anmeldung fehlgeschlagen“:** Fehler, die der Browser selbst bei der Passkey- oder Passwort-Anmeldung wirft, landeten in einer Sammelmeldung ohne Ursache. Jetzt steht die konkrete Fehlermeldung im Login. Ist kein passender Passkey da, weist der Login darauf hin, dass Passkeys nur für die Adresse gelten, unter der sie angelegt wurden (z. B. `offgridcloud.local` vs. `<hostname>.local`). Verweigert der Browser Passkeys wegen eines nicht vertrauten Zertifikats, sagt er das ebenfalls.
+
+## [0.9.6] – 2026-10-30
+
+### 🐛 Fehlerbehebungen
+
+- **Nextcloud-Freigabelinks: große Dateien scheiterten mit 413:** Dateien über 100 MB scheiterten beim Upload auf einen Freigabelink an Proxys wie Cloudflare (413 „Payload Too Large“). Jetzt wird in 10-MB-Stücken über den Chunked-Upload hochgeladen, den Nextcloud für Freigaben anbietet. Fehlt dieser Endpunkt bei älteren Nextcloud-Versionen, meldet das der Verbindungstest.
+
+## [0.9.5] – 2026-10-29
+
+Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü.
+
+### ✨ Neu
+
+- **Einheitlicher Datei-Browser:** Medien eines Ordners, die Ordner-Ansicht von Karten und USB-Laufwerken sowie die Suche nutzen jetzt denselben Browser. Er bietet Liste oder Kacheln mit Vorschaubildern (die Wahl wird je Ansicht gemerkt), einen Namensfilter, Sortierung per Spaltenkopf und Mehrfachauswahl: Shift-Klick für einen Bereich, Strg/⌘+A für alle, Esc hebt sie auf. Bedienbar ist er auch per Tastatur (Pfeiltasten, Leertaste, Enter öffnet). Lange Listen werden virtualisiert: Eine Karte mit Tausenden Dateien rendert nur, was gerade zu sehen ist, und fragt nur dafür Vorschaubilder an. Die Ordner-Ansicht auf der Speicher-Seite zeigt jetzt Vorschaubilder; sie teilt sich den Thumbnail-Cache mit der Galerie.
+- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht.
+- **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
+
+### 🐛 Fehlerbehebungen
+
 - **Monitoring-Token ließ sich über HTTP nicht kopieren:** Der „Kopieren“-Button unter Zustand → Zugriff für Monitoring-Systeme nutzte nur die Clipboard-API des Browsers, die es ausschließlich über HTTPS gibt. Auf einer Box, die per `http://` erreicht wird, passierte beim Klick nichts. Jetzt greift derselbe Fallback wie im Telegram-Assistenten. Klappt auch der nicht, erscheint ein Hinweis, das Token von Hand zu kopieren.
+
+## [0.9.3] – 2026-10-28
+
+### 🐛 Fehlerbehebungen
+
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).
+
+## [0.9.2] – 2026-10-28
+
+### 🐛 Fehlerbehebungen
+
 - **Bluetooth-Box verschwindet nach einer Weile und meldet sich nicht mehr:** Lehnte BlueZ das Anmelden der Werbung ein einziges Mal ab (z. B. direkt nach dem Trennen eines Handys), blieb die Werbung halb registriert, und jeder weitere Versuch scheiterte, bis der Dienst von Hand neu gestartet wurde. Der Prozess lief weiter, schrieb aber keinen Herzschlag mehr: Das Portal zeigte „Der Bluetooth-Dienst der Box meldet sich nicht“ ohne Fehlermeldung. Jetzt räumt der Dienst eine gescheiterte Anmeldung auf, zeigt Admins nach 30 Sekunden den Fehler im Portal und startet sich nach einer Minute ohne Erfolg selbst neu. Auch ein Neustart von `bluetoothd` (z. B. durch ein BlueZ-Update), der alle Registrierungen verwirft, führt jetzt zu einem sauberen Neustart statt zu einer unsichtbaren Box.
 
 ## [0.9.1] – 2026-10-28

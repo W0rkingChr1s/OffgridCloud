@@ -252,7 +252,7 @@ def test_create_share_without_password_and_reject_bad_link(client, admin_auth):
     assert patched.status_code == 400
 
 
-def _share_test(client, admin_auth, monkeypatch, perms, chunking=True):
+def _share_test(client, admin_auth, monkeypatch, perms, chunking=True, rclone=(1, 75, 2)):
     from app import nextcloud_share
     from app.rclone import TestResult
     from app.routers import providers
@@ -260,6 +260,8 @@ def _share_test(client, admin_auth, monkeypatch, perms, chunking=True):
     monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
     monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: perms)
     monkeypatch.setattr(nextcloud_share, "_has_chunk_endpoint", lambda *a: chunking)
+    monkeypatch.setattr(nextcloud_share, "_server_version", lambda *a: "31.0.9")
+    monkeypatch.setattr(nextcloud_share.rclone, "rclone_version", lambda: rclone)
     return client.post(
         "/api/providers/test",
         headers=admin_auth,
@@ -284,3 +286,120 @@ def test_share_test_flags_server_without_chunk_endpoint(client, admin_auth, monk
     res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", chunking=False)
     assert res["ok"] is False
     assert "Chunked-Upload" in res["message"]
+    assert "Nextcloud 31.0.9" in res["message"]
+
+
+def test_share_test_flags_rclone_without_chunking(client, admin_auth, monkeypatch):
+    # rclone < 1.63 ignores vendor=nextcloud chunking and PUTs whole files.
+    res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", rclone=(1, 60, 1))
+    assert res["ok"] is False
+    assert "rclone 1.60.1" in res["message"]
+    # Unknown version -> don't block.
+    assert _share_test(client, admin_auth, monkeypatch, "RGDNVCK", rclone=None)["ok"] is True
+
+
+def test_parse_rclone_version():
+    from app.rclone import parse_version
+
+    assert parse_version("rclone v1.60.1-DEV") == (1, 60, 1)
+    assert parse_version("rclone v1.75.2") == (1, 75, 2)
+    assert parse_version("rclone 1.63") == (1, 63, 0)
+    assert parse_version("") is None
+    assert parse_version(None) is None
+
+
+# --- Share links on servers without public chunking (Nextcloud < 32) -----
+
+
+def _http_error(code):
+    import urllib.error
+
+    return urllib.error.HTTPError("u", code, "x", {}, None)
+
+
+def test_share_chunk_probe_classifies_responses(monkeypatch):
+    from app import nextcloud_share
+
+    def fake(code):
+        def _open(req, timeout):
+            raise _http_error(code)
+        return _open
+
+    url = "https://c.example.com/public.php/dav/files/Tok/"
+    monkeypatch.setattr(nextcloud_share.urllib.request, "urlopen", fake(404))
+    assert nextcloud_share._probe_chunk_endpoint(url, "Tok", "") is False
+    monkeypatch.setattr(nextcloud_share.urllib.request, "urlopen", fake(503))
+    assert nextcloud_share._probe_chunk_endpoint(url, "Tok", "") is None
+
+
+def test_share_upload_options_disable_chunking_without_endpoint(monkeypatch):
+    from app import nextcloud_share
+
+    nextcloud_share._chunk_cache.clear()
+    calls = []
+
+    def probe(url, token, pw):
+        calls.append(url)
+        return False
+
+    monkeypatch.setattr(nextcloud_share, "_probe_chunk_endpoint", probe)
+    cfg = {"link": "https://cloud.example.com/s/AbC123"}
+    base = {"type": "webdav", "vendor": "nextcloud"}
+    assert nextcloud_share.share_upload_options(cfg, base)["nextcloud_chunk_size"] == "0"
+    nextcloud_share.share_upload_options(cfg, base)
+    assert len(calls) == 1  # cached
+
+    nextcloud_share._chunk_cache.clear()
+    monkeypatch.setattr(nextcloud_share, "_probe_chunk_endpoint", lambda *a: True)
+    assert "nextcloud_chunk_size" not in nextcloud_share.share_upload_options(cfg, base)
+
+    # Unknown (network hiccup): keep chunking, don't cache.
+    nextcloud_share._chunk_cache.clear()
+    monkeypatch.setattr(nextcloud_share, "_probe_chunk_endpoint", lambda *a: None)
+    assert "nextcloud_chunk_size" not in nextcloud_share.share_upload_options(cfg, base)
+    assert nextcloud_share._chunk_cache == {}
+
+
+def test_share_upload_error_gets_hint():
+    from app.nextcloud_share import explain_upload_error
+
+    msg = "making upload directory failed: Parent node does not exist: 409 Conflict"
+    assert "Nextcloud 32" in explain_upload_error(msg)
+    assert "Nextcloud 32" in explain_upload_error("413 Payload Too Large")
+    assert explain_upload_error("connection refused") == "connection refused"
+
+
+def test_process_job_applies_upload_options_and_error_hint(client, admin_auth, monkeypatch):
+    import dataclasses
+
+    from sqlalchemy import select
+
+    from app import transfers
+    from app.db import SessionLocal
+    from app.models import TransferJob
+    from app.rclone import UploadResult
+    from tests.test_tether import _queue_job
+
+    media = _queue_job(client, admin_auth, b"v" * 64)
+    real_get_type = transfers.get_type
+
+    def patched(key):
+        pt = real_get_type(key)
+        return dataclasses.replace(
+            pt,
+            upload_options=lambda cfg, opts: {**opts, "nextcloud_chunk_size": "0"},
+            explain_error=lambda msg: msg + " | Hinweis",
+        )
+
+    monkeypatch.setattr(transfers, "get_type", patched)
+    seen = []
+
+    def upload(local, options, dest, bwlimit=0, on_progress=None):
+        seen.append(options.get("nextcloud_chunk_size"))
+        return UploadResult(False, 0, "413 Payload Too Large", 0.0)
+
+    with SessionLocal() as db:
+        job = db.scalar(select(TransferJob).where(TransferJob.media_id == media["id"]))
+        transfers.process_job(db, job, upload)
+        assert job.last_error == "413 Payload Too Large | Hinweis"
+    assert seen == ["0"]
