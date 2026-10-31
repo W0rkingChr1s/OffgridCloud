@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime
 
 import jwt
@@ -36,6 +37,11 @@ from ..transfers import get_live
 router = APIRouter(tags=["events"])
 
 SNAPSHOT_INTERVAL = 2.0  # seconds
+# A stream ends after this long; EventSource reconnects on its own (after
+# RETRY_MS). This bounds streams whose client vanished without a FIN — an iPad
+# that went to sleep behind Caddy can otherwise keep one open for hours.
+STREAM_MAX_SECONDS = 300.0
+RETRY_MS = 3000
 
 
 def _user_from_token(token: str) -> int:
@@ -55,9 +61,7 @@ def _accessible_folders(db: Session, user: User) -> list[UploadFolder]:
     if not ids:
         return []
     return list(
-        db.scalars(
-            select(UploadFolder).where(UploadFolder.id.in_(ids)).order_by(UploadFolder.name)
-        )
+        db.scalars(select(UploadFolder).where(UploadFolder.id.in_(ids)).order_by(UploadFolder.name))
     )
 
 
@@ -69,8 +73,9 @@ def build_snapshot(user_id: int) -> dict | None:
 
         # Per-folder media counts by status.
         rows = db.execute(
-            select(MediaItem.folder_id, MediaItem.status, func.count())
-            .group_by(MediaItem.folder_id, MediaItem.status)
+            select(MediaItem.folder_id, MediaItem.status, func.count()).group_by(
+                MediaItem.folder_id, MediaItem.status
+            )
         ).all()
         by_folder: dict[int, dict[str, int]] = {}
         for folder_id, st, count in rows:
@@ -103,11 +108,22 @@ def build_snapshot(user_id: int) -> dict | None:
 
             live = get_live()
             running = list(
-                db.scalars(
-                    select(TransferJob).where(TransferJob.status == TransferStatus.RUNNING)
-                )
+                db.scalars(select(TransferJob).where(TransferJob.status == TransferStatus.RUNNING))
             )
-            media_names = dict(db.execute(select(MediaItem.id, MediaItem.filename)).all())
+            # Only the names of running jobs — not every media row, which on a
+            # box with thousands of files made each 2 s frame a full table scan.
+            running_media = {j.media_id for j in running}
+            media_names = (
+                dict(
+                    db.execute(
+                        select(MediaItem.id, MediaItem.filename).where(
+                            MediaItem.id.in_(running_media)
+                        )
+                    ).all()
+                )
+                if running_media
+                else {}
+            )
             prov_names = dict(db.execute(select(CloudProvider.id, CloudProvider.name)).all())
             active = []
             for j in running:
@@ -155,15 +171,36 @@ def build_snapshot(user_id: int) -> dict | None:
         return snapshot
 
 
+# Per-user snapshot cache: however many streams a user has open (tabs, devices,
+# streams of clients that silently went away), the snapshot is built at most
+# once per SNAPSHOT_INTERVAL.
+_cache: dict[int, tuple[float, dict | None]] = {}
+_locks: dict[int, asyncio.Lock] = {}
+
+
+async def cached_snapshot(user_id: int) -> dict | None:
+    lock = _locks.setdefault(user_id, asyncio.Lock())
+    async with lock:
+        hit = _cache.get(user_id)
+        # Slightly under the interval so a stream's own next tick is a miss.
+        if hit and time.monotonic() - hit[0] < SNAPSHOT_INTERVAL * 0.9:
+            return hit[1]
+        snapshot = await asyncio.to_thread(build_snapshot, user_id)
+        _cache[user_id] = (time.monotonic(), snapshot)
+        return snapshot
+
+
 @router.get("/api/events")
 async def events(request: Request, token: str) -> StreamingResponse:
     user_id = _user_from_token(token)
 
     async def stream():
-        while True:
+        yield f"retry: {RETRY_MS}\n\n"
+        deadline = time.monotonic() + STREAM_MAX_SECONDS
+        while time.monotonic() < deadline:
             if await request.is_disconnected():
                 break
-            snapshot = await asyncio.to_thread(build_snapshot, user_id)
+            snapshot = await cached_snapshot(user_id)
             if snapshot is None:
                 break
             yield f"data: {json.dumps(snapshot)}\n\n"
