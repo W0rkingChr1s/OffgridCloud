@@ -8,19 +8,42 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [0.10.0] – 2026-10-30
 
-Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü. Dazu klarere Fehlermeldungen beim Login.
-
-### ✨ Neu
-
-- **Einheitlicher Datei-Browser:** Medien eines Ordners, die Ordner-Ansicht von Karten und USB-Laufwerken sowie die Suche nutzen jetzt denselben Browser. Er bietet Liste oder Kacheln mit Vorschaubildern (die Wahl wird je Ansicht gemerkt), einen Namensfilter, Sortierung per Spaltenkopf und Mehrfachauswahl: Shift-Klick für einen Bereich, Strg/⌘+A für alle, Esc hebt sie auf. Bedienbar ist er auch per Tastatur (Pfeiltasten, Leertaste, Enter öffnet). Lange Listen werden virtualisiert: Eine Karte mit Tausenden Dateien rendert nur, was gerade zu sehen ist, und fragt nur dafür Vorschaubilder an. Die Ordner-Ansicht auf der Speicher-Seite zeigt jetzt Vorschaubilder; sie teilt sich den Thumbnail-Cache mit der Galerie.
-- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht. Hochgeladen wird in 10-MB-Stücken über den Chunked-Upload, den Nextcloud für Freigaben anbietet. Dateien über 100 MB scheitern deshalb nicht mehr an Proxys wie Cloudflare (413 „Payload Too Large“). Fehlt dieser Endpunkt bei älteren Nextcloud-Versionen, meldet das der Verbindungstest.
-- **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
+Klarere Fehlermeldungen beim Login.
 
 ### 🐛 Fehlerbehebungen
 
 - **Login meldete nur „Passkey-Anmeldung fehlgeschlagen“:** Fehler, die der Browser selbst bei der Passkey- oder Passwort-Anmeldung wirft, landeten in einer Sammelmeldung ohne Ursache. Jetzt steht die konkrete Fehlermeldung im Login. Ist kein passender Passkey da, weist der Login darauf hin, dass Passkeys nur für die Adresse gelten, unter der sie angelegt wurden (z. B. `offgridcloud.local` vs. `<hostname>.local`). Verweigert der Browser Passkeys wegen eines nicht vertrauten Zertifikats, sagt er das ebenfalls.
+
+## [0.9.6] – 2026-10-30
+
+### 🐛 Fehlerbehebungen
+
+- **Nextcloud-Freigabelinks: große Dateien scheiterten mit 413:** Dateien über 100 MB scheiterten beim Upload auf einen Freigabelink an Proxys wie Cloudflare (413 „Payload Too Large“). Jetzt wird in 10-MB-Stücken über den Chunked-Upload hochgeladen, den Nextcloud für Freigaben anbietet. Fehlt dieser Endpunkt bei älteren Nextcloud-Versionen, meldet das der Verbindungstest.
+
+## [0.9.5] – 2026-10-29
+
+Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü.
+
+### ✨ Neu
+
+- **Einheitlicher Datei-Browser:** Medien eines Ordners, die Ordner-Ansicht von Karten und USB-Laufwerken sowie die Suche nutzen jetzt denselben Browser. Er bietet Liste oder Kacheln mit Vorschaubildern (die Wahl wird je Ansicht gemerkt), einen Namensfilter, Sortierung per Spaltenkopf und Mehrfachauswahl: Shift-Klick für einen Bereich, Strg/⌘+A für alle, Esc hebt sie auf. Bedienbar ist er auch per Tastatur (Pfeiltasten, Leertaste, Enter öffnet). Lange Listen werden virtualisiert: Eine Karte mit Tausenden Dateien rendert nur, was gerade zu sehen ist, und fragt nur dafür Vorschaubilder an. Die Ordner-Ansicht auf der Speicher-Seite zeigt jetzt Vorschaubilder; sie teilt sich den Thumbnail-Cache mit der Galerie.
+- **Nextcloud-Freigabelinks als Cloud-Ziel:** Neuer Provider-Typ „Nextcloud-Freigabelink“. Man fügt nur den öffentlichen Link ein (`https://…/s/<token>`, auch Hetzner Storage Share), bei Bedarf mit Freigabe-Passwort. Die Box baut daraus selbst den WebDAV-Zugang. Ein eigenes Nextcloud-Konto ist nicht nötig. Der Verbindungstest prüft zusätzlich die Rechte der Freigabe und meldet einen schreibgeschützten Link sofort, statt erst beim ersten Upload zu scheitern. Die Freigabe braucht „Hochladen und Bearbeiten erlauben“, „Dateiablage“ reicht nicht.
+- **Rechtsklick-Menü:** In der Medienliste eines Ordners, in den Transfers und in der Ordnerverwaltung öffnet ein Rechtsklick ein Kontextmenü mit den passenden Aktionen: Herunterladen, Beschreiben, Auswählen, Dateinamen kopieren und Löschen bei Medien; Erneut versuchen, Zum Ordner und Fehlermeldung kopieren bei Transfers. Ist die angeklickte Datei Teil einer Mehrfachauswahl, gelten die Aktionen für die ganze Auswahl (ZIP-Download, Beschreiben, Löschen). Bedienbar mit Pfeiltasten, Enter und Esc. Wer das Browser-Menü braucht, hält Shift gedrückt; in Eingabefeldern und auf markiertem Text bleibt es ohnehin.
+
+### 🐛 Fehlerbehebungen
+
 - **Monitoring-Token ließ sich über HTTP nicht kopieren:** Der „Kopieren“-Button unter Zustand → Zugriff für Monitoring-Systeme nutzte nur die Clipboard-API des Browsers, die es ausschließlich über HTTPS gibt. Auf einer Box, die per `http://` erreicht wird, passierte beim Klick nichts. Jetzt greift derselbe Fallback wie im Telegram-Assistenten. Klappt auch der nicht, erscheint ein Hinweis, das Token von Hand zu kopieren.
+
+## [0.9.3] – 2026-10-28
+
+### 🐛 Fehlerbehebungen
+
 - **Fehlendes `dbus-fast` wird im Portal angezeigt:** Scheiterte bei einem Update die Installation von `dbus-fast`, stürzte `offgridcloud-ble` schon beim Import ab, und das Portal meldete nur „Der Bluetooth-Dienst der Box meldet sich nicht“. Jetzt zeigt es Admins den Fehler und den Befehl zum Nachinstallieren (`sudo /opt/offgridcloud/src/deploy/ble/install.sh`).
+
+## [0.9.2] – 2026-10-28
+
+### 🐛 Fehlerbehebungen
+
 - **Bluetooth-Box verschwindet nach einer Weile und meldet sich nicht mehr:** Lehnte BlueZ das Anmelden der Werbung ein einziges Mal ab (z. B. direkt nach dem Trennen eines Handys), blieb die Werbung halb registriert, und jeder weitere Versuch scheiterte, bis der Dienst von Hand neu gestartet wurde. Der Prozess lief weiter, schrieb aber keinen Herzschlag mehr: Das Portal zeigte „Der Bluetooth-Dienst der Box meldet sich nicht“ ohne Fehlermeldung. Jetzt räumt der Dienst eine gescheiterte Anmeldung auf, zeigt Admins nach 30 Sekunden den Fehler im Portal und startet sich nach einer Minute ohne Erfolg selbst neu. Auch ein Neustart von `bluetoothd` (z. B. durch ein BlueZ-Update), der alle Registrierungen verwirft, führt jetzt zu einem sauberen Neustart statt zu einer unsichtbaren Box.
 
 ## [0.9.1] – 2026-10-28
