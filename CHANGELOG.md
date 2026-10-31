@@ -6,6 +6,11 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Behoben
+
+- **One-Click-Update bricht nicht mehr mittendrin ab:** Das Update aus dem Portal lief in der cgroup des Webdienstes. Startete ein Unterskript (AP-Fallback, VPN) den Webdienst neu, beendete systemd das ganze Update gleich mit, nach dem Neuaufbau des Python-venv, aber vor dem Bluetooth-Schritt. Das Portal meldete trotzdem Erfolg, weil die Version schon gestempelt war. Folge: `dbus-fast` fehlte im neuen venv, und `offgridcloud-ble` fiel erst nach dem nächsten Neustart der Box mit `No module named 'dbus_fast'` aus, weil der alte Prozess bis dahin weiterlief. Auch Kiosk-, HTTPS- und Abschlussschritte fielen still weg. Jetzt läuft `update.sh` als eigene systemd-Unit weiter, die Unterskripte starten den Webdienst während eines Updates nicht mehr neu, und `dbus-fast` kommt direkt beim venv-Neubau mit.
+  Betroffene Boxen: einmal `sudo /opt/offgridcloud/src/deploy/update.sh` per SSH ausführen (oder nur `sudo /opt/offgridcloud/src/deploy/ble/install.sh` für Bluetooth).
+
 ## [0.11.0] – 2026-10-31
 
 Große Dateien kommen jetzt auch über Nextcloud-Freigabelinks ohne Chunked-Upload in die Cloud: Videos als abspielbare Clips, alles andere in Stücken. Dazu: kein sinnloses Wiederholen bei „zu groß“, kleine Dateien zuerst, eine Transferliste, die aufs Handy passt, und Hinweise direkt am Provider.

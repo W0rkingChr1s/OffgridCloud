@@ -634,6 +634,14 @@ step "Setting up Python virtualenv..."
 python3 -m venv "$PREFIX/backend/.venv"
 "$PREFIX/backend/.venv/bin/pip" install --upgrade pip
 "$PREFIX/backend/.venv/bin/pip" install -r "$PREFIX/backend/requirements.txt"
+# Bluetooth's dependency right away, not only in the BLE step further down: the
+# fresh venv must never sit there without it — offgridcloud-ble shares this venv
+# and fails with "No module named 'dbus_fast'" on its next start otherwise. The
+# BLE step installs it again (a no-op then) and retries on failure.
+if [[ $WITH_BLE -eq 1 ]]; then
+  "$PREFIX/backend/.venv/bin/pip" install -r "$PREFIX/backend/requirements-ble.txt" \
+    || warn "dbus-fast (Bluetooth) failed to install — retried in the Bluetooth step."
+fi
 # The code tree is read-only for the service account (see ownership below), so
 # Python can't write __pycache__ at runtime — compile it once here instead.
 "$PREFIX/backend/.venv/bin/python" -m compileall -q "$PREFIX/backend/app" >/dev/null || true
@@ -786,7 +794,9 @@ if [[ $WITH_AP_FALLBACK -eq 1 ]]; then
   rm -rf "$PREFIX/deploy/netfallback"   # replace, don't nest, on a re-run/update
   cp -r "$REPO_ROOT/deploy/netfallback" "$PREFIX/deploy/netfallback"
   chmod +x "$PREFIX/deploy/netfallback/"*.sh "$PREFIX/deploy/netfallback/_apply.py" 2>/dev/null || true
-  bash "$PREFIX/deploy/netfallback/install.sh" --prefix "$PREFIX" --service-user "$SERVICE_USER" \
+  NETFALLBACK_ARGS=(--prefix "$PREFIX" --service-user "$SERVICE_USER")
+  [[ $DO_START -eq 1 ]] || NETFALLBACK_ARGS+=(--no-start)
+  bash "$PREFIX/deploy/netfallback/install.sh" "${NETFALLBACK_ARGS[@]}" \
     || warn "AP-fallback setup reported an issue — see docs/NETZWERK-REDUNDANZ.md."
 fi
 
@@ -799,7 +809,9 @@ if [[ $WITH_VPN -eq 1 ]]; then
   cp -r "$REPO_ROOT/deploy/vpn" "$PREFIX/deploy/vpn"
   chmod +x "$PREFIX/deploy/vpn/install.sh" 2>/dev/null || true
   if [[ $INSTALL_SERVICE -eq 1 ]]; then
-    bash "$PREFIX/deploy/vpn/install.sh" --prefix "$PREFIX" \
+    VPN_ARGS=(--prefix "$PREFIX")
+    [[ $DO_START -eq 1 ]] || VPN_ARGS+=(--no-start)
+    bash "$PREFIX/deploy/vpn/install.sh" "${VPN_ARGS[@]}" \
       || warn "VPN setup reported an issue — see docs/VPN.md."
   else
     echo "   --no-service given: VPN needs the systemd unit for the CAP_NET_ADMIN"
