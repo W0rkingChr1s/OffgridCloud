@@ -14,6 +14,7 @@ import base64
 import json
 import logging
 import os
+import re
 import secrets
 import shutil
 import socket
@@ -54,6 +55,20 @@ def check_rclone() -> RcloneStatus:
 
     first_line = result.stdout.splitlines()[0] if result.stdout else ""
     return RcloneStatus(available=True, version=first_line.strip() or None)
+
+
+def parse_version(text: str | None) -> tuple[int, int, int] | None:
+    """``"rclone v1.60.1-DEV"`` -> ``(1, 60, 1)``; ``None`` if unparseable."""
+    match = re.search(r"v?(\d+)\.(\d+)(?:\.(\d+))?", text or "")
+    if match is None:
+        return None
+    return int(match[1]), int(match[2]), int(match[3] or 0)
+
+
+def rclone_version() -> tuple[int, int, int] | None:
+    """The installed rclone's version, ``None`` when missing or unknown."""
+    status = check_rclone()
+    return parse_version(status.version) if status.available else None
 
 
 @dataclass(frozen=True)

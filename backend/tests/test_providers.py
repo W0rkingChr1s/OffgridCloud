@@ -252,7 +252,7 @@ def test_create_share_without_password_and_reject_bad_link(client, admin_auth):
     assert patched.status_code == 400
 
 
-def _share_test(client, admin_auth, monkeypatch, perms, chunking=True):
+def _share_test(client, admin_auth, monkeypatch, perms, chunking=True, rclone=(1, 75, 2)):
     from app import nextcloud_share
     from app.rclone import TestResult
     from app.routers import providers
@@ -260,6 +260,8 @@ def _share_test(client, admin_auth, monkeypatch, perms, chunking=True):
     monkeypatch.setattr(providers, "test_remote", lambda opts, sub="": TestResult(True, "ok"))
     monkeypatch.setattr(nextcloud_share, "_fetch_permissions", lambda *a: perms)
     monkeypatch.setattr(nextcloud_share, "_has_chunk_endpoint", lambda *a: chunking)
+    monkeypatch.setattr(nextcloud_share, "_server_version", lambda *a: "31.0.9")
+    monkeypatch.setattr(nextcloud_share.rclone, "rclone_version", lambda: rclone)
     return client.post(
         "/api/providers/test",
         headers=admin_auth,
@@ -284,3 +286,23 @@ def test_share_test_flags_server_without_chunk_endpoint(client, admin_auth, monk
     res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", chunking=False)
     assert res["ok"] is False
     assert "Chunked-Upload" in res["message"]
+    assert "Nextcloud 31.0.9" in res["message"]
+
+
+def test_share_test_flags_rclone_without_chunking(client, admin_auth, monkeypatch):
+    # rclone < 1.63 ignores vendor=nextcloud chunking and PUTs whole files.
+    res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", rclone=(1, 60, 1))
+    assert res["ok"] is False
+    assert "rclone 1.60.1" in res["message"]
+    # Unknown version -> don't block.
+    assert _share_test(client, admin_auth, monkeypatch, "RGDNVCK", rclone=None)["ok"] is True
+
+
+def test_parse_rclone_version():
+    from app.rclone import parse_version
+
+    assert parse_version("rclone v1.60.1-DEV") == (1, 60, 1)
+    assert parse_version("rclone v1.75.2") == (1, 75, 2)
+    assert parse_version("rclone 1.63") == (1, 63, 0)
+    assert parse_version("") is None
+    assert parse_version(None) is None
