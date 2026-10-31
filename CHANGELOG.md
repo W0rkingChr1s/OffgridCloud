@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### 🐛 Fehlerbehebungen
+
+- **Weboberfläche wird nach längerer Laufzeit langsam bis unerreichbar (möglicher Auslöser):** Jeder offene Tab hielt zwei Live-Verbindungen, und jede baute alle 2 Sekunden einen eigenen Zustandsbericht. Für Admins las dieser jedes Mal die Dateinamen aller Medien. Schlief ein iPad hinter Caddy ein, blieben seine Verbindungen oft stundenlang offen, und die Box rechnete für niemanden weiter. Jetzt hat jeder Tab nur noch eine Verbindung, die er schließt, solange er im Hintergrund ist. Der Bericht entsteht pro Nutzer höchstens einmal je Intervall und liest nur die Namen der laufenden Transfers. Außerdem beendet der Server jede Verbindung nach 5 Minuten, der Browser verbindet sich von selbst neu.
+
 ## [0.10.0] – 2026-10-30
 
 Ein gemeinsamer Datei-Browser für Ordner, Karten und Suche, Nextcloud-Freigabelinks als Cloud-Ziel und ein Rechtsklick-Menü. Dazu klarere Fehlermeldungen beim Login.
