@@ -15,8 +15,11 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
 from .nextcloud_share import (
+    DEFAULT_SPLIT_MB,
     explain_upload_error,
     share_rclone_options,
+    share_split_limit,
+    share_test_note,
     share_upload_options,
     share_write_problem,
 )
@@ -57,11 +60,16 @@ class ProviderType:
     # Best-effort check after a successful connection test: returns why the
     # target can't take uploads (e.g. a read-only share), or None.
     write_check: Callable[[dict[str, str]], str | None] | None = None
+    # Note appended to a passing connection test (limits worth knowing).
+    test_note: Callable[[dict[str, str]], str | None] | None = None
     # Upload-time adjustments: may probe the server, so kept out of
     # to_rclone_options (which also runs when a provider is saved).
     upload_options: Callable[[dict[str, str], dict[str, str]], dict[str, str]] | None = None
     # Adds a hint to a failed upload's error message.
     explain_error: Callable[[str], str] | None = None
+    # Largest file the target takes in one piece (bytes), or None. Bigger
+    # videos are cut into playable parts before upload (app.video_split).
+    split_limit: Callable[[dict[str, str]], int | None] | None = None
 
     def to_rclone_options(self, config: dict[str, str]) -> dict[str, str]:
         opts: dict[str, str] = {"type": self.backend, **self.fixed}
@@ -401,13 +409,20 @@ _PROVIDER_LIST: tuple[ProviderType, ...] = (
              "„Dateiablage“ (nur hochladen) reicht nicht.",
         derive=share_rclone_options,
         write_check=share_write_problem,
+        test_note=share_test_note,
         upload_options=share_upload_options,
         explain_error=explain_upload_error,
+        split_limit=share_split_limit,
         fields=(
             Field("link", "Freigabelink",
                   help="z. B. https://cloud.example.com/s/AbC123xyz"),
             Field("pass", "Freigabe-Passwort", type="password", required=False,
                   secret=True, help="Nur wenn die Freigabe passwortgeschützt ist"),
+            Field("split_mb", "Max. Größe am Stück (MB)", type="number", required=False,
+                  default=str(DEFAULT_SPLIT_MB),
+                  help="Nur für Server ohne Chunked-Upload (Nextcloud < 32): "
+                       "größere Videos werden verlustfrei in Teile geschnitten "
+                       "und in einem Unterordner abgelegt"),
         ),
     ),
     ProviderType(

@@ -161,6 +161,29 @@ def share_upload_options(config: dict[str, str], options: dict[str, str]) -> dic
     return options
 
 
+DEFAULT_SPLIT_MB = 90
+
+
+def share_split_limit(config: dict[str, str]) -> int | None:
+    """Largest single upload in bytes when the server can't take chunks, else ``None``.
+
+    Videos above it are cut into parts (app.video_split). The default keeps
+    clear of Cloudflare's 100 MB request limit in front of Hetzner Storage
+    Share; the admin can set another value per share.
+    """
+    try:
+        url, token = parse_share_link(config.get("link", ""))
+    except ValueError:
+        return None
+    if _chunking_supported(url, token, config.get("pass", "")) is not False:
+        return None
+    try:
+        mb = int(str(config.get("split_mb", "")).strip() or DEFAULT_SPLIT_MB)
+    except ValueError:
+        mb = DEFAULT_SPLIT_MB
+    return max(5, mb) * 1_000_000
+
+
 _TOO_LARGE_MARKERS = ("413", "payload too large", "request entity too large")
 
 
@@ -171,7 +194,9 @@ def explain_upload_error(message: str) -> str:
         return (
             f"{message} — Datei zu groß für einen Upload am Stück, und diese "
             "Nextcloud nimmt über Freigabelinks keine Chunks an (erst ab "
-            "Nextcloud 32). Abhilfe: Nextcloud aktualisieren oder den Provider "
+            "Nextcloud 32). Videos werden automatisch geteilt; bei anderen "
+            "Dateien oder zu hoch eingestelltem Limit hilft: „Max. Größe am "
+            "Stück“ senken, Nextcloud aktualisieren oder den Provider "
             "„Nextcloud“ mit Konto und App-Passwort nutzen"
         )
     return message
@@ -209,8 +234,8 @@ def share_write_problem(config: dict[str, str]) -> str | None:
     Uploading needs ``C`` (create files) and ``K`` (create folders, for the
     per-folder target paths). A read-only link only carries ``G``/``R``; a
     file drop can't be listed at all, which the rclone test already reports.
-    Older servers without the public chunk endpoint are flagged as well, and
-    so is an rclone too old to chunk at all.
+    An rclone too old to chunk at all is flagged as well. Servers without the
+    public chunk endpoint still pass (see share_test_note).
     """
     try:
         url, token = parse_share_link(config.get("link", ""))
@@ -224,13 +249,22 @@ def share_write_problem(config: dict[str, str]) -> str | None:
             "Freigabe ist schreibgeschützt — in Nextcloud bei der Freigabe "
             "„Hochladen und Bearbeiten erlauben“ aktivieren"
         )
-    if not _has_chunk_endpoint(url, token, config.get("pass", "")):
-        version = _server_version(url)
-        which = f"Nextcloud {version}" if version else "Diese Nextcloud"
-        return (
-            f"{which} bietet keinen Chunked-Upload für Freigaben (erst ab "
-            "Nextcloud 32) — große Dateien würden scheitern. Nextcloud "
-            "aktualisieren oder den Provider „Nextcloud“ mit Konto und "
-            "App-Passwort nutzen"
-        )
     return rclone_problem()
+
+
+def share_test_note(config: dict[str, str]) -> str | None:
+    """What a passing test should still mention: no chunked upload on this server."""
+    try:
+        url, token = parse_share_link(config.get("link", ""))
+    except ValueError:
+        return None
+    if _has_chunk_endpoint(url, token, config.get("pass", "")):
+        return None
+    version = _server_version(url)
+    which = f"Nextcloud {version}" if version else "Diese Nextcloud"
+    return (
+        f"{which} bietet keinen Chunked-Upload für Freigaben (erst ab "
+        "Nextcloud 32). Dateien gehen am Stück hoch; Videos über "
+        "„Max. Größe am Stück“ werden in Teile geschnitten, andere große "
+        "Dateien scheitern"
+    )

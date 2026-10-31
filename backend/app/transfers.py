@@ -12,14 +12,16 @@ import json
 import logging
 import os
 import posixpath
+import shutil
 import threading
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from . import bandwidth, buffers, network
+from . import bandwidth, buffers, network, video_split
 from .config import get_settings
 from .crypto import decrypt
 from .db import SessionLocal
@@ -239,6 +241,62 @@ def _build_dest(dest_path: str, filename: str) -> str:
     return posixpath.join(dest_path.strip("/"), filename) if dest_path.strip("/") else filename
 
 
+def _split_dests(dest_path: str, filename: str, parts: int) -> list[str]:
+    """Remote paths of a video uploaded as ``parts`` pieces (sub folder per video)."""
+    folder = _build_dest(dest_path, video_split.part_folder(filename))
+    return [
+        posixpath.join(folder, video_split.part_name(filename, i, parts))
+        for i in range(1, parts + 1)
+    ]
+
+
+def _upload_split(
+    local_path: str,
+    filename: str,
+    dest_path: str,
+    limit: int,
+    options: dict,
+    upload_fn: UploadFn,
+    bwlimit_kbps: int,
+    on_progress: ProgressCb,
+) -> tuple[UploadResult, int]:
+    """Cut a too-big video into playable parts and upload them one by one.
+
+    Returns the combined result and the number of parts (0 on failure). The
+    parts live next to the original on the same buffer drive, in a hidden
+    work folder that is removed afterwards. A retry cuts and uploads again;
+    parts already on the remote are simply overwritten.
+    """
+    src = Path(local_path)
+    work = src.parent / f".split-{src.name}"
+    try:
+        split = video_split.split_video(src, work, limit)
+        if not split.ok:
+            return UploadResult(False, 0, f"Video teilen fehlgeschlagen: {split.message}"), 0
+        sizes = [p.stat().st_size for p in split.parts]
+        total = sum(sizes)
+        dests = _split_dests(dest_path, filename, len(split.parts))
+        done = 0
+        rates: list[float] = []
+        for index, (part, size, dest) in enumerate(zip(split.parts, sizes, dests, strict=True), 1):
+            def _progress(sent: int, _total: int, kbps: float, base: int = done) -> None:
+                on_progress(base + sent, total, kbps)
+
+            result = upload_fn(str(part), options, dest, bwlimit_kbps, _progress)
+            if not result.ok:
+                return UploadResult(
+                    False, done + result.bytes_transferred,
+                    f"Teil {index}/{len(dests)}: {result.message}", result.kbps,
+                ), 0
+            done += result.bytes_transferred or size
+            if result.kbps > 0:
+                rates.append(result.kbps)
+        kbps = sum(rates) / len(rates) if rates else 0.0
+        return UploadResult(True, done, "", kbps), len(dests)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def _rclone_upload_fn(
     local_path: str,
     options: dict,
@@ -342,8 +400,20 @@ def process_job(
         sent[0] = max(sent[0], bytes_done)
         set_live(job_id, bytes_done, total, kbps)
 
+    split_limit = pt.split_limit(config) if pt.split_limit is not None else None
+    split_parts = 0
     try:
-        result = upload_fn(media.stored_path, options, dest, bwlimit_kbps, _on_progress)
+        if (
+            split_limit
+            and media.size > split_limit
+            and video_split.is_splittable(media.filename)
+        ):
+            result, split_parts = _upload_split(
+                media.stored_path, media.filename, dest_path, split_limit,
+                options, upload_fn, bwlimit_kbps, _on_progress,
+            )
+        else:
+            result = upload_fn(media.stored_path, options, dest, bwlimit_kbps, _on_progress)
     finally:
         clear_live(job_id)
 
@@ -365,6 +435,7 @@ def process_job(
         job.status = TransferStatus.DONE
         job.progress = 1.0
         job.bytes_transferred = result.bytes_transferred or media.size
+        job.split_parts = split_parts
         job.last_error = ""
         job.next_attempt_at = None
     else:
@@ -585,13 +656,30 @@ def delete_media(
                     FolderProviderLink.provider_id == provider_id,
                 )
             )
-            dest = _build_dest(link.dest_path if link else "", media.filename)
+            dest_path = link.dest_path if link else ""
+            job = db.scalar(
+                select(TransferJob).where(
+                    TransferJob.media_id == media_id, TransferJob.provider_id == provider_id
+                )
+            )
+            parts = job.split_parts if job is not None else 0
+            dests = (
+                _split_dests(dest_path, media.filename, parts)
+                if parts
+                else [_build_dest(dest_path, media.filename)]
+            )
             attempted += 1
-            result = delete_fn(_provider_options(provider), dest)
-            if result.ok:
+            options = _provider_options(provider)
+            failed = ""
+            for dest in dests:
+                result = delete_fn(options, dest)
+                if not result.ok:
+                    failed = result.message
+                    break
+            if not failed:
                 remote_deleted += 1
             else:
-                remote_errors.append(f"{provider.name}: {result.message}")
+                remote_errors.append(f"{provider.name}: {failed}")
 
     # Remove the local buffer copy (best-effort — it may already be gone).
     if not media.local_deleted:

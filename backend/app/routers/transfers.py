@@ -39,6 +39,7 @@ def enrich_jobs(db: Session, jobs: list[TransferJob]) -> list[TransferJobOut]:
                 last_error=j.last_error,
                 created_at=j.created_at,
                 updated_at=j.updated_at,
+                split_parts=j.split_parts or 0,
                 media_filename=media_map.get(j.media_id, ""),
                 provider_name=provider_map.get(j.provider_id, ""),
                 folder_id=folder_map.get(j.media_id),

@@ -195,6 +195,10 @@ def _run_test(pt: ProviderType, config: dict[str, str], subpath: str = "") -> Te
         problem = pt.write_check(config)
         if problem:
             return TestResult(False, problem)
+    if result.ok and pt.test_note is not None:
+        note = pt.test_note(config)
+        if note:
+            return TestResult(True, f"{result.message} — Hinweis: {note}")
     return result
 
 

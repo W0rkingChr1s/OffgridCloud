@@ -747,6 +747,7 @@ class TransferJobOut(BaseModel):
     last_error: str
     created_at: datetime
     updated_at: datetime
+    split_parts: int = 0
     # Enriched for the admin view:
     media_filename: str = ""
     provider_name: str = ""

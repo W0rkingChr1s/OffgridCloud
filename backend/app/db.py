@@ -123,6 +123,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Upload handover over BLE (app.handover).
     ("system_settings", "handover_users_may_pause", "BOOLEAN NOT NULL DEFAULT 0"),
     ("ble_devices", "wifi_psk_encrypted", "TEXT NOT NULL DEFAULT ''"),
+    # Videos uploaded as parts (app.video_split).
+    ("transfer_jobs", "split_parts", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

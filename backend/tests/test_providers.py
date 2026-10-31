@@ -282,9 +282,10 @@ def test_share_test_passes_writable_link(client, admin_auth, monkeypatch):
     assert _share_test(client, admin_auth, monkeypatch, None)["ok"] is True
 
 
-def test_share_test_flags_server_without_chunk_endpoint(client, admin_auth, monkeypatch):
+def test_share_test_notes_server_without_chunk_endpoint(client, admin_auth, monkeypatch):
+    # Works (whole files, videos split), but the admin should know the limit.
     res = _share_test(client, admin_auth, monkeypatch, "RGDNVCK", chunking=False)
-    assert res["ok"] is False
+    assert res["ok"] is True
     assert "Chunked-Upload" in res["message"]
     assert "Nextcloud 31.0.9" in res["message"]
 

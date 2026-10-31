@@ -376,6 +376,8 @@ class TransferJob(Base):
     attempts: Mapped[int] = mapped_column(default=0)
     last_error: Mapped[str] = mapped_column(Text, default="")
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # >0: the video went up as this many parts in a sub folder (app.video_split).
+    split_parts: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
