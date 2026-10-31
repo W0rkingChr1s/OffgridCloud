@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.10.1] – 2026-10-31
+
+Die Web-Oberfläche lädt auf dem Handy deutlich schneller.
+
 ### ⚡ Performance
 
 - **Web-Oberfläche lädt auf dem Handy deutlich schneller:** Bisher kam die ganze App als ein unkomprimiertes 660-KB-Skript, bei jedem Aufruf neu über das Netz, auch wenn der Service Worker es schon hatte. Jetzt:
