@@ -11,19 +11,36 @@ RUN npm run build
 # --- Stage 2: runtime — single process, multi-arch (amd64/arm64)
 FROM python:3.14-slim AS runtime
 
-# rclone = universal transfer engine. Installed from Debian for multi-arch.
 # wireguard-tools/openvpn = optional built-in VPN client (needs the container to
 # run with --cap-add=NET_ADMIN --device=/dev/net/tun to actually connect).
 # openresolv lets wg-quick apply a config's DNS line without failing.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        rclone \
         wireguard-tools \
         openvpn \
         iproute2 \
         iptables \
         openresolv \
     && rm -rf /var/lib/apt/lists/*
+
+# rclone = universal transfer engine. Debian ships 1.60, which predates
+# Nextcloud chunked uploads (1.63) — large files to Nextcloud share links then
+# go out as one PUT and proxies answer 413. Take the official build instead.
+ARG TARGETARCH
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends curl unzip ca-certificates; \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+        amd64) arch=amd64 ;; arm64) arch=arm64 ;; arm|armhf) arch=arm-v7 ;; \
+        *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/rclone-current-linux-${arch}.zip"; \
+    unzip -j /tmp/rclone.zip '*/rclone' -d /usr/local/bin; \
+    chmod 755 /usr/local/bin/rclone; \
+    rm /tmp/rclone.zip; \
+    apt-get purge -y --auto-remove curl unzip; \
+    rm -rf /var/lib/apt/lists/*; \
+    rclone version | head -1
 
 WORKDIR /app
 # Container defaults. The box updates by pulling a new image and has no sudo,

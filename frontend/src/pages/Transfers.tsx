@@ -166,6 +166,14 @@ export default function Transfers() {
                         → {j.provider_name}
                         {j.attempts > 1 && ` · ${j.attempts} Versuche`}
                       </div>
+                      {/* Why it failed — also while it waits for the next retry, so
+                          "wartet" never hides a hard error. Under the name, where
+                          phones have room for it. */}
+                      {(j.status === "failed" || j.status === "queued") && j.last_error && (
+                        <div className={`mt-1 wrap-break-word text-xs ${j.status === "failed" ? "text-red-300" : "text-amber-300/90"}`}>
+                          {j.last_error}
+                        </div>
+                      )}
                     </td>
                     <td className="hidden px-4 py-3 text-slate-300 sm:table-cell">{j.provider_name}</td>
                     <td className="px-4 py-3">
@@ -186,9 +194,6 @@ export default function Transfers() {
                             {active[j.id].kbps > 0 && ` · ${active[j.id].kbps.toFixed(0)} KB/s`}
                           </div>
                         </div>
-                      )}
-                      {j.status === "failed" && j.last_error && (
-                        <div className="mt-1 wrap-break-word text-xs text-red-300">{j.last_error}</div>
                       )}
                     </td>
                     <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">{j.attempts}</td>

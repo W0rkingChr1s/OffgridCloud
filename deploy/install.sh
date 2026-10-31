@@ -461,10 +461,22 @@ fi
 
 # rclone — the distro package is often years out of date, so prefer the
 # official installer and fall back to the package manager if offline.
-if command -v rclone >/dev/null 2>&1; then
+# Nextcloud chunked uploads (needed for big files to share links) arrived in
+# 1.63, so an older rclone already on the system (Debian ships 1.60) is replaced.
+RCLONE_MIN_MINOR=63
+rclone_too_old() {
+  local minor
+  minor=$(rclone version 2>/dev/null | head -1 | sed -nE 's/^rclone v?1\.([0-9]+).*/\1/p')
+  [[ -n $minor && $minor -lt $RCLONE_MIN_MINOR ]]
+}
+if command -v rclone >/dev/null 2>&1 && ! rclone_too_old; then
   echo "   rclone already present: $(rclone version 2>/dev/null | head -1)"
 else
-  step "Installing rclone (official installer)..."
+  if command -v rclone >/dev/null 2>&1; then
+    step "Updating rclone ($(rclone version 2>/dev/null | head -1) is older than 1.${RCLONE_MIN_MINOR})..."
+  else
+    step "Installing rclone (official installer)..."
+  fi
   if ! curl -fsSL https://rclone.org/install.sh | bash; then
     echo "   Official installer failed; trying the distro package..."
     if command -v apt-get >/dev/null 2>&1; then apt-get install -y rclone

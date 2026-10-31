@@ -296,8 +296,10 @@ function NodeJobs({
                     {j.attempts > 0 && ` · ${j.attempts} Versuche`}
                     {` · ${new Date(j.updated_at + "Z").toLocaleString()}`}
                   </div>
-                  {j.status === "failed" && j.last_error && (
-                    <div className="mt-0.5 wrap-break-word text-xs text-red-300">{j.last_error}</div>
+                  {(j.status === "failed" || j.status === "queued") && j.last_error && (
+                    <div className={`mt-0.5 wrap-break-word text-xs ${j.status === "failed" ? "text-red-300" : "text-amber-300/90"}`}>
+                      {j.last_error}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
