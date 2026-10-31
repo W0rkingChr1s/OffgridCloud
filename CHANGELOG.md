@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.10.2] – 2026-10-31
+
+Große Videos auf Nextcloud-Freigabelinks gehen wieder durch, und wartende Transfers zeigen ihren Fehlergrund.
+
 ### 🐛 Fehlerbehebungen
 
 - **Große Videos auf Nextcloud-Freigabelinks blieben bei „wartet“ hängen:** Der Chunked-Upload aus #247 greift erst ab rclone 1.63. Das Docker-Image installierte rclone aus Debian (1.60.1), und `install.sh` behielt ein vorhandenes altes rclone. Dann gingen große Dateien weiter als ein einziger Request raus und scheiterten mit „413 Payload Too Large“.
