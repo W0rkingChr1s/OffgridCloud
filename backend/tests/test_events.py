@@ -52,3 +52,33 @@ def test_snapshot_scoped_for_regular_user(client, admin_auth):
 
 def test_snapshot_none_for_unknown_user():
     assert build_snapshot(999999) is None
+
+
+def test_cached_snapshot_builds_once_for_concurrent_streams(monkeypatch):
+    import asyncio
+
+    from app.routers import events
+
+    calls = []
+    monkeypatch.setattr(events, "build_snapshot", lambda uid: calls.append(uid) or {"folders": []})
+    events._cache.clear()
+    events._locks.clear()
+
+    async def many():
+        return await asyncio.gather(*(events.cached_snapshot(7) for _ in range(5)))
+
+    results = asyncio.run(many())
+    assert calls == [7]
+    assert all(r == {"folders": []} for r in results)
+
+
+def test_stream_ends_after_max_lifetime(client, admin_auth, monkeypatch):
+    from app.routers import events
+
+    monkeypatch.setattr(events, "STREAM_MAX_SECONDS", 0.3)
+    monkeypatch.setattr(events, "SNAPSHOT_INTERVAL", 0.05)
+    token = admin_auth["Authorization"].split()[1]
+    # Returns at all only because the server closes the stream.
+    body = client.get(f"/api/events?token={token}").text
+    assert body.startswith(f"retry: {events.RETRY_MS}\n\n")
+    assert body.count("data: ") >= 2
