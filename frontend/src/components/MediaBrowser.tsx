@@ -12,7 +12,10 @@ import {
   type StorageKnown,
   type StorageMediaKind,
 } from "../api";
+import { useNavigate } from "react-router-dom";
+import { copyText } from "../clipboard";
 import { useToast } from "../toast";
+import { type ContextMenuEntry, useContextMenu } from "./ContextMenu";
 import FileBrowser, { FileGlyph } from "./FileBrowser";
 import { type SortOption } from "./Sort";
 import { formatBytes } from "../upload";
@@ -194,6 +197,80 @@ export default function MediaBrowser({ device, title, basePath = "", canCache = 
     setMany(target, !allOn);
   }
 
+  const imp = useImportRun(
+    device,
+    selected,
+    (single) => {
+      // A single right-clicked entry leaves the rest of the selection alone.
+      if (!single) setSelected(new Map());
+      onStarted();
+      // Refresh the duplicate badges once the job has had a moment.
+      setTimeout(loadGallery, 2500);
+    },
+    toast,
+  );
+
+  // --- Right-click menu ---------------------------------------------------------
+  const ctx = useContextMenu();
+  const navigate = useNavigate();
+  const copy = async (text: string) => {
+    if (await copyText(text)) toast.success("Kopiert", `„${text}“ liegt in der Zwischenablage.`);
+    else toast.error("Kopieren fehlgeschlagen", "Der Browser hat den Zugriff verweigert.");
+  };
+  const uploadLabel = (what: string) => (imp.folder ? `${what} hochladen nach „${imp.folder.name}“` : `${what} hochladen …`);
+  const noFolder = imp.folder ? undefined : "Erst unten einen Ziel-Ordner wählen";
+
+  /**
+   * Same actions as the tile/row and the action bar. Right-clicking inside a
+   * multi-selection acts on the whole selection, otherwise on that one entry.
+   */
+  function entryMenu(e: {
+    path: string;
+    name: string;
+    isDir: boolean;
+    known: StorageKnown | null;
+    onOpen?: () => void;
+    onPreview?: () => void;
+    extra?: ContextMenuEntry[];
+  }): ContextMenuEntry[] {
+    const n = selected.size;
+    if (n > 1 && selected.has(e.path)) {
+      return [
+        { label: uploadLabel(`${n} Einträge`), title: noFolder, disabled: imp.busy || !imp.folder, onClick: () => imp.run("import") },
+        canCache && { label: `${n} Einträge auf Cache sichern`, disabled: imp.busy, onClick: () => imp.run("cache") },
+        "separator",
+        { label: "Auswahl aufheben", onClick: () => setSelected(new Map()) },
+      ];
+    }
+    const isSel = selected.has(e.path);
+    return [
+      e.onOpen && { label: "Öffnen", onClick: e.onOpen },
+      e.onPreview && { label: "Vorschau", onClick: e.onPreview },
+      {
+        label: isSel ? "Abwählen" : e.isDir ? "Ganzen Ordner auswählen" : "Auswählen",
+        onClick: () =>
+          setSelected((prev) => {
+            const next = new Map(prev);
+            if (isSel) next.delete(e.path);
+            else next.set(e.path, e.isDir);
+            return next;
+          }),
+      },
+      ...(e.extra ?? []),
+      "separator",
+      {
+        label: uploadLabel(e.isDir ? "Ordner" : "Nur diese Datei"),
+        title: noFolder,
+        disabled: imp.busy || !imp.folder,
+        onClick: () => imp.run("import", [e.path]),
+      },
+      canCache && { label: "Auf Cache sichern", disabled: imp.busy, onClick: () => imp.run("cache", [e.path]) },
+      "separator",
+      e.known && { label: `In „${e.known.folder_name}“ anzeigen`, onClick: () => navigate(`/folders/${e.known!.folder_id}`) },
+      { label: e.isDir ? "Pfad kopieren" : "Dateinamen kopieren", onClick: () => copy(e.isDir ? e.path : e.name) },
+    ];
+  }
+
   return (
     <div className="rounded-2xl bg-slate-800/60 ring-1 ring-ogc-teal/30">
       {/* Header */}
@@ -299,6 +376,21 @@ export default function MediaBrowser({ device, title, basePath = "", canCache = 
                       selected={selected.has(item.path)}
                       onClick={(shift) => clickTile(index, shift)}
                       onPreview={() => setPreview(index)}
+                      onContextMenu={ctx.bind(() =>
+                        entryMenu({
+                          path: item.path,
+                          name: item.name,
+                          isDir: false,
+                          known: item.known,
+                          onPreview: item.kind !== "audio" ? () => setPreview(index) : undefined,
+                          extra: [
+                            {
+                              label: nSel > 0 && nSel === paths.length ? "Tag abwählen" : "Ganzen Tag auswählen",
+                              onClick: () => toggleGroup(paths),
+                            },
+                          ],
+                        }),
+                      )}
                     />
                   ))}
                 </div>
@@ -307,23 +399,22 @@ export default function MediaBrowser({ device, title, basePath = "", canCache = 
           })}
         </div>
       ) : (
-        <FolderView device={device} basePath={basePath} selected={selected} setSelected={setSelected} />
+        <FolderView
+          device={device}
+          basePath={basePath}
+          selected={selected}
+          setSelected={setSelected}
+          onEntryMenu={(en, ev, open) =>
+            ctx.bind(() =>
+              entryMenu({ path: en.path, name: en.name, isDir: en.is_dir, known: en.known, onOpen: en.is_dir ? open : undefined }),
+            )(ev)
+          }
+        />
       )}
 
-      <ActionBar
-        device={device}
-        selected={selected}
-        selectedBytes={selectedBytes}
-        selectedDirs={selectedDirs}
-        canCache={canCache}
-        onDone={() => {
-          setSelected(new Map());
-          onStarted();
-          // Refresh the duplicate badges once the job has had a moment.
-          setTimeout(loadGallery, 2500);
-        }}
-        toast={toast}
-      />
+      <ActionBar selected={selected} selectedBytes={selectedBytes} selectedDirs={selectedDirs} canCache={canCache} imp={imp} />
+
+      {ctx.menu}
 
       {preview !== null && visible[preview] && (
         <Lightbox
@@ -348,12 +439,14 @@ function Tile({
   selected,
   onClick,
   onPreview,
+  onContextMenu,
 }: {
   device: string;
   item: StorageGalleryItem;
   selected: boolean;
   onClick: (shift: boolean) => void;
   onPreview: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const [failed, setFailed] = useState(false);
   const badge = item.known ? knownLabel(item.known) : null;
@@ -363,6 +456,7 @@ function Tile({
       aria-checked={selected}
       tabIndex={0}
       onClick={(e) => onClick(e.shiftKey)}
+      onContextMenu={onContextMenu}
       onKeyDown={(e) => {
         if (e.key === " " || e.key === "Enter") {
           e.preventDefault();
@@ -529,11 +623,14 @@ function FolderView({
   basePath,
   selected,
   setSelected,
+  onEntryMenu,
 }: {
   device: string;
   basePath: string;
   selected: Map<string, boolean>;
   setSelected: React.Dispatch<React.SetStateAction<Map<string, boolean>>>;
+  /** Right-click on an entry; `open` enters it (directories). */
+  onEntryMenu: (entry: StorageEntry, e: React.MouseEvent, open: () => void) => void;
 }) {
   const [path, setPath] = useState(basePath);
   const [listing, setListing] = useState<StorageBrowse | null>(null);
@@ -578,6 +675,7 @@ function FolderView({
         selected={keys}
         onSelectedChange={onSelectedChange}
         onOpen={(e) => e.is_dir && setPath(e.path)}
+        onContextMenu={(en, ev) => onEntryMenu(en, ev, () => setPath(en.path))}
         sortOptions={ENTRY_SORT}
         storageKey="storage-folders"
         resetKey={`${device}:${path}`}
@@ -701,30 +799,19 @@ function EntryIcon({ device, entry, big = false }: { device: string; entry: Stor
 
 // --- Sticky action bar ---------------------------------------------------------------
 
-function ActionBar({
-  device,
-  selected,
-  selectedBytes,
-  selectedDirs,
-  canCache,
-  onDone,
-  toast,
-}: {
-  device: string;
-  selected: Map<string, boolean>;
-  selectedBytes: number;
-  selectedDirs: number;
-  canCache: boolean;
-  onDone: () => void;
-  toast: ReturnType<typeof useToast>;
-}) {
+/** Target folder, options and the import/cache call, shared by the action bar and the right-click menu. */
+function useImportRun(
+  device: string,
+  selected: Map<string, boolean>,
+  onDone: (single: boolean) => void,
+  toast: ReturnType<typeof useToast>,
+) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderId, setFolderId] = useState<number | "">("");
   const [tags, setTags] = useState("");
   const [skipDupes, setSkipDupes] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [showOpts, setShowOpts] = useState(false);
 
   useEffect(() => {
     api<Folder[]>("/api/folders")
@@ -735,11 +822,12 @@ function ActionBar({
       .catch(() => {});
   }, []);
 
-  async function run(kind: "import" | "cache") {
+  /** Runs on the selection, or on just `only` (a single right-clicked entry). */
+  async function run(kind: "import" | "cache", only?: string[]) {
     setBusy(true);
     setErr(null);
     try {
-      const paths = [...selected.keys()];
+      const paths = only ?? [...selected.keys()];
       const job =
         kind === "import"
           ? await api<StorageImportJob>("/api/storage/imports", {
@@ -761,13 +849,35 @@ function ActionBar({
         kind === "import" ? "Upload gestartet" : "Sicherung auf Cache gestartet",
         `${job.total_files} Datei(en), ${formatBytes(job.total_bytes)}${kind === "import" ? ` → „${job.folder_name}“` : ""}`,
       );
-      onDone();
+      onDone(only !== undefined);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Fehler");
     } finally {
       setBusy(false);
     }
   }
+
+  const folder = folders.find((f) => f.id === folderId) ?? null;
+  return { folders, folderId, setFolderId, folder, tags, setTags, skipDupes, setSkipDupes, busy, err, run };
+}
+
+type ImportRun = ReturnType<typeof useImportRun>;
+
+function ActionBar({
+  selected,
+  selectedBytes,
+  selectedDirs,
+  canCache,
+  imp,
+}: {
+  selected: Map<string, boolean>;
+  selectedBytes: number;
+  selectedDirs: number;
+  canCache: boolean;
+  imp: ImportRun;
+}) {
+  const { folders, folderId, setFolderId, tags, setTags, skipDupes, setSkipDupes, busy, err, run } = imp;
+  const [showOpts, setShowOpts] = useState(false);
 
   const n = selected.size;
   return (

@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+### ✨ Neu
+
+- **Rechtsklick-Menü auch auf der Speicher-Seite und in der Suche:** In der Galerie und der Ordner-Ansicht von Karten und USB-Laufwerken gibt es *Vorschau*, *Öffnen*, *Auswählen*, *Ganzen Tag auswählen*, *Nur diese Datei hochladen nach „…“* (die übrige Auswahl bleibt dabei stehen), *Auf Cache sichern*, *In „Ordner“ anzeigen* für Dateien, die schon auf der Box liegen, sowie *Dateinamen/Pfad kopieren*. Ein Rechtsklick in eine Mehrfachauswahl lädt die ganze Auswahl hoch oder sichert sie. Das Ziel ist der unten in der Leiste gewählte Ordner. In der Suche gibt es *Herunterladen*, *Ordner öffnen* und *Dateinamen kopieren*.
+
 ## [0.10.3] – 2026-10-31
 
 Nextcloud-Freigabelinks auf Servern vor Nextcloud 32 nehmen Dateien über 10 MiB wieder an, und zu große Dateien melden, was hilft.
