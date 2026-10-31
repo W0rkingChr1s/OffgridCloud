@@ -181,6 +181,9 @@ export default function Transfers() {
                       {j.status === "done" && j.bytes_transferred > 0 && (
                         <span className="ml-2 text-xs text-slate-500">{formatBytes(j.bytes_transferred)}</span>
                       )}
+                      {j.status === "done" && (j.split_parts ?? 0) > 0 && (
+                        <div className="mt-0.5 text-xs text-slate-500">in {j.split_parts} Teilen</div>
+                      )}
                       {j.status === "running" && active[j.id] && (
                         <div className="mt-1.5 w-full max-w-48">
                           <div className="h-1.5 overflow-hidden rounded-full bg-slate-700">

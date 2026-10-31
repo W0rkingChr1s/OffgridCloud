@@ -281,7 +281,7 @@ if [[ $USE_WHIPTAIL -eq 1 ]]; then
   _sel=$(whiptail --backtitle "$WT_BACKTITLE" --title "Funktionen wählen" \
     --separate-output --checklist \
     "Leertaste schaltet eine Option um, Enter bestätigt:" 22 78 11 \
-    FFMPEG     "Video-Thumbnails (installiert ffmpeg)"                  "$(wt_onoff "$WITH_FFMPEG")" \
+    FFMPEG     "Video-Thumbnails + Teilen großer Videos (installiert ffmpeg)"                  "$(wt_onoff "$WITH_FFMPEG")" \
     SPEEDTEST  "Ookla-Speedtest-CLI (genauere Bandbreite)"             "$(wt_onoff "$WITH_SPEEDTEST")" \
     HTTPS      "HTTPS (Zugriff per https://<name>.local)"              "$(wt_onoff "$WITH_HTTPS")" \
     APFALLBACK "Netzwerk-Redundanz: eigenes WLAN bei Uplink-Ausfall"   "$(wt_onoff "$WITH_AP_FALLBACK")" \
@@ -368,7 +368,7 @@ fi
 ask        PREFIX              "Installationsverzeichnis"                                   "$PREFIX"
 ask        ADMIN_EMAIL         "Admin-E-Mail (Login)"                                       "$ADMIN_EMAIL"
 ask        PORT                "Port für die Weboberfläche"                                 "$PORT"
-ask_yn     WITH_FFMPEG         "Video-Thumbnails aktivieren? (installiert ffmpeg)"          "$WITH_FFMPEG"
+ask_yn     WITH_FFMPEG         "Video-Thumbnails und Teilen großer Videos aktivieren? (installiert ffmpeg)"          "$WITH_FFMPEG"
 ask_yn     WITH_SPEEDTEST      "Ookla-Speedtest-CLI für genauere Bandbreitenmessung?"       "$WITH_SPEEDTEST"
 ask_yn     WITH_HTTPS          "HTTPS aktivieren (empfohlen, Zugriff per https://<name>.local)?" "$WITH_HTTPS"
 if [[ "$WITH_HTTPS" -eq 1 ]]; then

@@ -8,6 +8,14 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ### ✨ Neu
 
+- **Große Videos werden für Freigabelinks automatisch geteilt:** Auf Nextcloud-Servern vor Version 32 nimmt ein Freigabelink nur Uploads am Stück an, und der Proxy davor (bei Hetzner Storage Share: Cloudflare) lehnt alles über rund 100 MB ab. Videos über der neuen Einstellung „Max. Größe am Stück“ (Standard 90 MB) schneidet OffgridCloud jetzt vor dem Upload mit ffmpeg in Teile:
+  - verlustfrei, ohne Neukodierung, also auch auf dem Pi schnell;
+  - jeder Teil ist ein eigenes, abspielbares Video;
+  - die Teile landen im Zielordner in einem Unterordner mit dem Namen des Videos, z. B. `DJI_0005_W/DJI_0005_W_teil01.MP4`;
+  - in der Transferliste steht „in N Teilen“, und das Löschen in der Cloud entfernt alle Teile.
+
+  Nicht übernommen werden Daten-Spuren wie die DJI-Telemetrie. Andere große Dateien (keine Videos) scheitern weiterhin, mit Hinweis. Während des Teilens braucht der Puffer kurz noch einmal so viel freien Platz wie das Video groß ist. ffmpeg ist im Pi-Image enthalten und jetzt auch im Docker-Image.
+- **Verbindungstest einer Freigabe ohne Chunked-Upload** gilt jetzt als bestanden, mit Hinweis auf das Limit, statt als Fehler.
 - **Rechtsklick-Menü auch auf der Speicher-Seite und in der Suche:** In der Galerie und der Ordner-Ansicht von Karten und USB-Laufwerken gibt es *Vorschau*, *Öffnen*, *Auswählen*, *Ganzen Tag auswählen*, *Nur diese Datei hochladen nach „…“* (die übrige Auswahl bleibt dabei stehen), *Auf Cache sichern*, *In „Ordner“ anzeigen* für Dateien, die schon auf der Box liegen, sowie *Dateinamen/Pfad kopieren*. Ein Rechtsklick in eine Mehrfachauswahl lädt die ganze Auswahl hoch oder sichert sie. Das Ziel ist der unten in der Leiste gewählte Ordner. In der Suche gibt es *Herunterladen*, *Ordner öffnen* und *Dateinamen kopieren*.
 
 ### 🐛 Fehlerbehebungen

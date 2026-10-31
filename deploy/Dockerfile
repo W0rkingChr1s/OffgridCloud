@@ -14,8 +14,11 @@ FROM python:3.14-slim AS runtime
 # wireguard-tools/openvpn = optional built-in VPN client (needs the container to
 # run with --cap-add=NET_ADMIN --device=/dev/net/tun to actually connect).
 # openresolv lets wg-quick apply a config's DNS line without failing.
+# ffmpeg = video thumbnails and cutting oversized videos into parts for
+# targets without chunked upload (app.video_split).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        ffmpeg \
         wireguard-tools \
         openvpn \
         iproute2 \
