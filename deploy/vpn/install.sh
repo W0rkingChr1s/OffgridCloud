@@ -12,16 +12,18 @@
 #
 # Idempotent. Re-run after changing --prefix/--service-name if needed.
 #
-# Usage: sudo ./deploy/vpn/install.sh [--service-name NAME] [--prefix DIR]
+# Usage: sudo ./deploy/vpn/install.sh [--service-name NAME] [--prefix DIR] [--no-start]
 set -euo pipefail
 
 SERVICE_NAME="offgridcloud"
 PREFIX="/opt/offgridcloud"
+START=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --service-name) SERVICE_NAME="${2:?}"; shift 2 ;;
     --prefix) PREFIX="${2:?}"; shift 2 ;;
+    --no-start) START=0; shift ;;
     -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -71,8 +73,12 @@ cat > "$DROPIN_DIR/10-vpn-caps.conf" <<'UNIT'
 AmbientCapabilities=CAP_NET_ADMIN
 UNIT
 systemctl daemon-reload
-systemctl try-restart "${SERVICE_NAME}.service" 2>/dev/null || \
-  echo "   Could not restart ${SERVICE_NAME} — start it to pick up the change." >&2
+# --no-start: the caller (install.sh/update.sh) restarts the service at the end;
+# a restart in the middle of an update cut the update short.
+if [[ $START -eq 1 ]]; then
+  systemctl try-restart "${SERVICE_NAME}.service" 2>/dev/null || \
+    echo "   Could not restart ${SERVICE_NAME} — start it to pick up the change." >&2
+fi
 
 cat <<EOF
 

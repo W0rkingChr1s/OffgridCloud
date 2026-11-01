@@ -12,18 +12,20 @@
 # It changes nothing about who the box connects to until an admin configures
 # networks + the AP in the web UI and clicks "Anwenden".
 #
-# Usage: sudo ./deploy/netfallback/install.sh [--prefix DIR] [--service-user USER]
+# Usage: sudo ./deploy/netfallback/install.sh [--prefix DIR] [--service-user USER] [--no-start]
 set -euo pipefail
 
 PREFIX="/opt/offgridcloud"
 SERVICE_USER="offgrid"
+START=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
     --service-user) SERVICE_USER="${2:?}"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-start) START=0; shift ;;
+    -h|--help) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -133,7 +135,11 @@ if [[ -f "$ENV_FILE" ]]; then
   fi
   chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true
   echo "   Set OGC_NET_APPLY_COMMAND and OGC_NET_HANDOVER_COMMAND in $ENV_FILE"
-  command -v systemctl >/dev/null 2>&1 && systemctl try-restart offgridcloud 2>/dev/null || true
+  # Not during install.sh/update.sh (--no-start): they restart the web service
+  # themselves at the end, and a restart mid-update cut the update short.
+  if [[ $START -eq 1 ]] && command -v systemctl >/dev/null 2>&1; then
+    systemctl try-restart offgridcloud 2>/dev/null || true
+  fi
 else
   echo "   $ENV_FILE not found — add manually:"
   echo "     OGC_NET_APPLY_COMMAND=sudo $APPLY $CONFIG_FILE"

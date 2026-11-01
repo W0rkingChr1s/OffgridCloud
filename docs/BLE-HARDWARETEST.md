@@ -54,7 +54,7 @@ systemctl show offgridcloud-ble -p MemoryCurrent
 |---|---|
 | `Kein Bluetooth-Adapter mit GATT-Unterstützung gefunden` | Adapter aus oder fehlt: `rfkill unblock bluetooth`, `sudo systemctl restart bluetooth`, bei Dongle `lsusb`. Bei mehreren Adaptern `OGC_BLE_ADAPTER=hci0` in `/opt/offgridcloud/.env` |
 | `org.freedesktop.DBus.Error.AccessDenied` oder `org.bluez.Error.NotPermitted` | D-Bus erlaubt der Gruppe `bluetooth` den Zugriff auf BlueZ nicht. `grep -A3 'group="bluetooth"' /etc/dbus-1/system.d/bluetooth.conf` muss `allow send_destination="org.bluez"` zeigen; Gruppe prüfen (siehe oben), danach `sudo systemctl restart offgridcloud-ble` |
-| `ModuleNotFoundError: No module named 'dbus_fast'` | `install.sh` Schritt 3 lief nicht: `sudo /opt/offgridcloud/src/deploy/ble/install.sh` |
+| `ModuleNotFoundError: No module named 'dbus_fast'` | `install.sh` Schritt 3 lief nicht (bis 0.11.0 typisch nach einem One-Click-Update, das mittendrin abbrach, sichtbar erst nach dem nächsten Neustart): `sudo /opt/offgridcloud/src/deploy/ble/install.sh` |
 | `org.bluez.Error.Failed` / `Invalid Length` bei `RegisterAdvertisement` | Werbung passt nicht in 31 Byte. **Genau das ist einer der offenen Punkte** → Diagnose (Abschnitt 6) und melden |
 
 ## 2. Werbung (nRF Connect, Reiter *Scanner*)

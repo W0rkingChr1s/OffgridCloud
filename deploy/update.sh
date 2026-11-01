@@ -42,6 +42,28 @@ cd /
 step() { printf '\n\033[1;36m>> %s\033[0m\n' "$1"; }
 
 if [[ $EUID -ne 0 ]]; then echo "Please run as root (sudo)." >&2; exit 1; fi
+
+# The portal's one-click update starts us inside offgridcloud.service's cgroup.
+# Any restart of that unit — a sub-installer's try-restart, or our own restart
+# below — kills the whole cgroup, update.sh included. The reinstall then stopped
+# half-way: the venv was rebuilt, but e.g. the Bluetooth step never put dbus-fast
+# back, and offgridcloud-ble only failed after the next reboot. So re-run
+# ourselves as a transient service of our own. Not a --scope: sudo (still in the
+# old cgroup) relays the SIGTERM to its child — here only the systemd-run client,
+# whose death doesn't stop the unit. Output keeps going to the portal's log.
+if [[ -z "${OGC_UPDATE_DETACHED:-}" ]] \
+   && grep -qE '/offgridcloud\.service$' /proc/self/cgroup 2>/dev/null \
+   && command -v systemd-run >/dev/null 2>&1; then
+  _log="$(readlink -f /proc/self/fd/1 2>/dev/null || true)"
+  if [[ -f "$_log" ]] && systemd-run --quiet --collect --wait true >/dev/null 2>&1; then
+    exec systemd-run --quiet --collect --wait \
+      --unit="offgridcloud-update-$$" --description="OffgridCloud update" \
+      --property=StandardOutput="append:$_log" --property=StandardError="append:$_log" \
+      --setenv=OGC_UPDATE_DETACHED=1 --setenv=PATH="$PATH" \
+      /bin/bash "$(readlink -f "${BASH_SOURCE[0]}")" "$@"
+  fi
+fi
+
 if [[ ! -d "$SRC/.git" ]]; then
   echo "No git checkout at $SRC. Re-run the one-line installer to update:" >&2
   echo "  sudo bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/$REPO/main/deploy/bootstrap.sh)\"" >&2
@@ -152,11 +174,13 @@ if [[ -f /etc/systemd/system/offgrid-kiosk.service ]]; then
 fi
 
 step "Restarting the service..."
-systemctl restart offgridcloud
 # The reinstall refreshed the Bluetooth service's code too (same venv/source).
+# Before the web service: should we still sit in its cgroup (no systemd-run),
+# that restart ends us, and the old BLE process would keep running stale code.
 if [[ -f /etc/systemd/system/offgridcloud-ble.service ]]; then
   systemctl restart offgridcloud-ble 2>/dev/null || true
 fi
+systemctl restart offgridcloud
 printf "   Waiting for http://127.0.0.1:%s/api/health " "$PORT"
 for _ in $(seq 1 20); do
   if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
