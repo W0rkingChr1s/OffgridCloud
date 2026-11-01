@@ -285,6 +285,29 @@ Im Admin-Bereich unter **Bandbreite**:
 - **Mindest-Bandbreite** aktivieren: Uploads pausieren, solange der gemessene
   Durchsatz darunter liegt (Messung aus realen Transfers, mit Cooldown).
 - **Prioritäten** je Ordner↔Provider setzen (Eilmaterial zuerst).
+  Bei gleicher Priorität starten Dateien bis 50 MB vor größeren, ein Lagefoto
+  wartet also nicht hinter einem Mehr-GB-Video (ein laufender Upload wird dafür
+  nicht abgebrochen).
+
+**Nextcloud-Freigabelinks ohne Chunked-Upload:** Nextcloud vor Version 32 nimmt
+über Freigabelinks nur Uploads am Stück an, und ein Proxy davor (bei Hetzner
+Storage Share: Cloudflare) lehnt alles über rund 100 MB ab. Dateien über
+**„Max. Größe am Stück“** (Provider-Einstellung, Standard 90 MB) teilt
+OffgridCloud deshalb vor dem Upload und legt die Teile in einem Unterordner mit
+dem Dateinamen ab:
+- **Videos** werden mit ffmpeg ohne Neukodierung in abspielbare Clips geschnitten
+  (`DJI_0005_W/DJI_0005_W_teil01.MP4`); Flugdaten in einer Untertitelspur bleiben
+  erhalten und liegen zusätzlich als `.srt` daneben. Reine Datenspuren (DJI-`djmd`)
+  fehlen in den Clips.
+- **Andere Dateien** werden in `name.ext.001`, `.002` … zerlegt, dazu eine
+  `ZUSAMMENFUEGEN.txt` mit Anleitung (7-Zip, `copy /b`, `cat`).
+- Abgebrochene Uploads setzen beim ersten fehlenden Teil fort; vorab wird der freie
+  Pufferplatz geprüft (kurzzeitig noch einmal die Dateigröße). Löschen in der Cloud
+  entfernt alle Teile. ffmpeg ist im Pi- und im Docker-Image enthalten.
+- Uploads, die an der Größe scheitern (413, 507, ffmpeg fehlt), werden nicht
+  automatisch wiederholt; „Erneut“ startet sie von Hand.
+- Einschränkungen eines funktionierenden Ziels stehen als Hinweis in der
+  Provider-Liste; sie werden beim Testen gesetzt und alle 6 Stunden nachgeprüft.
 
 **Messung ohne Konfiguration:** Der Knopf **„Jetzt messen"** funktioniert sofort
 — es muss nichts eingetragen werden. Die Messung probiert der Reihe nach mehrere
@@ -890,4 +913,6 @@ rm -rf ./data                  # bzw. das gemountete Verzeichnis — DESTRUKTIV
 | Provider-Test schlägt fehl: „rclone nicht installiert" | rclone fehlt im PATH; Image/Install-Skript bringt es mit. |
 | Uploads bleiben „wartend" | Bandbreiten-Gate aktiv (Mindest-Bandbreite) oder kein Provider verknüpft. |
 | Login schlägt nach Key-Wechsel fehl / Provider-Test rot | `OGC_SECRET_KEY` wurde geändert → Provider-Credentials neu eingeben. |
+| Weboberfläche wird nach langer Laufzeit langsam | Seit 0.11.0 hält jeder Tab nur eine Live-Verbindung (im Hintergrund geschlossen), der Server beendet sie nach 5 Minuten, der Browser verbindet sich selbst neu. Ältere Versionen: Update einspielen. |
+| Große Datei über Freigabelink scheitert mit 413 | Nextcloud < 32 ohne Chunk-Endpunkt: „Max. Größe am Stück“ senken (Datei wird geteilt), Nextcloud 32 oder Provider „Nextcloud“ mit App-Passwort nutzen. |
 | Wenig Speicher | Externe SSD für `OGC_BUFFER_DIR`; „Lokale Kopie nach Upload löschen" aktivieren. |
