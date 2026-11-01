@@ -6,6 +6,10 @@ Alle nennenswerten Änderungen an OffgridCloud. Die neueste Version steht oben.
 
 ## [Unreleased]
 
+## [0.11.1] – 2026-11-01
+
+Bugfix-Release: Das One-Click-Update aus dem Portal lief nicht immer bis zum Ende durch. Danach fehlte unter anderem Bluetooth nach dem nächsten Neustart. **Wichtig:** Das Update auf 0.11.1 selbst läuft noch mit dem alten Update-Skript. Am sichersten per SSH: `sudo /opt/offgridcloud/src/deploy/update.sh`.
+
 ### 🐛 Behoben
 
 - **One-Click-Update bricht nicht mehr mittendrin ab:** Das Update aus dem Portal lief in der cgroup des Webdienstes. Startete ein Unterskript (AP-Fallback, VPN) den Webdienst neu, beendete systemd das ganze Update gleich mit, nach dem Neuaufbau des Python-venv, aber vor dem Bluetooth-Schritt. Das Portal meldete trotzdem Erfolg, weil die Version schon gestempelt war. Folge: `dbus-fast` fehlte im neuen venv, und `offgridcloud-ble` fiel erst nach dem nächsten Neustart der Box mit `No module named 'dbus_fast'` aus, weil der alte Prozess bis dahin weiterlief. Auch Kiosk-, HTTPS- und Abschlussschritte fielen still weg. Jetzt läuft `update.sh` als eigene systemd-Unit weiter, die Unterskripte starten den Webdienst während eines Updates nicht mehr neu, und `dbus-fast` kommt direkt beim venv-Neubau mit.
