@@ -30,11 +30,11 @@ KEY_FPR="0168C7AB77721656904811AE904F61E7F4F1C2A1"
 REPO="https://pkg.net-merge.org"
 # Pinned release. Bumped by scripts/netmerge-bump.sh (weekly via the
 # "net-merge update" workflow, which opens a PR): version + tarball SHA-256s.
-NM_VERSION="0.3.6"
+NM_VERSION="0.3.7"
 declare -A NM_SHA256=(
-  [x86_64]="6cd0f248a7c78b423e19e9df2b4c44244a74fd0b55554c24e2f536d1927e5d78"
-  [aarch64]="da6591c37adc2c9e6548cb40e8b3aa3376d84f3c2d2caf926a91a03ecf0c175f"
-  [armv7l]="4d0b5f6266a50888737a8ec30f8f18a1098b8d9065083aa19206acf0fbaa8a71"
+  [x86_64]="4bba086500c6f931ce94358833ce05b14abcb5d1af76698827aee963e12d1a86"
+  [aarch64]="b0dafa703b5dceec7f8daf935cbfad849f085701ffcc9dfa2ae67a60744b5796"
+  [armv7l]="78d43cbcb12efc8e283addb224c50781518370fc2aa5ada3a10d120079846cf9"
 )
 
 while [[ $# -gt 0 ]]; do
