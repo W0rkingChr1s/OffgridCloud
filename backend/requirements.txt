@@ -25,7 +25,7 @@ pillow==13.0.0
 webauthn==3.0.1
 # mDNS: boxes announce themselves and find each other in the LAN (pool).
 # Wheels for amd64, arm64 and armv7 (Pi 3); only dependency is ifaddr.
-zeroconf==0.151.5
+zeroconf==0.154.0
 # Used directly to list this box's addresses (zeroconf's helper is deprecated).
 ifaddr==0.2.0
 # BLE protocol (docs/BLE-PROTOKOLL.md): CBOR messages. Already pulled in by
