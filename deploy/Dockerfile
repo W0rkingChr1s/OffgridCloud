@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: runtime — single process, multi-arch (amd64/arm64)
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 # wireguard-tools/openvpn = optional built-in VPN client (needs the container to
 # run with --cap-add=NET_ADMIN --device=/dev/net/tun to actually connect).
