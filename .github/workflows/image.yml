@@ -97,7 +97,7 @@ jobs:
 
       - name: Build image with pi-gen
         id: build
-        uses: usimd/pi-gen-action@v1
+        uses: usimd/pi-gen-action@v2
         with:
           image-name: ${{ steps.name.outputs.image }}
           release: trixie
